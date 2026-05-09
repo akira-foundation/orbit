@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { api } from "../api"
 import type { AnalyzeResult, Project } from "../types"
-import { FolderSearch, Sparkles } from "lucide-react"
+import { FolderSearch } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -34,9 +34,25 @@ export function AddProjectDialog({
     setError(null)
     setBusy(false)
   }
+
   const close = () => {
     reset()
     onClose()
+  }
+
+  const analyze = async (target: string) => {
+    const t = target.trim()
+    if (!t) return
+    setBusy(true)
+    setError(null)
+    setAnalysis(null)
+    try {
+      setAnalysis(await api.analyzePath(t))
+    } catch (e: any) {
+      setError(e?.message ?? String(e))
+    } finally {
+      setBusy(false)
+    }
   }
 
   const pickFolder = async () => {
@@ -51,27 +67,12 @@ export function AddProjectDialog({
     }
   }
 
-  const analyze = async (target: string) => {
-    setBusy(true)
-    setError(null)
-    setAnalysis(null)
-    try {
-      const a = await api.analyzePath(target)
-      setAnalysis(a)
-    } catch (e: any) {
-      setError(e?.message ?? String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
   const create = async () => {
     if (!path) return
     setBusy(true)
     setError(null)
     try {
-      const p = await api.addProject(path)
-      onCreated(p)
+      onCreated(await api.addProject(path))
       close()
     } catch (e: any) {
       setError(e?.message ?? String(e))
@@ -84,57 +85,58 @@ export function AddProjectDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add project</DialogTitle>
-          <DialogDescription>
-            Select a local folder. Orbit will analyze it.
-          </DialogDescription>
+          <DialogDescription>Select a local folder. Orbit will analyze it.</DialogDescription>
         </DialogHeader>
 
         <DialogBody className="space-y-4">
+          {/* Path input */}
           <div className="flex gap-2">
             <Input
               value={path}
-              onChange={(e) => setPath(e.target.value)}
+              onChange={(e) => {
+                setPath(e.target.value)
+                setAnalysis(null)
+                setError(null)
+              }}
+              onBlur={(e) => analyze(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && analyze(path)}
               placeholder="/path/to/project"
               className="flex-1"
+              disabled={busy}
             />
-            <Button variant="outline" onClick={pickFolder}>
+            <Button variant="outline" onClick={pickFolder} disabled={busy}>
               <FolderSearch />
               Browse
             </Button>
-            <Button onClick={() => analyze(path)} disabled={!path || busy}>
-              <Sparkles />
-              Analyze
-            </Button>
           </div>
 
+          {/* Analyzing indicator */}
+          {busy && (
+            <p className="text-xs text-[var(--orbit-muted)]">Analyzing…</p>
+          )}
+
+          {/* Error */}
           {error && (
             <div className="rounded-md bg-destructive/15 border border-destructive/40 text-destructive text-sm px-3 py-2">
               {error}
             </div>
           )}
 
+          {/* Analysis result */}
           {analysis && (
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-2">
-              <Row label="Name" value={analysis.name} />
-              <Row label="Framework" value={analysis.framework} />
+              <Row label="Name"            value={analysis.name} />
+              <Row label="Framework"       value={analysis.framework} />
               <Row label="Package manager" value={analysis.packageManager} />
-              <Row label="Dev command" value={analysis.devCommand} mono />
-              <Row
-                label="Local domain"
-                value={`https://${analysis.suggestedDomain}`}
-                mono
-              />
+              <Row label="Dev command"     value={analysis.devCommand} mono />
+              <Row label="Local domain"    value={`https://${analysis.suggestedDomain}`} mono />
             </div>
           )}
         </DialogBody>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={close}>
-            Cancel
-          </Button>
-          <Button onClick={create} disabled={!analysis || busy}>
-            Add to Orbit
-          </Button>
+          <Button variant="ghost" onClick={close}>Cancel</Button>
+          <Button onClick={create} disabled={!analysis || busy}>Add to Orbit</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
