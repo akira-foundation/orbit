@@ -25,6 +25,7 @@ interface State {
   remove: (id: string) => Promise<void>
   start: (id: string) => Promise<void>
   stop: (id: string) => Promise<void>
+  patchStatus: (id: string, status: Project['status']) => void
 }
 
 export const useProjects = create<State>((set, get) => ({
@@ -107,5 +108,10 @@ export const useProjects = create<State>((set, get) => ({
   async stop(id) {
     await api.stopProject(id)
     await get().load()
+  },
+  patchStatus(id, status) {
+    set({
+      projects: get().projects.map(p => p.id === id ? { ...p, status } : p),
+    })
   },
 }))

@@ -30,6 +30,33 @@ export interface Project {
   scripts?: ProjectScript[]
 }
 
+export interface RuntimeLogLine {
+  timestamp: string
+  stream: 'stdout' | 'stderr' | 'system'
+  text: string
+}
+
+export interface RuntimeSnapshot {
+  projectId: string
+  status: ProjectStatus
+  pid: number
+  port: number
+  startedAt: string
+  uptimeMs: number
+  lastActivity: string
+  error?: string
+}
+
+export interface RuntimeLogEvent {
+  projectId: string
+  line: RuntimeLogLine
+}
+
+export interface RuntimeStatusEvent {
+  projectId: string
+  snapshot: RuntimeSnapshot
+}
+
 export interface AnalyzeResult {
   name: string
   path: string

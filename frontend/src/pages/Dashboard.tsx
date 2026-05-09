@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button'
 import type { Project } from '../types'
 import { cn } from '../lib/cn'
 import { RuntimeStatusBadge } from '../components/RuntimeStatusBadge'
+import { BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 
 export function Dashboard({ onAdd }: { onAdd: () => void }) {
   const { projects, filter, query, select } = useProjects()
@@ -94,15 +95,15 @@ function ListView({
               <Td>
                 <div className="flex items-center gap-1.5">
                   <span className="font-mono text-xs text-[var(--orbit-muted)] truncate">{p.localDomain}</span>
-                  <a
-                    href={`https://${p.localDomain}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(e) => e.stopPropagation()}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      BrowserOpenURL(`https://${p.localDomain}`)
+                    }}
                     className="shrink-0 text-[var(--orbit-muted)] hover:text-[var(--orbit-text)] transition-colors"
                   >
                     <ExternalLink className="size-3" />
-                  </a>
+                  </button>
                 </div>
               </Td>
             </tr>

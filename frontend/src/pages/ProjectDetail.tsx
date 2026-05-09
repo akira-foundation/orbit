@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useCopyToClipboard } from "usehooks-ts";
 import { api } from "../api";
 import type { Project } from "../types";
 import { RuntimeStatusBadge } from "../components/RuntimeStatusBadge";
@@ -14,14 +15,22 @@ import {
   Check,
 } from "lucide-react";
 import { useProjects } from "../store";
+import { useRuntime, formatUptime } from "../hooks/useRuntime";
+import { LogsPanel } from "../components/LogsPanel";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { cn } from "../lib/cn";
+import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 
 export function ProjectDetail({ id }: { id: string }) {
-  const { select, remove, start, stop } = useProjects();
+  const { select, remove } = useProjects();
+  const { snapshot, logs, uptimeMs, start, stop, restart, clearLogs } =
+    useRuntime(id);
   const [project, setProject] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [, copyToClipboard] = useCopyToClipboard();
 
   const reload = async () => {
     setError(null);
@@ -39,9 +48,9 @@ export function ProjectDetail({ id }: { id: string }) {
   }, [id]);
 
   const copy = async (key: string, text: string) => {
-    await navigator.clipboard.writeText(text);
-    setCopied(key);
-    setTimeout(() => setCopied(null), 1200);
+    await copyToClipboard(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 1200);
   };
 
   if (error) {
@@ -69,68 +78,69 @@ export function ProjectDetail({ id }: { id: string }) {
     );
   }
 
-  const isRunning =
-    project.status === "running" || project.status === "starting";
+  const status = snapshot?.status ?? project.status;
+  const isRunning = status === "running" || status === "starting";
+  const detectedPort = snapshot?.port || project.devPort;
 
-  const onStart = async () => {
+  const wrap = async (fn: () => Promise<void>) => {
     setBusy(true);
     try {
-      await start(project.id);
-      await reload();
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onStop = async () => {
-    setBusy(true);
-    try {
-      await stop(project.id);
-      await reload();
+      await fn();
     } finally {
       setBusy(false);
     }
   };
 
   const onDelete = async () => {
-    if (!confirm(`Remove "${project.name}" from Orbit?`)) return;
+    if (isRunning) await stop();
     await remove(project.id);
     select(null);
   };
 
   return (
     <div className="h-full overflow-auto scrollbar-thin">
-      <div className="mx-auto w-full max-w-6xl px-10 py-8 space-y-10">
-        {/* Hero */}
+      <div className="mx-auto w-full max-w-6xl px-10 py-8 space-y-8">
+
         <header className="flex items-center justify-between gap-8">
-          <div className="min-w-0 flex items-center gap-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-semibold tracking-tight truncate">
-                  {project.name}
-                </h1>
-                <RuntimeStatusBadge status={project.status} />
-              </div>
-              <a
-                href={`https://${project.localDomain}`}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-1 inline-flex items-center gap-1.5 text-sm font-mono text-[var(--orbit-accent-2)] hover:text-[var(--orbit-accent)] transition-colors"
-              >
-                {project.localDomain}
-                <ExternalLink className="size-3.5" />
-              </a>
+          <div className="min-w-0 space-y-1">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-semibold tracking-tight truncate">
+                {project.name}
+              </h1>
+              <RuntimeStatusBadge status={status} />
             </div>
+            <button
+              onClick={() => BrowserOpenURL(`https://${project.localDomain}`)}
+              className="inline-flex items-center gap-1.5 text-sm font-mono text-[var(--orbit-accent-2)] hover:text-[var(--orbit-accent)] transition-colors"
+            >
+              {project.localDomain}
+              <ExternalLink className="size-3.5" />
+            </button>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
             {isRunning ? (
-              <Button variant="secondary" onClick={onStop} disabled={busy}>
-                <Square />
-                Stop
-              </Button>
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={() => wrap(restart)}
+                  disabled={busy}
+                  title="Restart"
+                >
+                  <RotateCcw />
+                  Restart
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => wrap(stop)}
+                  disabled={busy}
+                >
+                  <Square />
+                  Stop
+                </Button>
+              </>
             ) : (
-              <Button onClick={onStart} disabled={busy}>
+              <Button onClick={() => wrap(start)} disabled={busy}>
                 <Play />
                 Start
               </Button>
@@ -138,7 +148,7 @@ export function ProjectDetail({ id }: { id: string }) {
             <Button
               variant="ghost"
               size="icon"
-              onClick={onDelete}
+              onClick={() => setConfirmRemove(true)}
               disabled={busy}
               title="Remove"
             >
@@ -147,20 +157,34 @@ export function ProjectDetail({ id }: { id: string }) {
           </div>
         </header>
 
-        {/* Stats */}
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Stat label="Framework" value={project.detectedFramework} />
           <Stat label="Package manager" value={project.packageManager} />
           <Stat
-            label="Dev port"
-            value={project.devPort ? String(project.devPort) : "—"}
+            label="Port"
+            value={detectedPort ? String(detectedPort) : "—"}
+            highlight={!!snapshot?.port}
           />
-          <Stat label="Dev command" value={project.devCommand} mono />
+          <Stat
+            label="Uptime"
+            value={isRunning ? formatUptime(uptimeMs) : "—"}
+            highlight={isRunning}
+          />
         </div>
 
-        {/* Body */}
+
+        <section className="space-y-3">
+          <SectionTitle>Runtime</SectionTitle>
+          <LogsPanel logs={logs} onClear={clearLogs} />
+          {snapshot?.error && (
+            <p className="text-xs text-rose-400 font-mono">{snapshot.error}</p>
+          )}
+        </section>
+
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Scripts */}
+
           <section className="space-y-4">
             <SectionTitle>Scripts</SectionTitle>
             {(project.scripts ?? []).length === 0 ? (
@@ -185,7 +209,7 @@ export function ProjectDetail({ id }: { id: string }) {
                       className="opacity-0 group-hover:opacity-100 transition-opacity text-[var(--orbit-muted)] hover:text-[var(--orbit-text)]"
                       title="Copy"
                     >
-                      {copied === `s-${s.id}` ? (
+                      {copiedKey === `s-${s.id}` ? (
                         <Check className="size-3.5 text-emerald-400" />
                       ) : (
                         <Copy className="size-3.5" />
@@ -197,10 +221,18 @@ export function ProjectDetail({ id }: { id: string }) {
             )}
           </section>
 
-          {/* Details */}
+
           <section className="space-y-4">
             <SectionTitle>Details</SectionTitle>
             <dl className="rounded-xl border border-[var(--orbit-border)] divide-y divide-[var(--orbit-border)] overflow-hidden">
+              <Row label="Dev command">
+                <code className="font-mono text-xs">{project.devCommand}</code>
+              </Row>
+              <Row label="PID">
+                <span className="font-mono text-xs">
+                  {snapshot?.pid ? snapshot.pid : "—"}
+                </span>
+              </Row>
               <Row label="Path">
                 <button
                   onClick={() => copy("path", project.path)}
@@ -209,7 +241,7 @@ export function ProjectDetail({ id }: { id: string }) {
                 >
                   <Folder className="size-3 shrink-0 text-[var(--orbit-muted)]" />
                   <span className="truncate">{project.path}</span>
-                  {copied === "path" ? (
+                  {copiedKey === "path" ? (
                     <Check className="size-3 shrink-0 text-emerald-400" />
                   ) : (
                     <Copy className="size-3 shrink-0 opacity-0 group-hover:opacity-100" />
@@ -228,6 +260,26 @@ export function ProjectDetail({ id }: { id: string }) {
           </section>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmRemove}
+        onOpenChange={setConfirmRemove}
+        title={`Remove "${project.name}"?`}
+        description={
+          <>
+            Project will be removed from Orbit. Source files on disk stay
+            untouched.
+            {isRunning && (
+              <span className="block mt-1 text-rose-300">
+                Runtime is active and will be stopped first.
+              </span>
+            )}
+          </>
+        }
+        confirmLabel="Remove"
+        destructive
+        onConfirm={onDelete}
+      />
     </div>
   );
 }
@@ -258,23 +310,25 @@ function Row({
 function Stat({
   label,
   value,
-  mono,
+  highlight,
 }: {
   label: string;
   value: string;
-  mono?: boolean;
+  highlight?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-[var(--orbit-border)] bg-white/2 px-4 py-3 min-w-0">
+    <div
+      className={cn(
+        "rounded-xl border px-4 py-3 min-w-0 transition-colors",
+        highlight
+          ? "border-[var(--orbit-accent-2)]/40 bg-[var(--orbit-accent-2)]/8"
+          : "border-[var(--orbit-border)] bg-white/2",
+      )}
+    >
       <div className="text-[10px] uppercase tracking-widest text-[var(--orbit-subtle)]">
         {label}
       </div>
-      <div
-        className={cn(
-          "mt-1.5 text-sm text-[var(--orbit-text)] truncate",
-          mono && "font-mono text-xs",
-        )}
-      >
+      <div className="mt-1.5 text-sm text-[var(--orbit-text)] truncate font-mono">
         {value}
       </div>
     </div>

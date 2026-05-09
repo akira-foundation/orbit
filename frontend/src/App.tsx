@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
 import { StatusBar } from "./components/StatusBar";
@@ -7,6 +7,15 @@ import { CommandPalette } from "./components/CommandPalette";
 import { Dashboard } from "./pages/Dashboard";
 import { ProjectDetail } from "./pages/ProjectDetail";
 import { useProjects } from "./store";
+import { useWailsEvent } from "./hooks/useWailsEvent";
+import type { RuntimeStatusEvent } from "./types";
+
+const STATUS_EVENTS = [
+  "runtime:starting",
+  "runtime:running",
+  "runtime:stopped",
+  "runtime:error",
+];
 
 const filterTitles: Record<string, string> = {
   all: "All Projects",
@@ -18,13 +27,20 @@ const filterTitles: Record<string, string> = {
 };
 
 export function App() {
-  const { selectedId, projects, filter, query, load, add } = useProjects();
+  const { selectedId, projects, filter, query, load, add, patchStatus } =
+    useProjects();
   const [dialog, setDialog] = useState(false);
   const [palette, setPalette] = useState(false);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const onRuntimeStatus = useCallback(
+    (e: RuntimeStatusEvent) => patchStatus(e.projectId, e.snapshot.status),
+    [patchStatus],
+  );
+  useWailsEvent<RuntimeStatusEvent>(STATUS_EVENTS, onRuntimeStatus);
 
   const selected = useMemo(
     () => projects.find((p) => p.id === selectedId) ?? null,

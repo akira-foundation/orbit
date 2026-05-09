@@ -45,11 +45,15 @@ func (a *App) startup(ctx context.Context) {
 
 	repo := projects.NewRepository(sqlDB, queries)
 	a.service = projects.NewService(repo, analyzer.New(), cfg.DomainTLD)
-	a.runtime = runtime.NewStub()
+	a.runtime = runtime.New(a.service)
+	a.runtime.SetEmitter(runtime.NewWailsEmitter(ctx))
 	a.proxy = proxy.NewStub()
 }
 
 func (a *App) shutdown(_ context.Context) {
+	if a.runtime != nil {
+		a.runtime.StopAll()
+	}
 	if a.db != nil {
 		_ = a.db.Close()
 	}
@@ -103,17 +107,23 @@ func (a *App) DeleteProject(id string) error {
 }
 
 func (a *App) StartProject(id string) error {
-	if err := a.runtime.Start(a.ctx, id); err != nil {
-		return err
-	}
-	return a.service.UpdateStatus(a.ctx, id, projects.StatusRunning)
+	return a.runtime.Start(a.ctx, id)
 }
 
 func (a *App) StopProject(id string) error {
-	if err := a.runtime.Stop(a.ctx, id); err != nil {
-		return err
-	}
-	return a.service.UpdateStatus(a.ctx, id, projects.StatusStopped)
+	return a.runtime.Stop(a.ctx, id)
+}
+
+func (a *App) RestartProject(id string) error {
+	return a.runtime.Restart(a.ctx, id)
+}
+
+func (a *App) RuntimeStatus(id string) runtime.Snapshot {
+	return a.runtime.Status(id)
+}
+
+func (a *App) RuntimeLogs(id string) []runtime.LogLine {
+	return a.runtime.Logs(id)
 }
 
 func (a *App) SelectProjectFolder() (string, error) {
