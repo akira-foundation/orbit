@@ -21,7 +21,6 @@ export function App() {
   const { selectedId, projects, filter, query, load, add } = useProjects();
   const [dialog, setDialog] = useState(false);
   const [palette, setPalette] = useState(false);
-  const [view] = useState<"grid" | "list">("grid");
 
   useEffect(() => {
     load();
@@ -57,20 +56,24 @@ export function App() {
 
       <div className="relative z-10 h-full flex gap-1.5 p-2">
         <aside className="island w-72 shrink-0 flex flex-col">
-          <div className="drag h-9 shrink-0 pl-[68px]" />
+          <div className="drag h-12 shrink-0 pl-[68px]" />
           <Sidebar />
         </aside>
 
         <main className="flex-1 min-w-0 flex flex-col">
-          <header className="drag h-9 shrink-0">
-            <Toolbar title={title} onOpenPalette={() => setPalette(true)} onAdd={() => setDialog(true)} />
+          <header className="drag h-12 shrink-0">
+            <Toolbar
+              title={title}
+              onOpenPalette={() => setPalette(true)}
+              onAdd={() => setDialog(true)}
+            />
           </header>
 
           <div className="flex-1 min-h-0">
             {selected ? (
               <ProjectDetail id={selected.id} />
             ) : (
-              <Dashboard view={view} onAdd={() => setDialog(true)} />
+              <Dashboard onAdd={() => setDialog(true)} />
             )}
           </div>
 

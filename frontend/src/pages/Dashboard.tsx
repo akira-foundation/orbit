@@ -1,23 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useProjects } from '../store'
-import { ProjectIcon } from '../components/ProjectIcon'
-import { Orbit, Plus } from 'lucide-react'
+import { ExternalLink, Orbit, Plus } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import type { Project } from '../types'
 import { cn } from '../lib/cn'
 import { RuntimeStatusBadge } from '../components/RuntimeStatusBadge'
 
-export function Dashboard({
-  view,
-  onAdd,
-}: {
-  view: 'grid' | 'list'
-  onAdd: () => void
-}) {
+export function Dashboard({ onAdd }: { onAdd: () => void }) {
   const { projects, filter, query, select } = useProjects()
   const [focusId, setFocusId] = useState<string | null>(null)
 
-  // Clear local focus when filter/query changes so stale selection isn't shown
   useEffect(() => {
     setFocusId(null)
   }, [filter, query])
@@ -47,49 +39,14 @@ export function Dashboard({
     )
   }
 
-  const open = (p: Project) => {
-    setFocusId(null)
-    select(p.id)
-  }
-
   return (
     <div className="h-full overflow-auto scrollbar-thin" onClick={() => setFocusId(null)}>
-      {view === 'grid' ? (
-        <GridView projects={filtered} focusId={focusId} setFocusId={setFocusId} onOpen={open} />
-      ) : (
-        <ListView projects={filtered} focusId={focusId} setFocusId={setFocusId} onOpen={open} />
-      )}
-    </div>
-  )
-}
-
-// ─── Grid ────────────────────────────────────────────────────────────────────
-
-function GridView({
-  projects,
-  focusId,
-  setFocusId,
-  onOpen,
-}: {
-  projects: Project[]
-  focusId: string | null
-  setFocusId: (id: string | null) => void
-  onOpen: (p: Project) => void
-}) {
-  return (
-    <div className="p-8">
-      <div className="flex flex-wrap gap-x-4 gap-y-6">
-        {projects.map((p) => (
-          <div key={p.id} onClick={(e) => e.stopPropagation()}>
-            <ProjectIcon
-              project={p}
-              selected={focusId === p.id}
-              onSelect={() => setFocusId(p.id)}
-              onOpen={() => onOpen(p)}
-            />
-          </div>
-        ))}
-      </div>
+      <ListView
+        projects={filtered}
+        focusId={focusId}
+        setFocusId={setFocusId}
+        onOpen={(p) => { setFocusId(null); select(p.id) }}
+      />
     </div>
   )
 }
@@ -111,7 +68,7 @@ function ListView({
     <div className="p-4">
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-[10px] uppercase tracking-widest text-[var(--orbit-subtle)]">
+          <tr className="text-xs uppercase tracking-widest text-[var(--orbit-subtle)]">
             <Th>Name</Th>
             <Th>Status</Th>
             <Th>Framework</Th>
@@ -127,16 +84,27 @@ function ListView({
               onDoubleClick={() => onOpen(p)}
               className={cn(
                 'cursor-default border-t border-[var(--orbit-border)] transition-colors',
-                focusId === p.id
-                  ? 'bg-[var(--orbit-accent)]/20'
-                  : 'hover:bg-white/[0.04]',
+                focusId === p.id ? 'bg-[var(--orbit-accent)]/20' : 'hover:bg-white/4',
               )}
             >
               <Td className="font-medium">{p.name}</Td>
               <Td><RuntimeStatusBadge status={p.status} /></Td>
               <Td>{p.detectedFramework}</Td>
               <Td>{p.packageManager}</Td>
-              <Td className="font-mono text-xs text-[var(--orbit-muted)]">{p.localDomain}</Td>
+              <Td>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-mono text-xs text-[var(--orbit-muted)] truncate">{p.localDomain}</span>
+                  <a
+                    href={`https://${p.localDomain}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="shrink-0 text-[var(--orbit-muted)] hover:text-[var(--orbit-text)] transition-colors"
+                  >
+                    <ExternalLink className="size-3" />
+                  </a>
+                </div>
+              </Td>
             </tr>
           ))}
         </tbody>
@@ -149,7 +117,7 @@ function Th({ children }: { children: React.ReactNode }) {
   return <th className="text-left font-semibold px-3 py-2">{children}</th>
 }
 function Td({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <td className={cn('px-3 py-2 align-middle', className)}>{children}</td>
+  return <td className={cn('px-3 py-2.5 align-middle', className)}>{children}</td>
 }
 
 // ─── Empty state ─────────────────────────────────────────────────────────────
@@ -159,7 +127,7 @@ function Empty({ onAdd }: { onAdd: () => void }) {
     <div className="h-full flex flex-col items-center justify-center text-center px-6 select-none">
       <Orbit className="h-12 w-12 text-[var(--orbit-accent)]/80" />
       <h2 className="mt-4 text-[15px] font-semibold">No projects yet</h2>
-      <p className="mt-1 text-[12px] text-[var(--orbit-muted)] max-w-xs">
+      <p className="mt-1 text-xs text-[var(--orbit-muted)] max-w-xs">
         Point Orbit at a folder with a <code className="font-mono">package.json</code>. It will
         detect the framework, package manager, and dev command automatically.
       </p>

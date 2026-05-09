@@ -43,10 +43,11 @@ export function ProjectIcon({ project, selected, onSelect, onOpen }: {
       )}>
         <span className="absolute inset-0 rounded-2xl bg-gradient-to-b from-white/25 to-transparent opacity-60" />
         <span className="absolute inset-x-3 top-2 h-2 rounded-full bg-white/40 blur-[2px]" />
-        <span className="absolute bottom-2 right-2 flex items-center gap-1 px-1.5 h-4 rounded-full bg-black/40 text-[9px] uppercase tracking-wider text-white/90 backdrop-blur-md">
-          <span className={cn('h-1 w-1 rounded-full', dotColors[project.status])} />
-          {project.status}
-        </span>
+        <span className={cn(
+          'absolute bottom-2 right-2 size-2.5 rounded-full border-2 border-black/30',
+          dotColors[project.status],
+          project.status === 'starting' && 'animate-pulse',
+        )} />
       </div>
       <span className={cn(
         'text-xs px-1.5 py-0.5 rounded-md max-w-[7rem] truncate',
