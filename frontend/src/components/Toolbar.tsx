@@ -1,19 +1,23 @@
-import { ArrowLeft, ArrowRight, Search } from "lucide-react"
+import { ArrowLeft, ArrowRight, Plus, Search } from "lucide-react"
 import { useProjects } from "../store"
 import { Button } from "./ui/button"
 
-export function Toolbar({ title, onOpenPalette }: { title?: string; onOpenPalette: () => void }) {
+export function Toolbar({
+  title,
+  onOpenPalette,
+  onAdd,
+}: {
+  title?: string
+  onOpenPalette: () => void
+  onAdd: () => void
+}) {
   const { selectedId, select } = useProjects()
 
   return (
     <div className="relative flex items-center h-full px-4">
+      {/* Left: nav + title */}
       <div className="no-drag flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          disabled={!selectedId}
-          onClick={() => select(null)}
-        >
+        <Button variant="ghost" size="icon" disabled={!selectedId} onClick={() => select(null)}>
           <ArrowLeft />
         </Button>
         <Button variant="ghost" size="icon" disabled>
@@ -24,8 +28,16 @@ export function Toolbar({ title, onOpenPalette }: { title?: string; onOpenPalett
         </div>
       </div>
 
+      {/* Center: search */}
       <div className="absolute left-1/2 -translate-x-1/2 no-drag w-[420px] max-w-[60%]">
         <SearchTrigger onClick={onOpenPalette} />
+      </div>
+
+      {/* Right: add */}
+      <div className="no-drag ml-auto">
+        <Button variant="ghost" size="icon" onClick={onAdd}>
+          <Plus />
+        </Button>
       </div>
     </div>
   )

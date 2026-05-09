@@ -63,7 +63,7 @@ export function App() {
 
         <main className="flex-1 min-w-0 flex flex-col">
           <header className="drag h-9 shrink-0">
-            <Toolbar title={title} onOpenPalette={() => setPalette(true)} />
+            <Toolbar title={title} onOpenPalette={() => setPalette(true)} onAdd={() => setDialog(true)} />
           </header>
 
           <div className="flex-1 min-h-0">
