@@ -23,6 +23,6 @@ func Load() (*Config, error) {
 	return &Config{
 		DataDir:   dir,
 		DBPath:    filepath.Join(dir, "orbit.db"),
-		DomainTLD: "test",
+		DomainTLD: "app",
 	}, nil
 }
