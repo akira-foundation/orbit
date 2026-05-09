@@ -12,10 +12,10 @@ export function ProjectMetadataPanel({ project }: { project: Project }) {
     ['Created', new Date(project.createdAt).toLocaleString()],
   ]
   return (
-    <div className="rounded-xl bg-[var(--color-surface)] ring-1 ring-[var(--color-border)] divide-y divide-[var(--color-border)]">
+    <div className="glass rounded-2xl divide-y divide-[var(--orbit-border)]">
       {items.map(([k, v]) => (
         <div key={k} className="flex items-center justify-between gap-6 px-4 py-3 text-sm">
-          <span className="text-[var(--color-muted)]">{k}</span>
+          <span className="text-[var(--orbit-muted)]">{k}</span>
           <span className="font-mono text-xs text-right truncate">{v}</span>
         </div>
       ))}

@@ -1,30 +1,172 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-@theme {
-  --color-bg: #0a0a0e;
-  --color-surface: #111118;
-  --color-surface-2: #16161f;
-  --color-border: #23232f;
-  --color-muted: #6b6b7a;
-  --color-text: #e7e7ee;
-  --color-accent: #7c5cff;
-  --color-accent-2: #5cc8ff;
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+@custom-variant dark (&:is(.dark *));
+
+/* shadcn tokens (dark by default) */
+:root {
+    --background: oklch(0.14 0.01 280);
+    --foreground: oklch(0.96 0.005 280);
+    --card: oklch(0.18 0.01 280);
+    --card-foreground: oklch(0.96 0.005 280);
+    --popover: oklch(0.18 0.01 280);
+    --popover-foreground: oklch(0.96 0.005 280);
+    --primary: oklch(0.62 0.21 295);
+    --primary-foreground: oklch(0.98 0 0);
+    --secondary: oklch(0.22 0.01 280);
+    --secondary-foreground: oklch(0.96 0.005 280);
+    --muted: oklch(0.22 0.01 280);
+    --muted-foreground: oklch(0.65 0.01 280);
+    --accent: oklch(0.22 0.01 280);
+    --accent-foreground: oklch(0.96 0.005 280);
+    --destructive: oklch(0.6 0.22 25);
+    --destructive-foreground: oklch(0.98 0 0);
+    --border: oklch(1 0 0 / 0.12);
+    --input: oklch(1 0 0 / 0.10);
+    --ring: oklch(0.62 0.21 295);
+    --radius: 0.5rem;
 }
 
-html, body, #root { height: 100%; }
+@theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+    --font-sans:
+        -apple-system, "SF Pro Text", "SF Pro Display", "Inter", ui-sans-serif,
+        system-ui, "Segoe UI", Roboto, sans-serif;
+}
 
+/* Orbit aliases — reference shadcn tokens for single source of truth */
+:root {
+    --orbit-text: var(--foreground);
+    --orbit-muted: oklch(0.65 0.01 280);
+    --orbit-subtle: oklch(0.50 0.01 280);
+    --orbit-border: var(--border);
+    --orbit-border-strong: rgba(255, 255, 255, 0.18);
+    --orbit-accent: var(--primary);
+    --orbit-accent-2: #5cc8ff;
+    --orbit-surface: rgba(255, 255, 255, 0.04);
+    --orbit-surface-2: rgba(255, 255, 255, 0.08);
+    --orbit-surface-hover: rgba(255, 255, 255, 0.12);
+}
+
+html,
+body,
+#root {
+    height: 100%;
+}
+
+html,
 body {
-  margin: 0;
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
+    margin: 0;
+    background: transparent;
+    color: var(--orbit-text);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
 }
 
-::selection { background: color-mix(in oklab, var(--color-accent) 40%, transparent); }
+#root {
+    background: rgba(8, 8, 12, 0.55);
+    border-radius: 14px;
+    overflow: hidden;
+}
 
-.scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
-.scrollbar-thin::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
-.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+::selection {
+    background: color-mix(in oklab, var(--orbit-accent) 45%, transparent);
+}
+
+/* Liquid glass primitives */
+.glass {
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    border: 1px solid var(--orbit-border);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        0 1px 0 rgba(0, 0, 0, 0.25),
+        0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.island {
+    background: rgba(36, 36, 44, 0.55);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.06),
+        0 1px 0 rgba(0, 0, 0, 0.4);
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+.glass-strong {
+    background: rgba(255, 255, 255, 0.10);
+    backdrop-filter: blur(40px) saturate(200%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    border: 1px solid var(--orbit-border-strong);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        0 1px 0 rgba(0, 0, 0, 0.3),
+        0 24px 64px rgba(0, 0, 0, 0.5);
+}
+
+.glass-hover:hover {
+    background: rgba(255, 255, 255, 0.10);
+    border-color: var(--orbit-border-strong);
+}
+
+.ambient { display: none; }
+
+.scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--orbit-border-strong);
+    border-radius: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* mac titlebar drag region — Wails + WebKit */
+.drag {
+    -webkit-app-region: drag;
+    --wails-draggable: drag;
+}
+.no-drag {
+    -webkit-app-region: no-drag;
+    --wails-draggable: no-drag;
+}
+.drag * {
+    -webkit-app-region: inherit;
+}
+.drag input,
+.drag button,
+.drag a,
+.drag [role="button"] {
+    -webkit-app-region: no-drag;
+    --wails-draggable: no-drag;
+}

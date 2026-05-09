@@ -2,13 +2,19 @@ import { create } from 'zustand'
 import type { Project } from './types'
 import { api } from './api'
 
+export type Filter = 'all' | 'running' | 'idle' | 'stopped' | 'suspended' | 'error'
+
 interface State {
   projects: Project[]
   selectedId: string | null
+  filter: Filter
+  query: string
   loading: boolean
   error: string | null
   load: () => Promise<void>
   select: (id: string | null) => void
+  setFilter: (f: Filter) => void
+  setQuery: (q: string) => void
   add: (p: Project) => void
   remove: (id: string) => Promise<void>
   start: (id: string) => Promise<void>
@@ -18,8 +24,12 @@ interface State {
 export const useProjects = create<State>((set, get) => ({
   projects: [],
   selectedId: null,
+  filter: 'all',
+  query: '',
   loading: false,
   error: null,
+  setFilter(f) { set({ filter: f }) },
+  setQuery(q) { set({ query: q }) },
   async load() {
     set({ loading: true, error: null })
     try {

@@ -13,7 +13,7 @@ export function Logo({ size = 28 }: { size?: number }) {
       </svg>
       <div className="leading-tight">
         <div className="text-sm font-semibold tracking-tight">Orbit</div>
-        <div className="text-[10px] uppercase tracking-[0.18em] text-[var(--color-muted)]">Smart Runtime Orchestration</div>
+        <div className="text-[10px] uppercase tracking-[0.18em] text-[var(--orbit-muted)]">Smart Runtime Orchestration</div>
       </div>
     </div>
   )
