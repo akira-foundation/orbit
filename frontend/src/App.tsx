@@ -3,6 +3,7 @@ import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
 import { StatusBar } from "./components/StatusBar";
 import { AddProjectDialog } from "./components/AddProjectDialog";
+import { CommandPalette } from "./components/CommandPalette";
 import { Dashboard } from "./pages/Dashboard";
 import { ProjectDetail } from "./pages/ProjectDetail";
 import { useProjects } from "./store";
@@ -19,7 +20,8 @@ const filterTitles: Record<string, string> = {
 export function App() {
   const { selectedId, projects, filter, query, load, add } = useProjects();
   const [dialog, setDialog] = useState(false);
-  const [view, setView] = useState<"grid" | "list">("grid");
+  const [palette, setPalette] = useState(false);
+  const [view] = useState<"grid" | "list">("grid");
 
   useEffect(() => {
     load();
@@ -61,12 +63,7 @@ export function App() {
 
         <main className="flex-1 min-w-0 flex flex-col">
           <header className="drag h-9 shrink-0">
-            <Toolbar
-              onAdd={() => setDialog(true)}
-              view={view}
-              onViewChange={setView}
-              title={title}
-            />
+            <Toolbar title={title} onOpenPalette={() => setPalette(true)} />
           </header>
 
           <div className="flex-1 min-h-0">
@@ -85,6 +82,12 @@ export function App() {
         open={dialog}
         onClose={() => setDialog(false)}
         onCreated={(p) => add(p)}
+      />
+
+      <CommandPalette
+        open={palette}
+        onOpenChange={setPalette}
+        onAdd={() => setDialog(true)}
       />
     </div>
   );
