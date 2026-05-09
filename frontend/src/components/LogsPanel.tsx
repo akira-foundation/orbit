@@ -1,7 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Anser from "anser";
 import { Eraser, Pause, Play } from "lucide-react";
 import type { RuntimeLogLine } from "../types";
 import { cn } from "../lib/cn";
+
+const CURSOR_CTRL_RE = /\x1B\[[0-9;]*[A-HJKSTfsu]/g;
+const STRAY_BRACKET_RE = /\[(?:\?25[lh]|2K|1G|0K|K|H|s|u)/g;
+
+function renderAnsi(text: string): string {
+  const cleaned = text.replace(CURSOR_CTRL_RE, "").replace(STRAY_BRACKET_RE, "");
+  return Anser.ansiToHtml(cleaned, { use_classes: false, json: false });
+}
 
 interface Props {
   logs: RuntimeLogLine[];
@@ -11,6 +20,11 @@ interface Props {
 export function LogsPanel({ logs, onClear }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+
+  const rendered = useMemo(
+    () => logs.map((l) => ({ ...l, html: renderAnsi(l.text) })),
+    [logs],
+  );
 
   useEffect(() => {
     if (!autoScroll) return;
@@ -63,7 +77,7 @@ export function LogsPanel({ logs, onClear }: Props) {
         {logs.length === 0 ? (
           <p className="text-[var(--orbit-muted)] italic">No logs yet.</p>
         ) : (
-          logs.map((l, i) => (
+          rendered.map((l, i) => (
             <div
               key={i}
               className={cn(
@@ -72,9 +86,8 @@ export function LogsPanel({ logs, onClear }: Props) {
                 l.stream === "system" && "text-[var(--orbit-muted)] italic",
                 l.stream === "stdout" && "text-[var(--orbit-text)]/85",
               )}
-            >
-              {l.text}
-            </div>
+              dangerouslySetInnerHTML={{ __html: l.html }}
+            />
           ))
         )}
       </div>
