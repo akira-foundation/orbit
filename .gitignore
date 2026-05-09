@@ -1,0 +1,25 @@
+# Build output
+build/bin
+frontend/dist
+
+# Dependencies
+node_modules
+
+# Wails generated bindings (regenerated on build)
+frontend/wailsjs
+
+# Editor / OS
+.DS_Store
+.idea
+.vscode
+*.log
+
+# Local data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Env
+.env
+.env.local
