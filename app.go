@@ -37,13 +37,13 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.cfg = cfg
 
-	db, err := database.Open(cfg.DBPath)
+	sqlDB, queries, err := database.Open(cfg.DBPath)
 	if err != nil {
 		panic(fmt.Errorf("database: %w", err))
 	}
-	a.db = db
+	a.db = sqlDB
 
-	repo := projects.NewRepository(db)
+	repo := projects.NewRepository(sqlDB, queries)
 	a.service = projects.NewService(repo, analyzer.New(), cfg.DomainTLD)
 	a.runtime = runtime.NewStub()
 	a.proxy = proxy.NewStub()

@@ -7,42 +7,58 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"orbit-app/internal/database/db"
 )
 
 var ErrNotFound = errors.New("project not found")
 
+// Repository wraps the SQLC-generated *db.Queries with domain-level logic:
+// transaction handling, model mapping, and error translation.
 type Repository struct {
-	db *sql.DB
+	q   *db.Queries
+	raw *sql.DB // needed for transactions
 }
 
-func NewRepository(db *sql.DB) *Repository {
-	return &Repository{db: db}
+func NewRepository(sqlDB *sql.DB, q *db.Queries) *Repository {
+	return &Repository{q: q, raw: sqlDB}
 }
+
+// ─── writes ──────────────────────────────────────────────────────────────────
 
 func (r *Repository) Create(ctx context.Context, p *Project) error {
 	if p.ID == "" {
 		p.ID = uuid.NewString()
 	}
-	now := time.Now().UTC()
+	now := time.Now().UTC().Format(time.RFC3339)
 	p.CreatedAt = now
 	p.UpdatedAt = now
 	if p.Status == "" {
 		p.Status = StatusStopped
 	}
 
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.raw.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck
 
-	_, err = tx.ExecContext(ctx, `INSERT INTO projects
-		(id, name, path, slug, local_domain, detected_framework, package_manager, dev_command, dev_port, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ID, p.Name, p.Path, p.Slug, p.LocalDomain, p.DetectedFramework,
-		p.PackageManager, p.DevCommand, p.DevPort, string(p.Status), p.CreatedAt, p.UpdatedAt,
-	)
-	if err != nil {
+	qtx := r.q.WithTx(tx)
+
+	if _, err := qtx.CreateProject(ctx, db.CreateProjectParams{
+		ID:                p.ID,
+		Name:              p.Name,
+		Path:              p.Path,
+		Slug:              p.Slug,
+		LocalDomain:       p.LocalDomain,
+		DetectedFramework: p.DetectedFramework,
+		PackageManager:    p.PackageManager,
+		DevCommand:        p.DevCommand,
+		DevPort:           int64(p.DevPort),
+		Status:            string(p.Status),
+		CreatedAt:         p.CreatedAt,
+		UpdatedAt:         p.UpdatedAt,
+	}); err != nil {
 		return err
 	}
 
@@ -53,89 +69,93 @@ func (r *Repository) Create(ctx context.Context, p *Project) error {
 		}
 		s.ProjectID = p.ID
 		s.CreatedAt = now
-		_, err := tx.ExecContext(ctx, `INSERT INTO project_scripts (id, project_id, name, command, created_at) VALUES (?, ?, ?, ?, ?)`,
-			s.ID, s.ProjectID, s.Name, s.Command, s.CreatedAt)
-		if err != nil {
+		if _, err := qtx.CreateScript(ctx, db.CreateScriptParams{
+			ID:        s.ID,
+			ProjectID: s.ProjectID,
+			Name:      s.Name,
+			Command:   s.Command,
+			CreatedAt: s.CreatedAt,
+		}); err != nil {
 			return err
 		}
 	}
+
 	return tx.Commit()
 }
 
+func (r *Repository) Delete(ctx context.Context, id string) error {
+	if _, err := r.q.GetProject(ctx, id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	return r.q.DeleteProject(ctx, id)
+}
+
+func (r *Repository) UpdateStatus(ctx context.Context, id string, status Status) error {
+	return r.q.UpdateProjectStatus(ctx, db.UpdateProjectStatusParams{
+		Status:    string(status),
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+		ID:        id,
+	})
+}
+
+// ─── reads ────────────────────────────────────────────────────────────────────
+
 func (r *Repository) List(ctx context.Context) ([]Project, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT id, name, path, slug, local_domain, detected_framework, package_manager, dev_command, dev_port, status, created_at, updated_at FROM projects ORDER BY created_at DESC`)
+	rows, err := r.q.ListProjects(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var out []Project
-	for rows.Next() {
-		var p Project
-		var status string
-		if err := rows.Scan(&p.ID, &p.Name, &p.Path, &p.Slug, &p.LocalDomain, &p.DetectedFramework,
-			&p.PackageManager, &p.DevCommand, &p.DevPort, &status, &p.CreatedAt, &p.UpdatedAt); err != nil {
-			return nil, err
-		}
-		p.Status = Status(status)
-		out = append(out, p)
+	out := make([]Project, len(rows))
+	for i, row := range rows {
+		out[i] = projectFromDB(row)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (r *Repository) Get(ctx context.Context, id string) (*Project, error) {
-	var p Project
-	var status string
-	err := r.db.QueryRowContext(ctx, `SELECT id, name, path, slug, local_domain, detected_framework, package_manager, dev_command, dev_port, status, created_at, updated_at FROM projects WHERE id = ?`, id).
-		Scan(&p.ID, &p.Name, &p.Path, &p.Slug, &p.LocalDomain, &p.DetectedFramework,
-			&p.PackageManager, &p.DevCommand, &p.DevPort, &status, &p.CreatedAt, &p.UpdatedAt)
+	row, err := r.q.GetProject(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	p.Status = Status(status)
+	p := projectFromDB(row)
 
-	scripts, err := r.scriptsByProject(ctx, p.ID)
+	scripts, err := r.q.ListScriptsByProject(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	p.Scripts = scripts
+	for _, s := range scripts {
+		p.Scripts = append(p.Scripts, Script{
+			ID:        s.ID,
+			ProjectID: s.ProjectID,
+			Name:      s.Name,
+			Command:   s.Command,
+			CreatedAt: s.CreatedAt,
+		})
+	}
 	return &p, nil
 }
 
-func (r *Repository) Delete(ctx context.Context, id string) error {
-	res, err := r.db.ExecContext(ctx, `DELETE FROM projects WHERE id = ?`, id)
-	if err != nil {
-		return err
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
+// ─── helpers ─────────────────────────────────────────────────────────────────
 
-func (r *Repository) UpdateStatus(ctx context.Context, id string, status Status) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE projects SET status = ?, updated_at = ? WHERE id = ?`, string(status), time.Now().UTC(), id)
-	return err
-}
-
-func (r *Repository) scriptsByProject(ctx context.Context, id string) ([]Script, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT id, project_id, name, command, created_at FROM project_scripts WHERE project_id = ? ORDER BY name`, id)
-	if err != nil {
-		return nil, err
+func projectFromDB(row db.Project) Project {
+	return Project{
+		ID:                row.ID,
+		Name:              row.Name,
+		Path:              row.Path,
+		Slug:              row.Slug,
+		LocalDomain:       row.LocalDomain,
+		DetectedFramework: row.DetectedFramework,
+		PackageManager:    row.PackageManager,
+		DevCommand:        row.DevCommand,
+		DevPort:           int(row.DevPort),
+		Status:            Status(row.Status),
+		CreatedAt:         row.CreatedAt,
+		UpdatedAt:         row.UpdatedAt,
 	}
-	defer rows.Close()
-
-	var out []Script
-	for rows.Next() {
-		var s Script
-		if err := rows.Scan(&s.ID, &s.ProjectID, &s.Name, &s.Command, &s.CreatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, s)
-	}
-	return out, rows.Err()
 }
