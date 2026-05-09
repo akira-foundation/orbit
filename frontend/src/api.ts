@@ -1,39 +1,31 @@
-import type { AnalyzeResult, Project, ProjectStatus } from './types'
+import {
+  AnalyzePath,
+  AddProject,
+  ListProjects,
+  GetProject,
+  DeleteProject,
+  StartProject,
+  StopProject,
+  SelectProjectFolder,
+} from '../wailsjs/go/main/App'
+import type { AnalyzeResult, Project } from './types'
 
-declare global {
-  interface Window {
-    go?: {
-      main?: {
-        App?: {
-          AnalyzePath(path: string): Promise<AnalyzeResult>
-          AddProject(path: string): Promise<Project>
-          ListProjects(): Promise<Project[] | null>
-          GetProject(id: string): Promise<Project>
-          DeleteProject(id: string): Promise<void>
-          StartProject(id: string): Promise<void>
-          StopProject(id: string): Promise<void>
-          SelectProjectFolder(): Promise<string>
-        }
-      }
-    }
-  }
-}
-
-function bridge() {
-  const app = window.go?.main?.App
-  if (!app) throw new Error('Wails bindings not ready')
-  return app
+// Cast through unknown because the wailsjs generated models use `any` for
+// time.Time fields, while our hand-written types use `string`. The JSON wire
+// format is identical (ISO-8601).
+function cast<T>(p: Promise<unknown>): Promise<T> {
+  return p as Promise<T>
 }
 
 export const api = {
-  analyzePath: (path: string) => bridge().AnalyzePath(path),
-  addProject: (path: string) => bridge().AddProject(path),
-  listProjects: async () => (await bridge().ListProjects()) ?? [],
-  getProject: (id: string) => bridge().GetProject(id),
-  deleteProject: (id: string) => bridge().DeleteProject(id),
-  startProject: (id: string) => bridge().StartProject(id),
-  stopProject: (id: string) => bridge().StopProject(id),
-  selectFolder: () => bridge().SelectProjectFolder(),
+  analyzePath:   (path: string): Promise<AnalyzeResult> => cast(AnalyzePath(path)),
+  addProject:    (path: string): Promise<Project>       => cast(AddProject(path)),
+  listProjects:  async (): Promise<Project[]>           => (await cast<Project[] | null>(ListProjects())) ?? [],
+  getProject:    (id: string):   Promise<Project>       => cast(GetProject(id)),
+  deleteProject: (id: string):   Promise<void>          => DeleteProject(id),
+  startProject:  (id: string):   Promise<void>          => StartProject(id),
+  stopProject:   (id: string):   Promise<void>          => StopProject(id),
+  selectFolder:  ():             Promise<string>        => SelectProjectFolder(),
 }
 
-export type { Project, ProjectStatus, AnalyzeResult }
+export type { Project, AnalyzeResult }
