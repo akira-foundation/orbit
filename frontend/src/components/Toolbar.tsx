@@ -50,7 +50,7 @@ export function Toolbar({ title, onOpenPalette, onAdd }: ToolbarProps) {
 
 function Pill({ children }: { children: React.ReactNode }) {
   return (
-    <div className="inline-flex items-center rounded-full bg-white/9 border border-white/11 overflow-hidden">
+    <div className="inline-flex items-center rounded-full bg-white/9 border border-white/11 overflow-hidden shadow-[0_4px_14px_rgba(0,0,0,0.35)]">
       {children}
     </div>
   );
@@ -87,7 +87,7 @@ function SearchTrigger({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="group w-full flex items-center h-10 rounded-full bg-white/6 border border-white/10 hover:bg-white/9 hover:border-white/14 transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group w-full flex items-center h-10 rounded-full bg-white/6 border border-white/10 hover:bg-white/9 hover:border-white/14 shadow-[0_4px_14px_rgba(0,0,0,0.3)] transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <Search className="ml-3.5 size-4 text-[var(--orbit-muted)] shrink-0" />
       <span className="flex-1 px-2 text-sm text-[var(--orbit-muted)]">
