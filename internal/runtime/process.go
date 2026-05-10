@@ -66,6 +66,15 @@ func (h *processHandle) forceKill() error {
 	return syscall.Kill(-h.pgid, syscall.SIGKILL)
 }
 
+// killPGID hard-kills a process group by pgid. Used defensively to clean up
+// any leftover child group from a prior session before spawning a new one.
+func killPGID(pgid int) error {
+	if pgid <= 0 {
+		return nil
+	}
+	return syscall.Kill(-pgid, syscall.SIGKILL)
+}
+
 func scanLines(r io.Reader, fn func(line string) bool) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)

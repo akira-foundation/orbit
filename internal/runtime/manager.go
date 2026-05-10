@@ -84,6 +84,11 @@ func (m *manager) Start(ctx context.Context, projectID string) error {
 			m.mu.Unlock()
 			return errors.New("runtime: cooling down after recent failure")
 		}
+		// Defensive: kill any stale child group from the previous session
+		// before spawning a new one so we never accumulate orphans.
+		if existing.pgid > 0 {
+			_ = killPGID(existing.pgid)
+		}
 	}
 	sess := newSession(projectID, m.logCap)
 	sess.setStatus(projects.StatusStarting)
@@ -118,6 +123,7 @@ func (m *manager) Start(ctx context.Context, projectID string) error {
 
 	sess.setPID(handle.cmd.Process.Pid)
 	sess.setPort(port)
+	sess.pgid = handle.pgid
 
 	_ = m.projects.UpdateStatus(ctx, projectID, projects.StatusStarting)
 	m.emit(EvtStarting, StatusEvent{ProjectID: projectID, Snapshot: sess.Snapshot()})
@@ -125,8 +131,27 @@ func (m *manager) Start(ctx context.Context, projectID string) error {
 	go m.readPipe(sess, handle.stdout, "stdout")
 	go m.readPipe(sess, handle.stderr, "stderr")
 	go m.supervise(sess, handle, proj)
+	go m.watchdog(sess, handle, 60*time.Second)
 
 	return nil
+}
+
+// watchdog force-kills the process group if the session never reaches Running
+// within timeout. Without this a hung dev server (compile loop, infinite
+// retry, prompt waiting on stdin) would just sit there consuming RAM forever.
+func (m *manager) watchdog(sess *Session, handle *processHandle, timeout time.Duration) {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-sess.stopCh:
+		return
+	case <-timer.C:
+		if sess.Status() == projects.StatusStarting {
+			log.Printf("[runtime] watchdog: project=%s never became ready in %s, killing pgid=%d",
+				sess.projectID, timeout, handle.pgid)
+			_ = handle.forceKill()
+		}
+	}
 }
 
 func (m *manager) markStartFailed(sess *Session, err error) {
@@ -212,18 +237,27 @@ func (m *manager) IsRunning(projectID string) bool {
 func (m *manager) StopAll() {
 	m.mu.RLock()
 	ids := make([]string, 0, len(m.sessions))
+	pgids := make([]int, 0, len(m.sessions))
 	for id, s := range m.sessions {
 		st := s.Status()
 		if st == projects.StatusStarting || st == projects.StatusRunning {
 			ids = append(ids, id)
 		}
+		if s.pgid > 0 {
+			pgids = append(pgids, s.pgid)
+		}
 	}
 	m.mu.RUnlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	for _, id := range ids {
 		_ = m.Stop(ctx, id)
+	}
+	// Final sweep: regardless of graceful stop, force-kill every known
+	// process group so app exit never leaves dev servers running.
+	for _, pgid := range pgids {
+		_ = killPGID(pgid)
 	}
 }
 

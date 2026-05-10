@@ -41,6 +41,7 @@ type Session struct {
 
 	stopCh chan struct{}
 	killFn func()
+	pgid   int
 }
 
 func newSession(projectID string, logCap int) *Session {
