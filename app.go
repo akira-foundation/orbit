@@ -44,10 +44,10 @@ func (a *App) startup(ctx context.Context) {
 	a.db = sqlDB
 
 	repo := projects.NewRepository(sqlDB, queries)
-	a.service = projects.NewService(repo, analyzer.New(), cfg.DomainTLD)
+	a.service = projects.NewService(repo, analyzer.New(), cfg.DomainSuffix)
 	a.runtime = runtime.New(a.service)
 	a.runtime.SetEmitter(runtime.NewWailsEmitter(ctx))
-	a.proxy = proxy.NewStub()
+	a.proxy = proxy.New(a.service, cfg.DomainSuffix)
 }
 
 func (a *App) shutdown(_ context.Context) {
@@ -86,7 +86,7 @@ func (a *App) AnalyzePath(path string) (*AnalyzeResult, error) {
 		DevPort:         res.DevPort,
 		Scripts:         res.Scripts,
 		SuggestedSlug:   slug,
-		SuggestedDomain: slug + "." + a.cfg.DomainTLD,
+		SuggestedDomain: a.cfg.DomainFor(slug),
 	}, nil
 }
 

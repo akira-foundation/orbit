@@ -10,14 +10,18 @@ import (
 )
 
 type Service struct {
-	repo     *Repository
-	analyzer analyzer.Analyzer
-	tld      string
+	repo         *Repository
+	analyzer     analyzer.Analyzer
+	domainSuffix string
 }
 
-func NewService(repo *Repository, a analyzer.Analyzer, tld string) *Service {
-	return &Service{repo: repo, analyzer: a, tld: tld}
+func NewService(repo *Repository, a analyzer.Analyzer, domainSuffix string) *Service {
+	return &Service{repo: repo, analyzer: a, domainSuffix: domainSuffix}
 }
+
+func (s *Service) DomainSuffix() string { return s.domainSuffix }
+
+func (s *Service) DomainFor(slug string) string { return slug + "." + s.domainSuffix }
 
 func (s *Service) AnalyzePath(path string) (*analyzer.Analysis, error) {
 	if strings.TrimSpace(path) == "" {
@@ -36,7 +40,7 @@ func (s *Service) Create(ctx context.Context, path string) (*Project, error) {
 		Name:              a.Name,
 		Path:              a.Path,
 		Slug:              slug,
-		LocalDomain:       slug + "." + s.tld,
+		LocalDomain:       s.DomainFor(slug),
 		DetectedFramework: a.Framework,
 		PackageManager:    a.PackageManager,
 		DevCommand:        a.DevCommand,

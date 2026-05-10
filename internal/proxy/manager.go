@@ -2,46 +2,86 @@ package proxy
 
 import (
 	"context"
-	"sync"
+	"errors"
+	"strings"
 
 	"orbit-app/internal/projects"
 )
 
+var ErrDomainNotRegistered = errors.New("proxy: domain not registered with orbit")
+
+type ProjectLookup interface {
+	List(ctx context.Context) ([]projects.Project, error)
+}
+
 type Manager interface {
-	RegisterDomain(ctx context.Context, p *projects.Project) error
-	UnregisterDomain(ctx context.Context, p *projects.Project) error
+	Resolve(ctx context.Context, host string) (*projects.Project, error)
 	List(ctx context.Context) ([]string, error)
 }
 
-type stubManager struct {
-	mu      sync.RWMutex
-	domains map[string]string
+type registry struct {
+	projects     ProjectLookup
+	domainSuffix string
 }
 
-func NewStub() Manager {
-	return &stubManager{domains: make(map[string]string)}
+func New(p ProjectLookup, domainSuffix string) Manager {
+	return &registry{projects: p, domainSuffix: strings.TrimPrefix(domainSuffix, ".")}
 }
 
-func (m *stubManager) RegisterDomain(_ context.Context, p *projects.Project) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.domains[p.LocalDomain] = p.ID
-	return nil
+func (r *registry) Resolve(ctx context.Context, host string) (*projects.Project, error) {
+	host = normalizeHost(host)
+	if host == "" {
+		return nil, ErrDomainNotRegistered
+	}
+
+	suffix := "." + r.domainSuffix
+	if !strings.HasSuffix(host, suffix) && host != r.domainSuffix {
+		return nil, ErrDomainNotRegistered
+	}
+
+	all, err := r.projects.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	candidate := host
+	for {
+		for i := range all {
+			if all[i].LocalDomain == candidate {
+				return &all[i], nil
+			}
+		}
+		idx := strings.IndexByte(candidate, '.')
+		if idx < 0 {
+			break
+		}
+		next := candidate[idx+1:]
+		if next == r.domainSuffix || next == "" {
+			break
+		}
+		candidate = next
+	}
+
+	return nil, ErrDomainNotRegistered
 }
 
-func (m *stubManager) UnregisterDomain(_ context.Context, p *projects.Project) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.domains, p.LocalDomain)
-	return nil
-}
-
-func (m *stubManager) List(_ context.Context) ([]string, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	out := make([]string, 0, len(m.domains))
-	for d := range m.domains {
-		out = append(out, d)
+func (r *registry) List(ctx context.Context) ([]string, error) {
+	all, err := r.projects.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(all))
+	for i := range all {
+		out = append(out, all[i].LocalDomain)
 	}
 	return out, nil
+}
+
+func normalizeHost(host string) string {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if i := strings.IndexByte(host, ':'); i >= 0 {
+		host = host[:i]
+	}
+	host = strings.TrimSuffix(host, ".")
+	return host
 }

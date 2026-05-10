@@ -17,15 +17,6 @@ const STATUS_EVENTS = [
   "runtime:error",
 ];
 
-const filterTitles: Record<string, string> = {
-  all: "All Projects",
-  running: "Running",
-  idle: "Idle",
-  stopped: "Stopped",
-  suspended: "Suspended",
-  error: "Errors",
-};
-
 export function App() {
   const { selectedId, projects, filter, query, load, add, patchStatus } =
     useProjects();
@@ -62,8 +53,6 @@ export function App() {
     return xs.length;
   }, [projects, filter, query]);
 
-  const title = selected ? selected.name : filterTitles[filter];
-
   return (
     <div className="relative h-full">
       <div className="ambient" />
@@ -79,7 +68,6 @@ export function App() {
         <main className="flex-1 min-w-0 flex flex-col">
           <header className="drag h-12 shrink-0">
             <Toolbar
-              title={title}
               onOpenPalette={() => setPalette(true)}
               onAdd={() => setDialog(true)}
             />

@@ -34,7 +34,7 @@ export function Sidebar() {
   const recent = projects.slice(0, 8);
 
   return (
-    <nav className="flex-1 overflow-auto scrollbar-thin px-3 pt-2 pb-4 mr-4">
+    <nav className="flex-1 overflow-auto scrollbar-thin px-2 pt-2 pb-4">
       <Section title="Workspace">
         {filterItems.map((it) => (
           <Row
@@ -83,7 +83,7 @@ function Section({
 }) {
   return (
     <div className="mt-5 first:mt-3">
-      <h3 className="pl-4 pr-3 mb-1.5 text-[11px] font-semibold text-[var(--orbit-subtle)]">
+      <h3 className="px-3 mb-1.5 text-[11px] font-semibold text-[var(--orbit-subtle)]">
         {title}
       </h3>
       <ul className="space-y-1">{children}</ul>
@@ -111,7 +111,7 @@ function Row({
       <button
         onClick={onClick}
         className={cn(
-          "no-drag w-full h-[34px] pl-4 pr-3 rounded-md flex items-center gap-3 text-[13px] transition",
+          "no-drag w-full h-[34px] px-3 rounded-md flex items-center gap-3 text-[13px] transition",
           active
             ? "bg-white/[0.10] text-[var(--orbit-text)]"
             : "text-[var(--orbit-text)]/90 hover:bg-white/[0.06]",

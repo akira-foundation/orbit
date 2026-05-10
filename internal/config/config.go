@@ -6,9 +6,9 @@ import (
 )
 
 type Config struct {
-	DataDir    string
-	DBPath     string
-	DomainTLD  string
+	DataDir      string
+	DBPath       string
+	DomainSuffix string
 }
 
 func Load() (*Config, error) {
@@ -21,8 +21,12 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	return &Config{
-		DataDir:   dir,
-		DBPath:    filepath.Join(dir, "orbit.db"),
-		DomainTLD: "app",
+		DataDir:      dir,
+		DBPath:       filepath.Join(dir, "orbit.db"),
+		DomainSuffix: "orbit.test",
 	}, nil
+}
+
+func (c *Config) DomainFor(slug string) string {
+	return slug + "." + c.DomainSuffix
 }
