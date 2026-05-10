@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"orbit-app/internal/projects"
+	"orbit-app/internal/runtime"
 )
 
 var ErrNoPort = errors.New("proxy: project has no known port")
@@ -16,6 +17,7 @@ type RuntimeProvider interface {
 	Start(ctx context.Context, projectID string) error
 	Port(projectID string) int
 	IsRunning(projectID string) bool
+	Status(projectID string) runtime.Snapshot
 	ConnOpen(projectID string)
 	ConnClose(projectID string)
 }

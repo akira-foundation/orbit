@@ -19,7 +19,10 @@ type Snapshot struct {
 	PID          int             `json:"pid"`
 	Port         int             `json:"port"`
 	StartedAt    string          `json:"startedAt"`
+	ReadyAt      string          `json:"readyAt,omitempty"`
 	UptimeMs     int64           `json:"uptimeMs"`
+	StartupMs    int64           `json:"startupMs,omitempty"`
+	Attempts     int             `json:"attempts,omitempty"`
 	LastActivity string          `json:"lastActivity"`
 	Error        string          `json:"error,omitempty"`
 }
@@ -32,8 +35,17 @@ type Session struct {
 	pid          int
 	port         int
 	startedAt    time.Time
+	readyAt      time.Time
 	lastActivity time.Time
 	errMsg       string
+
+	// Self-healing accounting. attempts counts consecutive failures since
+	// the last successful run; reaches 0 again as soon as the session
+	// becomes Running. wasRunning flips true once a session reached
+	// Running so we can tell premature startup failures apart from real
+	// runtime crashes.
+	attempts   int
+	wasRunning bool
 
 	logs     []LogLine
 	logCap   int
@@ -59,6 +71,13 @@ func (s *Session) setStatus(st projects.Status) {
 	s.mu.Lock()
 	s.status = st
 	s.lastActivity = time.Now().UTC()
+	if st == projects.StatusRunning {
+		if s.readyAt.IsZero() {
+			s.readyAt = time.Now().UTC()
+		}
+		s.wasRunning = true
+		s.attempts = 0
+	}
 	s.mu.Unlock()
 }
 
@@ -109,13 +128,22 @@ func (s *Session) Snapshot() Snapshot {
 	if s.status == projects.StatusRunning || s.status == projects.StatusStarting {
 		uptime = time.Since(s.startedAt).Milliseconds()
 	}
+	startupMs := int64(0)
+	readyStr := ""
+	if !s.readyAt.IsZero() {
+		startupMs = s.readyAt.Sub(s.startedAt).Milliseconds()
+		readyStr = s.readyAt.Format(time.RFC3339)
+	}
 	return Snapshot{
 		ProjectID:    s.projectID,
 		Status:       s.status,
 		PID:          s.pid,
 		Port:         s.port,
 		StartedAt:    s.startedAt.Format(time.RFC3339),
+		ReadyAt:      readyStr,
 		UptimeMs:     uptime,
+		StartupMs:    startupMs,
+		Attempts:     s.attempts,
 		LastActivity: s.lastActivity.Format(time.RFC3339),
 		Error:        s.errMsg,
 	}
@@ -151,4 +179,24 @@ func (s *Session) LastActivity() time.Time {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.lastActivity
+}
+
+func (s *Session) Attempts() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.attempts
+}
+
+func (s *Session) WasRunning() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.wasRunning
+}
+
+func (s *Session) bumpAttempts() int {
+	s.mu.Lock()
+	s.attempts++
+	n := s.attempts
+	s.mu.Unlock()
+	return n
 }

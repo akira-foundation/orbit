@@ -53,6 +53,12 @@ func main() {
 		OnStartup:         app.startup,
 		OnShutdown:        app.shutdown,
 		Bind:              []interface{}{app},
+		// Closing the window must NOT terminate the runtime daemon. The
+		// proxy, runtime manager and *.orbit.test routing keep running in
+		// the background; only the UI hides. Dock icon click reopens it.
+		// Quit Orbit (Cmd+Q) goes through the App menu and triggers the
+		// real shutdown via OnShutdown.
+		HideWindowOnClose: true,
 		Mac: &mac.Options{
 			TitleBar:             mac.TitleBarHiddenInset(),
 			Appearance:           mac.NSAppearanceNameDarkAqua,

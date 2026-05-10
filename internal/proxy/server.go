@@ -11,6 +11,8 @@ import (
 	"net/http/httputil"
 	"strings"
 	"time"
+
+	"orbit-app/internal/projects"
 )
 
 type Server struct {
@@ -72,6 +74,31 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fast path for navigations to a not-yet-ready runtime: render the Wake
+	// page immediately and let it SSE-poll until the runtime is healthy,
+	// instead of holding the connection open until our 45s router timeout.
+	// We only do this for top-level GETs — XHR/fetch/asset requests still
+	// fall through to Route so HMR/SSE reconnects after a brief blip just
+	// keep working.
+	if s.recovery != nil && isPageNavigation(r) {
+		if proj, ok := s.lookup(r); ok {
+			st := s.router.runtime.Status(proj.ID)
+			needsWake := st.Status == projects.StatusStopped ||
+				st.Status == projects.StatusStarting
+			if needsWake {
+				if st.Status == projects.StatusStopped {
+					go func() {
+						ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+						defer cancel()
+						_ = s.router.runtime.Start(ctx, proj.ID)
+					}()
+				}
+				s.renderWake(w, r, proj)
+				return
+			}
+		}
+	}
+
 	target, err := s.router.Route(r.Context(), r.Host)
 	if err != nil {
 		s.handleError(w, r, err)
@@ -115,6 +142,39 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rp.ServeHTTP(w, r)
+}
+
+func (s *Server) lookup(r *http.Request) (*projects.Project, bool) {
+	proj, err := s.router.registry.Resolve(r.Context(), r.Host)
+	if err != nil {
+		return nil, false
+	}
+	return proj, true
+}
+
+// isPageNavigation returns true for top-level browser navigations (HTML
+// document loads). Asset / XHR / WS reconnect requests fall through to the
+// proxy so a transient downstream blip during an HMR session doesn't redirect
+// the user to the Wake page.
+func isPageNavigation(r *http.Request) bool {
+	if r.Method != http.MethodGet {
+		return false
+	}
+	if isWebSocket(r) {
+		return false
+	}
+	if dest := r.Header.Get("Sec-Fetch-Dest"); dest != "" {
+		return dest == "document" || dest == "iframe"
+	}
+	accept := r.Header.Get("Accept")
+	return strings.Contains(accept, "text/html")
+}
+
+func (s *Server) renderWake(w http.ResponseWriter, r *http.Request, proj *projects.Project) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusAccepted)
+	fmt.Fprint(w, wakePage(proj))
 }
 
 func isWebSocket(r *http.Request) bool {

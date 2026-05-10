@@ -84,6 +84,10 @@ func (m *manager) emit(name string, data ...any) {
 }
 
 func (m *manager) Start(ctx context.Context, projectID string) error {
+	return m.start(ctx, projectID, false)
+}
+
+func (m *manager) start(ctx context.Context, projectID string, internal bool) error {
 	m.mu.Lock()
 	if existing, ok := m.sessions[projectID]; ok {
 		st := existing.Status()
@@ -91,7 +95,11 @@ func (m *manager) Start(ctx context.Context, projectID string) error {
 			m.mu.Unlock()
 			return errors.New("runtime: already running")
 		}
-		if st == projects.StatusError && time.Since(existing.LastActivity()) < 10*time.Second {
+		// External callers (proxy auto-wake, UI button) get throttled to
+		// avoid relaunching on every browser refresh after a fresh failure.
+		// Self-healing goroutines (internal=true) ignore this — they are
+		// already paced by exponential backoff.
+		if !internal && st == projects.StatusError && time.Since(existing.LastActivity()) < 10*time.Second {
 			m.mu.Unlock()
 			return errors.New("runtime: cooling down after recent failure")
 		}
@@ -391,9 +399,8 @@ func (m *manager) finalize(sess *Session, err error, requested bool) {
 		return
 	}
 
-	// Process exited on its own. If it never reached Running, treat as a
-	// failure so the cooldown kicks in and we don't relaunch on every request.
 	prematurelyExited := sess.Status() == projects.StatusStarting
+	wasRunning := sess.WasRunning()
 
 	if err != nil || prematurelyExited {
 		msg := "process exited before becoming ready"
@@ -408,11 +415,62 @@ func (m *manager) finalize(sess *Session, err error, requested bool) {
 		})
 		m.emit(EvtError, StatusEvent{ProjectID: sess.projectID, Snapshot: sess.Snapshot()})
 		_ = m.projects.UpdateStatus(context.Background(), sess.projectID, projects.StatusError)
+		// Self-healing: only retry runtimes that previously reached Running.
+		// A startup that never went healthy is most likely a config bug
+		// (wrong port, missing dep) and retrying just spams the user.
+		if wasRunning {
+			m.scheduleRestart(sess)
+		}
 		return
 	}
+
+	// Clean exit (code 0) of a previously-running session: still try to
+	// recover — the user did not request a stop.
 	sess.markStopped()
 	m.emit(EvtStopped, StatusEvent{ProjectID: sess.projectID, Snapshot: sess.Snapshot()})
 	_ = m.projects.UpdateStatus(context.Background(), sess.projectID, projects.StatusStopped)
+	if wasRunning {
+		m.scheduleRestart(sess)
+	}
+}
+
+// scheduleRestart kicks off an exponential-backoff retry after an unexpected
+// crash. Each attempt doubles the wait, capped at maxBackoff. Gives up after
+// maxRestartAttempts and leaves the session in Error so the recovery overlay
+// stays visible.
+const (
+	maxRestartAttempts = 5
+	maxBackoff         = 16 * time.Second
+)
+
+func (m *manager) scheduleRestart(sess *Session) {
+	n := sess.bumpAttempts()
+	if n > maxRestartAttempts {
+		log.Printf("[runtime] self-heal giving up project=%s attempts=%d",
+			sess.projectID, n)
+		return
+	}
+	delay := time.Duration(1<<uint(n-1)) * time.Second
+	if delay > maxBackoff {
+		delay = maxBackoff
+	}
+	log.Printf("[runtime] self-heal scheduling project=%s attempt=%d in=%s",
+		sess.projectID, n, delay)
+	go func() {
+		t := time.NewTimer(delay)
+		defer t.Stop()
+		select {
+		case <-sess.stopCh:
+			return
+		case <-t.C:
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := m.start(ctx, sess.projectID, true); err != nil {
+			log.Printf("[runtime] self-heal restart failed project=%s err=%v",
+				sess.projectID, err)
+		}
+	}()
 }
 
 // pickPort returns a free ephemeral port for the dev server. We always pick

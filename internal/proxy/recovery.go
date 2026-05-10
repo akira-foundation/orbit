@@ -326,6 +326,110 @@ func recoveryPage(p *projects.Project) string {
 	)
 }
 
+// wakePage is the calm "starting up" UI shown the first time someone hits a
+// stopped or starting runtime. Sibling to recoveryPage but visually distinct
+// (cool blue, no error treatment) so users immediately read it as "give me a
+// moment" instead of "something broke". Reuses /__orbit__/recovery/events
+// for the SSE stream and the same auto-reload-when-running JS.
+func wakePage(p *projects.Project) string {
+	return fmt.Sprintf(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Orbit · Waking %[1]s</title>
+<meta name="color-scheme" content="dark">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    background: radial-gradient(circle at 30%% 20%%, rgba(45,215,255,0.18), transparent 50%%),
+                radial-gradient(circle at 75%% 80%%, rgba(124,127,255,0.14), transparent 55%%),
+                #0a0b10;
+    color: #e5e7eb;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .card {
+    width: min(520px, calc(100%% - 32px));
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px;
+    background: rgba(20,21,28,0.65);
+    backdrop-filter: blur(28px) saturate(160%%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%%);
+    box-shadow: 0 24px 64px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06);
+    padding: 28px 32px 24px;
+  }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; border-radius: 999px;
+    background: rgba(45,215,255,0.12);
+    color: #67e8f9;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+    margin-bottom: 18px;
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%%; background: #2dd7ff; box-shadow: 0 0 12px #2dd7ff; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%%,100%% { opacity: 1; transform: scale(1); } 50%% { opacity: 0.4; transform: scale(0.85); } }
+  h1 { font-size: 19px; margin: 0 0 6px; font-weight: 600; letter-spacing: -0.01em; }
+  .lead { font-size: 13px; color: #a1a1aa; margin: 0 0 22px; line-height: 1.55; }
+  .row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0;
+         border-top: 1px solid rgba(255,255,255,0.06); font-size: 12px; }
+  .row:first-of-type { border-top: 0; }
+  .row .label { color: #71717a; text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; font-weight: 600; }
+  .row .value { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #e5e7eb; }
+  .footer { margin-top: 18px; font-size: 11px; color: #52525b; text-align: center; }
+</style>
+</head>
+<body>
+  <main class="card">
+    <div class="badge"><span class="dot"></span><span id="state">starting</span></div>
+    <h1 id="title">Waking %[1]s</h1>
+    <p class="lead" id="lead">Orbit is starting the dev server. This page reloads automatically when it's ready.</p>
+    <div class="row"><span class="label">Project</span><span class="value">%[1]s</span></div>
+    <div class="row"><span class="label">Domain</span><span class="value">%[2]s</span></div>
+    <div class="row"><span class="label">Port</span><span class="value" id="port">—</span></div>
+    <div class="row"><span class="label">Startup</span><span class="value" id="elapsed">0s</span></div>
+    <p class="footer">Orbit · ambient runtime</p>
+  </main>
+<script>
+(() => {
+  const stateEl = document.getElementById('state');
+  const titleEl = document.getElementById('title');
+  const leadEl  = document.getElementById('lead');
+  const portEl  = document.getElementById('port');
+  const elapsedEl = document.getElementById('elapsed');
+  const startedAt = Date.now();
+  setInterval(() => {
+    elapsedEl.textContent = Math.round((Date.now() - startedAt) / 1000) + 's';
+  }, 250);
+
+  function reload() { location.reload(); }
+  function open() {
+    const es = new EventSource('%[3]s/events');
+    es.onmessage = (ev) => {
+      let snap; try { snap = JSON.parse(ev.data); } catch { return; }
+      stateEl.textContent = snap.status;
+      portEl.textContent = snap.port || '—';
+      if (snap.status === 'running' && snap.port > 0) {
+        titleEl.textContent = 'Ready';
+        leadEl.textContent = 'Loading the app…';
+        es.close();
+        setTimeout(reload, 300);
+      } else if (snap.status === 'error') {
+        // Hand off to the recovery page on real failure.
+        es.close();
+        location.replace('%[3]s/');
+      }
+    };
+    es.onerror = () => { es.close(); setTimeout(open, 1500); };
+  }
+  open();
+})();
+</script>
+</body></html>`,
+		htmlEscape(p.Name),
+		htmlEscape(p.LocalDomain),
+		recoveryPrefix,
+	)
+}
+
 func htmlEscape(s string) string {
 	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&#39;")
 	return r.Replace(s)
