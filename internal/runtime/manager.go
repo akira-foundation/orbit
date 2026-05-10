@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"orbit-app/internal/config"
 	"orbit-app/internal/projects"
 )
 
@@ -34,8 +35,8 @@ type Manager interface {
 	IsRunning(projectID string) bool
 	ConnOpen(projectID string)
 	ConnClose(projectID string)
-	Metrics(projectID string) []Sample
-	MetricsAll() map[string][]Sample
+	Metrics(projectID string, sinceTs int64) []Sample
+	MetricsAll(sinceTs int64, ids []string) map[string][]Sample
 	LogsHistory(projectID string, sinceTs int64, limit int) []LogLine
 	RecordEvent(projectID string, level EventLevel, source EventSource, text string)
 	RecordRequest(projectID string, statusCode int, durationMs float64, bytesIn, bytesOut int64, isWS bool)
@@ -44,7 +45,7 @@ type Manager interface {
 	SetEmitter(e Emitter)
 }
 
-func New(projects ProjectLookup, db *sql.DB) Manager {
+func New(projects ProjectLookup, db *sql.DB, cfg *config.Config) Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &manager{
 		ctx:        ctx,
@@ -57,7 +58,7 @@ func New(projects ProjectLookup, db *sql.DB) Manager {
 		idleAfter:  10 * time.Second,
 		activeConn: make(map[string]int),
 		idleSince:  make(map[string]time.Time),
-		metrics:    newMetrics(db),
+		metrics:    newMetrics(db, cfg),
 		logs:       newLogStore(db),
 	}
 	go m.idleSweeper()
@@ -101,9 +102,7 @@ func (m *manager) projMetricsFor(projectID string) *projMetrics {
 	return pm
 }
 
-// RecordRequest is called by the proxy on every completed request. Increments
-// counters used for req-rate, error-rate, latency percentiles, byte volume,
-// HTTP-vs-WS breakdown.
+
 func (m *manager) RecordRequest(projectID string, statusCode int, durationMs float64, bytesIn, bytesOut int64, isWS bool) {
 	if projectID == "" {
 		return
@@ -111,12 +110,7 @@ func (m *manager) RecordRequest(projectID string, statusCode int, durationMs flo
 	m.projMetricsFor(projectID).RecordRequest(statusCode, durationMs, bytesIn, bytesOut, isWS)
 }
 
-// addLog appends to the session's in-memory ring buffer (hot path for the
-// streaming UI) and persists the line to the events table.
-//
-// Stream-based level inference: stderr -> warn, system -> info, stdout ->
-// info. The events table is the single audit log for everything that
-// happens in Orbit, kept forever by user request.
+
 func (m *manager) addLog(sess *Session, line LogLine) {
 	sess.appendLog(line)
 	if m.logs == nil {
@@ -137,8 +131,7 @@ func (m *manager) addLog(sess *Session, line LogLine) {
 	})
 }
 
-// recordSystem persists a non-runtime event (lifecycle marker, self-heal
-// retry, crash detected, etc.). Project ID may be empty for app-wide events.
+
 func (m *manager) recordSystem(projectID string, level EventLevel, source EventSource, text string) {
 	if m.logs == nil {
 		return
@@ -152,12 +145,12 @@ func (m *manager) recordSystem(projectID string, level EventLevel, source EventS
 	})
 }
 
-func (m *manager) Metrics(projectID string) []Sample {
-	return m.metrics.get(projectID)
+func (m *manager) Metrics(projectID string, sinceTs int64) []Sample {
+	return m.metrics.get(projectID, sinceTs)
 }
 
-func (m *manager) MetricsAll() map[string][]Sample {
-	return m.metrics.all()
+func (m *manager) MetricsAll(sinceTs int64, ids []string) map[string][]Sample {
+	return m.metrics.all(sinceTs, ids)
 }
 
 func (m *manager) LogsHistory(projectID string, sinceTs int64, limit int) []LogLine {
@@ -171,12 +164,7 @@ func (m *manager) RecordEvent(projectID string, level EventLevel, source EventSo
 	m.recordSystem(projectID, level, source, text)
 }
 
-// metricsSampler walks every active session every sampleInterval and pushes
-// a snapshot point into the metric_samples table. Pulls in:
-//   - session state (status, port, conns, uptime, attempts)
-//   - traffic counters drained from projMetrics (reqs, errors, latency, bytes)
-//   - OS process stats from ps (RSS, CPU%) for the child process group
-//   - lifetime counters (crashes, autostops) and most recent wake latency
+
 func (m *manager) metricsSampler() {
 	tk := time.NewTicker(sampleInterval)
 	defer tk.Stop()
@@ -185,44 +173,51 @@ func (m *manager) metricsSampler() {
 		case <-m.ctx.Done():
 			return
 		case <-tk.C:
-			m.mu.RLock()
-			ids := make([]string, 0, len(m.sessions))
-			pgids := make(map[string]int, len(m.sessions))
-			for id, sess := range m.sessions {
-				ids = append(ids, id)
-				pgids[id] = sess.pgid
-			}
-			m.mu.RUnlock()
-		now := time.Now().Unix()
-		for _, id := range ids {
-			snap := m.Status(id)
-			d := m.projMetricsFor(id).Drain()
-			ps := readProcStat(pgids[id])
-			m.metrics.push(Sample{
-				Ts:        now,
-				ProjectID: id,
-				Status:    snap.Status,
-				Port:      snap.Port,
-				Conns:     snap.Conns,
-				UptimeMs:  snap.UptimeMs,
-				Attempts:  snap.Attempts,
-				ReqCount:  d.ReqCount,
-				ErrCount:  d.ErrCount,
-				HTTPReqs:  d.HTTPReqs,
-				WSReqs:    d.WSReqs,
-				BytesIn:   d.BytesIn,
-				BytesOut:  d.BytesOut,
-				P50Ms:     d.P50,
-				P95Ms:     d.P95,
-				P99Ms:     d.P99,
-				MemKB:     ps.MemKB,
-				CPUPct:    ps.CPUPct,
-				Crashes:   d.Crashes,
-				Autostops: d.Autostops,
-				WakeMs:    d.WakeMs,
-			})
+			m.sampleNow()
 		}
-		}
+	}
+}
+
+// sampleNow writes one Sample per active session into metric_samples.
+func (m *manager) sampleNow() {
+	now := time.Now().Unix()
+
+	m.mu.RLock()
+	pgids := make(map[string]int, len(m.sessions))
+	activeIDs := make([]string, 0, len(m.sessions))
+	for id, sess := range m.sessions {
+		activeIDs = append(activeIDs, id)
+		pgids[id] = sess.pgid
+	}
+	m.mu.RUnlock()
+
+	for _, id := range activeIDs {
+		snap := m.Status(id)
+		d := m.projMetricsFor(id).Drain()
+		ps := readProcStat(pgids[id])
+		m.metrics.push(Sample{
+			Ts:        now,
+			ProjectID: id,
+			Status:    snap.Status,
+			Port:      snap.Port,
+			Conns:     snap.Conns,
+			UptimeMs:  snap.UptimeMs,
+			Attempts:  snap.Attempts,
+			ReqCount:  d.ReqCount,
+			ErrCount:  d.ErrCount,
+			HTTPReqs:  d.HTTPReqs,
+			WSReqs:    d.WSReqs,
+			BytesIn:   d.BytesIn,
+			BytesOut:  d.BytesOut,
+			P50Ms:     d.P50,
+			P95Ms:     d.P95,
+			P99Ms:     d.P99,
+			MemKB:     ps.MemKB,
+			CPUPct:    ps.CPUPct,
+			Crashes:   d.Crashes,
+			Autostops: d.Autostops,
+			WakeMs:    d.WakeMs,
+		})
 	}
 }
 
@@ -243,9 +238,6 @@ func (m *manager) emit(name string, data ...any) {
 	e.Emit(name, data...)
 }
 
-// snap takes a session and wraps the per-session Snapshot with manager-level
-// metadata (currently the live connection count). Use this whenever you build
-// a StatusEvent so emitted snapshots match what Status(id) returns.
 func (m *manager) snap(sess *Session) Snapshot {
 	s := sess.Snapshot()
 	m.mu.RLock()
@@ -266,16 +258,12 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 			m.mu.Unlock()
 			return errors.New("runtime: already running")
 		}
-		// External callers (proxy auto-wake, UI button) get throttled to
-		// avoid relaunching on every browser refresh after a fresh failure.
-		// Self-healing goroutines (internal=true) ignore this — they are
-		// already paced by exponential backoff.
+
 		if !internal && st == projects.StatusError && time.Since(existing.LastActivity()) < 10*time.Second {
 			m.mu.Unlock()
 			return errors.New("runtime: cooling down after recent failure")
 		}
-		// Defensive: kill any stale child group from the previous session
-		// before spawning a new one so we never accumulate orphans.
+		
 		if existing.pgid > 0 {
 			_ = killPGID(existing.pgid)
 		}
@@ -315,9 +303,7 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 
 	sess.setPID(handle.cmd.Process.Pid)
 	sess.pgid = handle.pgid
-	// Don't pre-set sess.Port. The framework may ignore $PORT (Astro reads
-	// astro.config, Vite reads vite.config) and bind a different one. Let
-	// log parsing in readPipe resolve the actual listening port.
+
 
 	_ = m.projects.UpdateStatus(ctx, projectID, projects.StatusStarting)
 	m.emit(EvtStarting, StatusEvent{ProjectID: projectID, Snapshot: m.snap(sess)})
@@ -330,9 +316,7 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 	return nil
 }
 
-// watchdog force-kills the process group if the session never reaches Running
-// within timeout. Without this a hung dev server (compile loop, infinite
-// retry, prompt waiting on stdin) would just sit there consuming RAM forever.
+
 func (m *manager) watchdog(sess *Session, handle *processHandle, timeout time.Duration) {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
@@ -432,10 +416,6 @@ func (m *manager) IsRunning(projectID string) bool {
 	return false
 }
 
-// ConnOpen and ConnClose are called by the proxy on every incoming request
-// (including long-lived WebSocket / SSE connections). When a project's active
-// connection count drops to zero, idleSweeper schedules a graceful stop after
-// idleAfter so closing the browser tab actually shuts the dev server down.
 func (m *manager) ConnOpen(projectID string) {
 	if projectID == "" {
 		return
@@ -520,8 +500,7 @@ func (m *manager) StopAll() {
 	for _, id := range ids {
 		_ = m.Stop(ctx, id)
 	}
-	// Final sweep: regardless of graceful stop, force-kill every known
-	// process group so app exit never leaves dev servers running.
+
 	for _, pgid := range pgids {
 		_ = killPGID(pgid)
 	}
@@ -614,21 +593,17 @@ func (m *manager) finalize(sess *Session, err error, requested bool) {
 		m.emit(EvtError, StatusEvent{ProjectID: sess.projectID, Snapshot: m.snap(sess)})
 		_ = m.projects.UpdateStatus(context.Background(), sess.projectID, projects.StatusError)
 		if wasRunning {
-			// Treat as a real crash for metrics purposes — startups that
-			// never reached Running are config bugs, not crashes.
+
 			m.projMetricsFor(sess.projectID).IncCrash()
 		}
-		// Self-healing: only retry runtimes that previously reached Running.
-		// A startup that never went healthy is most likely a config bug
-		// (wrong port, missing dep) and retrying just spams the user.
+
 		if wasRunning {
 			m.scheduleRestart(sess)
 		}
 		return
 	}
 
-	// Clean exit (code 0) of a previously-running session: still try to
-	// recover — the user did not request a stop.
+
 	sess.markStopped()
 	m.emit(EvtStopped, StatusEvent{ProjectID: sess.projectID, Snapshot: m.snap(sess)})
 	_ = m.projects.UpdateStatus(context.Background(), sess.projectID, projects.StatusStopped)
@@ -637,10 +612,6 @@ func (m *manager) finalize(sess *Session, err error, requested bool) {
 	}
 }
 
-// scheduleRestart kicks off an exponential-backoff retry after an unexpected
-// crash. Each attempt doubles the wait, capped at maxBackoff. Gives up after
-// maxRestartAttempts and leaves the session in Error so the recovery overlay
-// stays visible.
 const (
 	maxRestartAttempts = 5
 	maxBackoff         = 16 * time.Second
@@ -680,10 +651,6 @@ func (m *manager) scheduleRestart(sess *Session) {
 	}()
 }
 
-// pickPort returns a free ephemeral port for the dev server. We always pick
-// fresh — the proxy hides port numbers from the user, and ephemeral avoids
-// races / collisions between multiple Orbit projects all defaulting to 3000.
-// preferred is only used as a fallback if the OS refuses to allocate.
 func pickPort(preferred int) int {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -700,10 +667,7 @@ func pickPort(preferred int) int {
 var localhostPortRe = regexp.MustCompile(`(?i)(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])[: ](\d{2,5})`)
 var portFlagRe = regexp.MustCompile(`(?i)\bport[:= ]\s*(\d{2,5})\b`)
 
-// extractPortFromLine returns (port, strong). A "strong" match is one tied to
-// an actual listener address (localhost:N / 127.0.0.1:N / 0.0.0.0:N) and should
-// overwrite previously detected ports. Weak matches (e.g. "Port 3000 is in use")
-// only set the port if none was found yet.
+
 func extractPortFromLine(s string) (int, bool) {
 	if m := localhostPortRe.FindStringSubmatch(s); len(m) == 2 {
 		if p, err := strconv.Atoi(m[1]); err == nil && p > 0 && p < 65536 {

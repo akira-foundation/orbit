@@ -30,6 +30,8 @@ import { api } from "../api";
 import { useProjects } from "../store";
 import type { MetricSample, Project } from "../types";
 import { cn } from "../lib/cn";
+import { MetricsFilter, MetricInterval, getSinceTsForInterval } from "../components/MetricsFilter";
+import { Skeleton } from "../components/ui/skeleton";
 
 // Lightweight palette so each project line has a stable color.
 const PALETTE = [
@@ -48,40 +50,43 @@ const MAX_DEFAULT_VISIBLE = 10;
 export function MetricsPage() {
   const { projects, showProjectMetrics } = useProjects();
   const [samples, setSamples] = useState<Record<string, MetricSample[]>>({});
+  const [loaded, setLoaded] = useState(false);
   const [selected, setSelected] = useLocalStorage<string[] | null>(
     "orbit:metrics:selectedProjects",
     null,
   );
 
-  const refresh = async () => {
-    try {
-      setSamples(await api.runtimeMetricsAll());
-    } catch {
-      /* ignore */
-    }
-  };
-  useEffect(() => {
-    refresh();
-  }, []);
-  useInterval(refresh, 5000);
+  const [range, setRange] = useLocalStorage<MetricInterval>("orbit:metrics:interval", "1H");
 
   const visibleIds = useMemo(() => {
     if (selected !== null) {
       const valid = new Set(projects.map((p) => p.id));
       return selected.filter((id) => valid.has(id));
     }
-    if (projects.length <= MAX_DEFAULT_VISIBLE) return projects.map((p) => p.id);
-    return projects
-      .map((p) => {
-        const buf = samples[p.id] ?? [];
-        const last = buf[buf.length - 1];
-        const score = last ? last.conns * 1000 + last.uptimeMs / 1000 : 0;
-        return { id: p.id, score };
-      })
-      .sort((a, b) => b.score - a.score)
+    // Default: most recently created N projects. Sample-based ranking
+    // would create a chicken-and-egg with the visibleIds-filtered fetch.
+    return [...projects]
+      .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))
       .slice(0, MAX_DEFAULT_VISIBLE)
-      .map((x) => x.id);
-  }, [projects, samples, selected]);
+      .map((p) => p.id);
+  }, [projects, selected]);
+
+  const refresh = async () => {
+    try {
+      setSamples(
+        await api.runtimeMetricsAll(getSinceTsForInterval(range), visibleIds),
+      );
+    } catch {
+      /* ignore */
+    } finally {
+      setLoaded(true);
+    }
+  };
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range, visibleIds.join(",")]);
+  useInterval(refresh, 30000);
 
   const visibleProjects = useMemo(
     () => projects.filter((p) => visibleIds.includes(p.id)),
@@ -115,14 +120,47 @@ export function MetricsPage() {
     samples,
   ]);
 
+  if (!loaded) {
+    return (
+      <div className="h-full overflow-auto scrollbar-thin">
+        <div className="mx-auto w-full max-w-6xl px-10 py-8 space-y-6">
+          <header className="flex items-center justify-between">
+            <div className="space-y-2">
+              <Skeleton className="h-7 w-24" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+            <Skeleton className="h-8 w-56 rounded-lg" />
+          </header>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Skeleton className="h-36 rounded-2xl" />
+            <Skeleton className="h-36 rounded-2xl" />
+            <Skeleton className="h-36 rounded-2xl" />
+          </div>
+          <Skeleton className="h-44 rounded-2xl" />
+          <Skeleton className="h-32 rounded-2xl" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Skeleton className="h-64 rounded-2xl" />
+            <Skeleton className="h-64 rounded-2xl" />
+            <Skeleton className="h-64 rounded-2xl" />
+            <Skeleton className="h-64 rounded-2xl" />
+          </div>
+          <Skeleton className="h-48 rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full overflow-auto scrollbar-thin">
       <div className="mx-auto w-full max-w-6xl px-10 py-8 space-y-6">
-        <header>
-          <h1 className="text-2xl font-semibold tracking-tight">Metrics</h1>
-          <p className="text-xs text-[var(--orbit-muted)] mt-1">
-            5s sampling · live
-          </p>
+        <header className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Metrics</h1>
+            <p className="text-xs text-[var(--orbit-muted)] mt-1">
+              5s sampling · live
+            </p>
+          </div>
+          <MetricsFilter value={range} onChange={setRange} />
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

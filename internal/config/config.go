@@ -1,16 +1,17 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 )
 
 type Config struct {
-	DataDir      string
-	DBPath       string
-	DomainSuffix string
-	ProxyAddr    string
-	PublicPort   string
+	DataDir              string `json:"-"`
+	DBPath               string `json:"-"`
+	DomainSuffix string `json:"domainSuffix"`
+	ProxyAddr    string `json:"proxyAddr"`
+	PublicPort   string `json:"publicPort"`
 }
 
 func Load() (*Config, error) {
@@ -22,13 +23,29 @@ func Load() (*Config, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	return &Config{
+	c := &Config{
 		DataDir:      dir,
 		DBPath:       filepath.Join(dir, "orbit.db"),
 		DomainSuffix: "orbit.test",
 		ProxyAddr:    "127.0.0.1:2080",
 		PublicPort:   "80",
-	}, nil
+	}
+
+	configPath := filepath.Join(dir, "orbit.json")
+	if data, err := os.ReadFile(configPath); err == nil {
+		_ = json.Unmarshal(data, c)
+	}
+
+	return c, nil
+}
+
+func (c *Config) Save() error {
+	configPath := filepath.Join(c.DataDir, "orbit.json")
+	data, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(configPath, data, 0o644)
 }
 
 func (c *Config) DomainFor(slug string) string {

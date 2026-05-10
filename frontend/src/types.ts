@@ -14,6 +14,9 @@ export interface ProjectScript {
   createdAt: string
 }
 
+import type { config } from "../wailsjs/go/models";
+export type Config = config.Config;
+
 export interface Project {
   id: string
   name: string

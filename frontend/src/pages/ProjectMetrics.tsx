@@ -27,9 +27,12 @@ import {
   Zap,
 } from "lucide-react";
 import { api } from "../api";
+import { useLocalStorage } from "usehooks-ts";
+import { MetricsFilter, MetricInterval, getSinceTsForInterval } from "../components/MetricsFilter";
 import { useProjects } from "../store";
 import type { MetricSample, Project } from "../types";
 import { cn } from "../lib/cn";
+import { Skeleton } from "../components/ui/skeleton";
 
 const ACCENT = "#22d3ee";
 
@@ -40,24 +43,54 @@ export function ProjectMetricsPage({ id }: { id: string }) {
     [projects, id],
   );
   const [samples, setSamples] = useState<MetricSample[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [range, setRange] = useLocalStorage<MetricInterval>("orbit:metrics:interval", "1H");
 
   const refresh = async () => {
     try {
-      setSamples(await api.runtimeMetrics(id));
+      setSamples(await api.runtimeMetrics(id, getSinceTsForInterval(range)));
     } catch {
       /* ignore */
+    } finally {
+      setLoaded(true);
     }
   };
 
   useEffect(() => {
+    setLoaded(false);
     refresh();
-  }, [id]);
-  useInterval(refresh, 5000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, range]);
+  useInterval(refresh, 30000);
 
   if (!project) {
     return (
       <div className="h-full flex items-center justify-center">
         <p className="text-sm text-[var(--orbit-muted)]">Project not found.</p>
+      </div>
+    );
+  }
+
+  if (!loaded) {
+    return (
+      <div className="h-full overflow-auto scrollbar-thin">
+        <div className="mx-auto w-full max-w-6xl px-10 py-8 space-y-6">
+          <Skeleton className="h-12 w-72" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Skeleton className="h-36 rounded-2xl" />
+            <Skeleton className="h-36 rounded-2xl" />
+            <Skeleton className="h-36 rounded-2xl" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Skeleton className="h-64 rounded-2xl" />
+            <Skeleton className="h-64 rounded-2xl" />
+          </div>
+          <Skeleton className="h-72 rounded-2xl" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Skeleton className="h-56 rounded-2xl" />
+            <Skeleton className="h-56 rounded-2xl" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -71,22 +104,25 @@ export function ProjectMetricsPage({ id }: { id: string }) {
   return (
     <div className="h-full overflow-auto scrollbar-thin">
       <div className="mx-auto w-full max-w-6xl px-10 py-8 space-y-8">
-        <header className="flex items-center justify-between">
-          <div className="space-y-1">
+        <header className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
+          <div className="flex items-center gap-4">
             <button
-              onClick={() => select(id)}
-              className="inline-flex items-center gap-1.5 text-[11px] text-[var(--orbit-muted)] hover:text-[var(--orbit-text)]"
+              onClick={() => select(null)}
+              className="inline-flex items-center justify-center size-8 rounded-md hover:bg-white/5 transition-colors text-[var(--orbit-muted)] hover:text-[var(--orbit-text)]"
+              title="Back"
             >
-              <ArrowLeft className="size-3" />
-              Back to {project.name}
+              <ArrowLeft className="size-4" />
             </button>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {project.name} · Metrics
-            </h1>
-            <p className="text-xs text-[var(--orbit-muted)]">
-              Last 30 minutes · 5s sampling · live
-            </p>
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight text-[var(--orbit-text)]">
+                {project.name} · Metrics
+              </h1>
+              <p className="text-xs text-[var(--orbit-muted)] mt-0.5">
+                5s sampling · live
+              </p>
+            </div>
           </div>
+          <MetricsFilter value={range} onChange={setRange} />
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

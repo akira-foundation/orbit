@@ -51,7 +51,7 @@ func (a *App) startup(ctx context.Context) {
 
 	repo := projects.NewRepository(sqlDB, queries)
 	a.service = projects.NewService(repo, analyzer.New(), cfg.DomainSuffix)
-	a.runtime = runtime.New(a.service, sqlDB)
+	a.runtime = runtime.New(a.service, sqlDB, a.cfg)
 	a.runtime.SetEmitter(runtime.NewWailsEmitter(ctx))
 	a.registry = proxy.New(a.service, cfg.DomainSuffix)
 
@@ -160,12 +160,22 @@ func (a *App) RuntimeLogsHistory(id string, sinceTs int64, limit int) []runtime.
 	return a.runtime.LogsHistory(id, sinceTs, limit)
 }
 
-func (a *App) RuntimeMetrics(id string) []runtime.Sample {
-	return a.runtime.Metrics(id)
+func (a *App) RuntimeMetrics(id string, sinceTs int64) []runtime.Sample {
+	return a.runtime.Metrics(id, sinceTs)
 }
 
-func (a *App) RuntimeMetricsAll() map[string][]runtime.Sample {
-	return a.runtime.MetricsAll()
+func (a *App) RuntimeMetricsAll(sinceTs int64, ids []string) map[string][]runtime.Sample {
+	return a.runtime.MetricsAll(sinceTs, ids)
+}
+
+func (a *App) SystemConfig() *config.Config {
+	return a.cfg
+}
+
+func (a *App) SystemSaveConfig(cfg *config.Config) error {
+	// For now we don't have any mutable config fields via the UI
+	// but this method is kept for future expansion.
+	return a.cfg.Save()
 }
 
 func (a *App) SelectProjectFolder() (string, error) {

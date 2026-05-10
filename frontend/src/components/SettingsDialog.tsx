@@ -16,7 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { api } from "../api";
-import type { SystemStatus } from "../types";
+import type { SystemStatus, Config } from "../types";
 import { cn } from "../lib/cn";
 
 type Section = "general" | "domains" | "about";
