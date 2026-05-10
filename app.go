@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"time"
 
 	"orbit-app/internal/analyzer"
@@ -189,6 +190,13 @@ func (a *App) ProjectURL(id string) (*ProjectURL, error) {
 		Domain: p.LocalDomain,
 		Port:   a.cfg.ProxyPort(),
 	}, nil
+}
+
+func (a *App) RevealInFinder(path string) error {
+	if path == "" {
+		return fmt.Errorf("empty path")
+	}
+	return exec.Command("open", path).Start()
 }
 
 func (a *App) OpenProject(id string) error {

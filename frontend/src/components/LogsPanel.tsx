@@ -55,50 +55,47 @@ export function LogsPanel({ logs, onClear }: Props) {
   };
 
   return (
-    <div className="rounded-xl border border-[var(--orbit-border)] bg-black/40 overflow-hidden flex flex-col h-80">
-      <div className="flex items-center justify-between px-3 h-8 border-b border-[var(--orbit-border)] bg-white/2">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--orbit-subtle)]">
-          Logs
-          <span className="ml-2 text-[var(--orbit-muted)] normal-case tracking-normal font-normal">
-            {logs.length} lines
-          </span>
+    <div className="rounded-lg border border-[var(--orbit-border)] bg-black/40 overflow-hidden flex flex-col h-80 relative">
+      {/* Floating actions — top right of the terminal pane. No header bar
+          since the parent Card already provides the title. */}
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+        <span className="text-[10px] font-mono text-[var(--orbit-muted)] mr-1.5 tabular-nums">
+          {logs.length}
         </span>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setAutoScroll((v) => !v)}
-            className={cn(
-              "size-6 inline-flex items-center justify-center rounded text-[var(--orbit-muted)] hover:text-[var(--orbit-text)] hover:bg-white/5 transition-colors",
-              autoScroll && "text-emerald-400 hover:text-emerald-300",
-            )}
-            title={autoScroll ? "Pause auto-scroll" : "Resume auto-scroll"}
-          >
-            {autoScroll ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
-          </button>
-          <button
-            onClick={onCopy}
-            disabled={logs.length === 0}
-            className={cn(
-              "size-6 inline-flex items-center justify-center rounded text-[var(--orbit-muted)] hover:text-[var(--orbit-text)] hover:bg-white/5 transition-colors",
-              copied && "text-emerald-400 hover:text-emerald-300",
-              logs.length === 0 && "opacity-40 cursor-default",
-            )}
-            title={copied ? "Copied" : "Copy logs"}
-          >
-            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-          </button>
-          <button
-            onClick={onClear}
-            className="size-6 inline-flex items-center justify-center rounded text-[var(--orbit-muted)] hover:text-[var(--orbit-text)] hover:bg-white/5 transition-colors"
-            title="Clear logs"
-          >
-            <Eraser className="size-3.5" />
-          </button>
-        </div>
+        <button
+          onClick={() => setAutoScroll((v) => !v)}
+          className={cn(
+            "size-6 inline-flex items-center justify-center rounded text-[var(--orbit-muted)] hover:text-[var(--orbit-text)] hover:bg-white/5 transition-colors",
+            autoScroll && "text-emerald-400 hover:text-emerald-300",
+          )}
+          title={autoScroll ? "Pause auto-scroll" : "Resume auto-scroll"}
+        >
+          {autoScroll ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
+        </button>
+        <button
+          onClick={onCopy}
+          disabled={logs.length === 0}
+          className={cn(
+            "size-6 inline-flex items-center justify-center rounded text-[var(--orbit-muted)] hover:text-[var(--orbit-text)] hover:bg-white/5 transition-colors",
+            copied && "text-emerald-400 hover:text-emerald-300",
+            logs.length === 0 && "opacity-40 cursor-default",
+          )}
+          title={copied ? "Copied" : "Copy logs"}
+        >
+          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+        </button>
+        <button
+          onClick={onClear}
+          className="size-6 inline-flex items-center justify-center rounded text-[var(--orbit-muted)] hover:text-[var(--orbit-text)] hover:bg-white/5 transition-colors"
+          title="Clear logs"
+        >
+          <Eraser className="size-3.5" />
+        </button>
       </div>
       <div
         ref={ref}
         onScroll={onScroll}
-        className="flex-1 overflow-auto scrollbar-thin font-mono text-[11px] leading-5 px-3 py-2"
+        className="flex-1 overflow-auto scrollbar-thin font-mono text-[11px] leading-5 px-3 py-2.5"
       >
         {logs.length === 0 ? (
           <p className="text-[var(--orbit-muted)] italic">No logs yet.</p>
