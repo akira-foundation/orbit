@@ -44,7 +44,7 @@ func New(projects ProjectLookup) Manager {
 		sessions:   make(map[string]*Session),
 		stopGrace:  5 * time.Second,
 		logCap:     2000,
-		idleAfter:  30 * time.Second,
+		idleAfter:  10 * time.Second,
 		activeConn: make(map[string]int),
 		idleSince:  make(map[string]time.Time),
 	}
@@ -276,7 +276,7 @@ func (m *manager) ConnClose(projectID string) {
 }
 
 func (m *manager) idleSweeper() {
-	tick := time.NewTicker(5 * time.Second)
+	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()
 	for range tick.C {
 		m.mu.RLock()

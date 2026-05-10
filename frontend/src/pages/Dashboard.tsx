@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useProjects } from '../store'
-import { ExternalLink, Orbit, Plus } from 'lucide-react'
+import { ExternalLink, Loader2, Orbit, Play, Plus, Square } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import type { Project } from '../types'
 import { cn } from '../lib/cn'
@@ -75,6 +75,7 @@ function ListView({
             <Th>Framework</Th>
             <Th>Manager</Th>
             <Th>Domain</Th>
+            <Th>{''}</Th>
           </tr>
         </thead>
         <tbody>
@@ -106,11 +107,47 @@ function ListView({
                   </button>
                 </div>
               </Td>
+              <Td className="w-px text-right pr-3">
+                <RowAction project={p} />
+              </Td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  )
+}
+
+function RowAction({ project }: { project: Project }) {
+  const [busy, setBusy] = useState(false)
+  const running = project.status === 'running' || project.status === 'starting'
+  const onClick = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (busy) return
+    setBusy(true)
+    try {
+      if (running) await api.stopProject(project.id)
+      else await api.startProject(project.id)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const Icon = busy ? Loader2 : running ? Square : Play
+  return (
+    <button
+      onClick={onClick}
+      disabled={busy}
+      title={running ? 'Stop' : 'Start'}
+      className={cn(
+        'no-drag inline-flex items-center justify-center size-7 rounded-md transition-colors',
+        running
+          ? 'text-rose-300 hover:bg-white/5'
+          : 'text-emerald-300 hover:bg-white/5',
+        busy && 'opacity-60 cursor-default',
+      )}
+    >
+      <Icon className={cn('size-3.5', busy && 'animate-spin')} />
+    </button>
   )
 }
 
