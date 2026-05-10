@@ -39,3 +39,13 @@ type Script struct {
 	Command   string `json:"command"`
 	CreatedAt string `json:"createdAt"`
 }
+
+type Domain struct {
+	ID         string `json:"id"`
+	ProjectID  string `json:"projectId"`
+	Domain     string `json:"domain"`
+	TargetPort int    `json:"targetPort"`
+	Enabled    bool   `json:"enabled"`
+	CreatedAt  string `json:"createdAt"`
+	UpdatedAt  string `json:"updatedAt"`
+}

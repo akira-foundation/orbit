@@ -19,6 +19,16 @@ type Project struct {
 	UpdatedAt         string `json:"updated_at"`
 }
 
+type ProjectDomain struct {
+	ID         string `json:"id"`
+	ProjectID  string `json:"project_id"`
+	Domain     string `json:"domain"`
+	TargetPort int64  `json:"target_port"`
+	Enabled    int64  `json:"enabled"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
+}
+
 type ProjectScript struct {
 	ID        string `json:"id"`
 	ProjectID string `json:"project_id"`

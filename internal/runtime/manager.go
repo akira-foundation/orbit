@@ -27,6 +27,8 @@ type Manager interface {
 	Status(projectID string) Snapshot
 	Logs(projectID string) []LogLine
 	GetStatus(ctx context.Context, projectID string) (projects.Status, error)
+	Port(projectID string) int
+	IsRunning(projectID string) bool
 	StopAll()
 	SetEmitter(e Emitter)
 }
@@ -170,6 +172,25 @@ func (m *manager) GetStatus(_ context.Context, projectID string) (projects.Statu
 	return m.Status(projectID).Status, nil
 }
 
+func (m *manager) Port(projectID string) int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if sess, ok := m.sessions[projectID]; ok {
+		return sess.Port()
+	}
+	return 0
+}
+
+func (m *manager) IsRunning(projectID string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if sess, ok := m.sessions[projectID]; ok {
+		st := sess.Status()
+		return st == projects.StatusRunning || st == projects.StatusStarting
+	}
+	return false
+}
+
 func (m *manager) StopAll() {
 	m.mu.RLock()
 	ids := make([]string, 0, len(m.sessions))
@@ -198,8 +219,8 @@ func (m *manager) readPipe(sess *Session, r io.Reader, stream string) {
 		sess.appendLog(line)
 		m.emit(EvtLog, LogEvent{ProjectID: sess.projectID, Line: line})
 
-		if sess.Port() == 0 {
-			if port := extractPort(text); port > 0 {
+		if port, strong := extractPortFromLine(text); port > 0 {
+			if strong || sess.Port() == 0 {
 				sess.setPort(port)
 			}
 		}
@@ -264,18 +285,22 @@ func (m *manager) finalize(sess *Session, err error, requested bool) {
 var localhostPortRe = regexp.MustCompile(`(?i)(?:localhost|127\.0\.0\.1|0\.0\.0\.0)[: ](\d{2,5})`)
 var portFlagRe = regexp.MustCompile(`(?i)\bport[:= ]\s*(\d{2,5})\b`)
 
-func extractPort(s string) int {
+// extractPortFromLine returns (port, strong). A "strong" match is one tied to
+// an actual listener address (localhost:N / 127.0.0.1:N / 0.0.0.0:N) and should
+// overwrite previously detected ports. Weak matches (e.g. "Port 3000 is in use")
+// only set the port if none was found yet.
+func extractPortFromLine(s string) (int, bool) {
 	if m := localhostPortRe.FindStringSubmatch(s); len(m) == 2 {
 		if p, err := strconv.Atoi(m[1]); err == nil && p > 0 && p < 65536 {
-			return p
+			return p, true
 		}
 	}
 	if m := portFlagRe.FindStringSubmatch(s); len(m) == 2 {
 		if p, err := strconv.Atoi(m[1]); err == nil && p > 0 && p < 65536 {
-			return p
+			return p, false
 		}
 	}
-	return 0
+	return 0, false
 }
 
 var readyMarkers = []string{

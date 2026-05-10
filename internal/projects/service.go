@@ -72,6 +72,18 @@ func (s *Service) UpdateStatus(ctx context.Context, id string, status Status) er
 	return s.repo.UpdateStatus(ctx, id, status)
 }
 
+func (s *Service) ListDomains(ctx context.Context) ([]Domain, error) {
+	return s.repo.ListDomains(ctx)
+}
+
+func (s *Service) GetDomain(ctx context.Context, host string) (*Domain, error) {
+	return s.repo.GetDomain(ctx, host)
+}
+
+func (s *Service) UpdateDomainPort(ctx context.Context, id string, port int) error {
+	return s.repo.UpdateDomainPort(ctx, id, port)
+}
+
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
 
 func Slugify(in string) string {

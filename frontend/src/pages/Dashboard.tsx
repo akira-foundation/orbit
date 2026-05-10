@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button'
 import type { Project } from '../types'
 import { cn } from '../lib/cn'
 import { RuntimeStatusBadge } from '../components/RuntimeStatusBadge'
-import { BrowserOpenURL } from '../../wailsjs/runtime/runtime'
+import { api } from '../api'
 
 export function Dashboard({ onAdd }: { onAdd: () => void }) {
   const { projects, filter, query, select } = useProjects()
@@ -98,7 +98,7 @@ function ListView({
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      BrowserOpenURL(`https://${p.localDomain}`)
+                      api.openProject(p.id)
                     }}
                     className="shrink-0 text-[var(--orbit-muted)] hover:text-[var(--orbit-text)] transition-colors"
                   >

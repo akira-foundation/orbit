@@ -10,6 +10,7 @@ import {
   RuntimeStatus,
   RuntimeLogs,
   SelectProjectFolder,
+  OpenProject,
 } from "../wailsjs/go/main/App";
 import type {
   AnalyzeResult,
@@ -38,6 +39,7 @@ export const api = {
   runtimeLogs: async (id: string): Promise<RuntimeLogLine[]> =>
     (await cast<RuntimeLogLine[] | null>(RuntimeLogs(id))) ?? [],
   selectFolder: (): Promise<string> => SelectProjectFolder(),
+  openProject: (id: string): Promise<void> => OpenProject(id),
 };
 
 export type { Project, AnalyzeResult };

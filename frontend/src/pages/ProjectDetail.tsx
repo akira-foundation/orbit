@@ -19,7 +19,6 @@ import { useRuntime, formatUptime } from "../hooks/useRuntime";
 import { LogsPanel } from "../components/LogsPanel";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { cn } from "../lib/cn";
-import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 
 export function ProjectDetail({ id }: { id: string }) {
   const { select, remove } = useProjects();
@@ -110,7 +109,7 @@ export function ProjectDetail({ id }: { id: string }) {
               <RuntimeStatusBadge status={status} />
             </div>
             <button
-              onClick={() => BrowserOpenURL(`https://${project.localDomain}`)}
+              onClick={() => api.openProject(project.id)}
               className="inline-flex items-center gap-1.5 text-sm font-mono text-[var(--orbit-accent-2)] hover:text-[var(--orbit-accent)] transition-colors"
             >
               {project.localDomain}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
+	"time"
 
 	"orbit-app/internal/analyzer"
 	"orbit-app/internal/config"
@@ -16,12 +18,13 @@ import (
 )
 
 type App struct {
-	ctx     context.Context
-	cfg     *config.Config
-	db      *sql.DB
-	service *projects.Service
-	runtime runtime.Manager
-	proxy   proxy.Manager
+	ctx         context.Context
+	cfg         *config.Config
+	db          *sql.DB
+	service     *projects.Service
+	runtime     runtime.Manager
+	registry    proxy.Manager
+	proxyServer *proxy.Server
 }
 
 func NewApp() *App {
@@ -47,10 +50,23 @@ func (a *App) startup(ctx context.Context) {
 	a.service = projects.NewService(repo, analyzer.New(), cfg.DomainSuffix)
 	a.runtime = runtime.New(a.service)
 	a.runtime.SetEmitter(runtime.NewWailsEmitter(ctx))
-	a.proxy = proxy.New(a.service, cfg.DomainSuffix)
+	a.registry = proxy.New(a.service, cfg.DomainSuffix)
+
+	router := proxy.NewRouter(a.registry, a.runtime)
+	a.proxyServer = proxy.NewServer(cfg.ProxyAddr, router)
+	go func() {
+		if err := a.proxyServer.ListenAndServe(); err != nil {
+			log.Printf("[proxy] server error: %v", err)
+		}
+	}()
 }
 
 func (a *App) shutdown(_ context.Context) {
+	if a.proxyServer != nil {
+		shCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_ = a.proxyServer.Shutdown(shCtx)
+		cancel()
+	}
 	if a.runtime != nil {
 		a.runtime.StopAll()
 	}
@@ -130,4 +146,31 @@ func (a *App) SelectProjectFolder() (string, error) {
 	return wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
 		Title: "Select project folder",
 	})
+}
+
+type ProjectURL struct {
+	URL    string `json:"url"`
+	Domain string `json:"domain"`
+	Port   string `json:"port"`
+}
+
+func (a *App) ProjectURL(id string) (*ProjectURL, error) {
+	p, err := a.service.Get(a.ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &ProjectURL{
+		URL:    a.cfg.URLFor(p.LocalDomain),
+		Domain: p.LocalDomain,
+		Port:   a.cfg.ProxyPort(),
+	}, nil
+}
+
+func (a *App) OpenProject(id string) error {
+	u, err := a.ProjectURL(id)
+	if err != nil {
+		return err
+	}
+	wailsruntime.BrowserOpenURL(a.ctx, u.URL)
+	return nil
 }
