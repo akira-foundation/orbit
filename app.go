@@ -43,7 +43,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.cfg = cfg
 
-	sqlDB, queries, err := database.Open(cfg.DBPath)
+	sqlDB, queries, err := database.Open(ctx, cfg.DBPath)
 	if err != nil {
 		panic(fmt.Errorf("database: %w", err))
 	}
@@ -72,7 +72,7 @@ func (a *App) shutdown(_ context.Context) {
 		cancel()
 	}
 	if a.runtime != nil {
-		a.runtime.StopAll()
+		a.runtime.Close()
 	}
 	if a.db != nil {
 		_ = a.db.Close()

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// Analysis is the result of inspecting a project directory.
+
 type Analysis struct {
 	Name           string            `json:"name"`
 	Path           string            `json:"path"`
@@ -37,6 +37,11 @@ type defaultAnalyzer struct{}
 
 func New() Analyzer { return &defaultAnalyzer{} }
 
+type composerJSON struct {
+	Name    string            `json:"name"`
+	Require map[string]string `json:"require"`
+}
+
 func (a *defaultAnalyzer) Analyze(path string) (*Analysis, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -50,10 +55,47 @@ func (a *defaultAnalyzer) Analyze(path string) (*Analysis, error) {
 		return nil, errors.New("path is not a directory")
 	}
 
+	analysis := &Analysis{
+		Path:    abs,
+		Scripts: make(map[string]string),
+	}
+
+	// 1. Check for composer.json (PHP/Laravel)
+	compPath := filepath.Join(abs, "composer.json")
+	compRaw, compErr := os.ReadFile(compPath)
+	if compErr == nil {
+		var comp composerJSON
+		if err := json.Unmarshal(compRaw, &comp); err == nil {
+			if _, hasLaravel := comp.Require["laravel/framework"]; hasLaravel {
+				analysis.Name = comp.Name
+				if analysis.Name == "" {
+					analysis.Name = filepath.Base(abs)
+				}
+				analysis.Framework = "laravel"
+				analysis.PackageManager = "composer"
+				analysis.DevCommand = "php artisan serve"
+				analysis.DevPort = 8000
+				return analysis, nil
+			}
+		}
+	}
+
+	// 2. Check for go.mod (Go)
+	goModPath := filepath.Join(abs, "go.mod")
+	if _, err := os.Stat(goModPath); err == nil {
+		analysis.Name = filepath.Base(abs)
+		analysis.Framework = "go"
+		analysis.PackageManager = "go modules"
+		analysis.DevCommand = "go run main.go"
+		analysis.DevPort = 8080
+		return analysis, nil
+	}
+
+	// 3. Fallback to package.json (Node.js)
 	pkgPath := filepath.Join(abs, "package.json")
 	raw, err := os.ReadFile(pkgPath)
 	if err != nil {
-		return nil, errors.New("no package.json found at " + abs)
+		return nil, errors.New("no supported project config found at " + abs)
 	}
 
 	var pkg packageJSON
@@ -75,23 +117,22 @@ func (a *defaultAnalyzer) Analyze(path string) (*Analysis, error) {
 	devCmd := suggestDevCommand(pkg.Scripts, pm)
 	port := suggestPort(framework, pkg.Scripts, devCmd)
 
-	return &Analysis{
-		Name:           name,
-		Path:           abs,
-		PackageManager: pm,
-		Framework:      framework,
-		DevCommand:     devCmd,
-		DevPort:        port,
-		Scripts:        pkg.Scripts,
-	}, nil
+	analysis.Name = name
+	analysis.PackageManager = pm
+	analysis.Framework = framework
+	analysis.DevCommand = devCmd
+	analysis.DevPort = port
+	analysis.Scripts = pkg.Scripts
+
+	return analysis, nil
 }
 
 // ─── package manager detection ───────────────────────────────────────────────
 
 func detectPackageManager(dir, declared string) string {
 	if declared != "" {
-		// "pnpm@8.0.0" → "pnpm"
-		if i := strings.Index(declared, "@"); i > 0 {
+		// "pnpm@8.0.0" → "pnpm", but be careful with "@org/pnpm@8.0.0"
+		if i := strings.LastIndex(declared, "@"); i > 0 {
 			return declared[:i]
 		}
 		return strings.TrimSpace(declared)

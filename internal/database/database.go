@@ -18,7 +18,7 @@ var embedMigrations embed.FS
 
 // Open connects to the SQLite database at path, applies any pending goose
 // migrations, and returns both the raw *sql.DB and a ready *db.Queries handle.
-func Open(path string) (*sql.DB, *db.Queries, error) {
+func Open(ctx context.Context, path string) (*sql.DB, *db.Queries, error) {
 	dsn := fmt.Sprintf(
 		"file:%s?_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)&_pragma=busy_timeout(5000)",
 		path,
@@ -30,14 +30,14 @@ func Open(path string) (*sql.DB, *db.Queries, error) {
 	if err := sqlDB.Ping(); err != nil {
 		return nil, nil, err
 	}
-	if err := runMigrations(sqlDB); err != nil {
+	if err := runMigrations(ctx, sqlDB); err != nil {
 		_ = sqlDB.Close()
 		return nil, nil, err
 	}
 	return sqlDB, db.New(sqlDB), nil
 }
 
-func runMigrations(sqlDB *sql.DB) error {
+func runMigrations(ctx context.Context, sqlDB *sql.DB) error {
 	migFS, err := fs.Sub(embedMigrations, "migrations")
 	if err != nil {
 		return fmt.Errorf("embed sub: %w", err)
@@ -46,6 +46,6 @@ func runMigrations(sqlDB *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("goose provider: %w", err)
 	}
-	_, err = provider.Up(context.Background())
+	_, err = provider.Up(ctx)
 	return err
 }

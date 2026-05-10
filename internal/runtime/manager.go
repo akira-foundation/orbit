@@ -40,11 +40,15 @@ type Manager interface {
 	RecordEvent(projectID string, level EventLevel, source EventSource, text string)
 	RecordRequest(projectID string, statusCode int, durationMs float64, bytesIn, bytesOut int64, isWS bool)
 	StopAll()
+	Close() error
 	SetEmitter(e Emitter)
 }
 
 func New(projects ProjectLookup, db *sql.DB) Manager {
+	ctx, cancel := context.WithCancel(context.Background())
 	m := &manager{
+		ctx:        ctx,
+		cancel:     cancel,
 		projects:   projects,
 		emitter:    nopEmitter{},
 		sessions:   make(map[string]*Session),
@@ -62,6 +66,8 @@ func New(projects ProjectLookup, db *sql.DB) Manager {
 }
 
 type manager struct {
+	ctx      context.Context
+	cancel   context.CancelFunc
 	mu       sync.RWMutex
 	projects ProjectLookup
 	emitter  Emitter
@@ -174,15 +180,19 @@ func (m *manager) RecordEvent(projectID string, level EventLevel, source EventSo
 func (m *manager) metricsSampler() {
 	tk := time.NewTicker(sampleInterval)
 	defer tk.Stop()
-	for range tk.C {
-		m.mu.RLock()
-		ids := make([]string, 0, len(m.sessions))
-		pgids := make(map[string]int, len(m.sessions))
-		for id, sess := range m.sessions {
-			ids = append(ids, id)
-			pgids[id] = sess.pgid
-		}
-		m.mu.RUnlock()
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-tk.C:
+			m.mu.RLock()
+			ids := make([]string, 0, len(m.sessions))
+			pgids := make(map[string]int, len(m.sessions))
+			for id, sess := range m.sessions {
+				ids = append(ids, id)
+				pgids[id] = sess.pgid
+			}
+			m.mu.RUnlock()
 		now := time.Now().Unix()
 		for _, id := range ids {
 			snap := m.Status(id)
@@ -211,6 +221,7 @@ func (m *manager) metricsSampler() {
 				Autostops: d.Autostops,
 				WakeMs:    d.WakeMs,
 			})
+		}
 		}
 	}
 }
@@ -452,22 +463,26 @@ func (m *manager) ConnClose(projectID string) {
 func (m *manager) idleSweeper() {
 	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()
-	for range tick.C {
-		m.mu.RLock()
-		var toStop []string
-		now := time.Now()
-		for id, since := range m.idleSince {
-			if now.Sub(since) < m.idleAfter {
-				continue
-			}
-			if sess, ok := m.sessions[id]; ok {
-				st := sess.Status()
-				if st == projects.StatusRunning || st == projects.StatusStarting {
-					toStop = append(toStop, id)
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-tick.C:
+			m.mu.RLock()
+			var toStop []string
+			now := time.Now()
+			for id, since := range m.idleSince {
+				if now.Sub(since) < m.idleAfter {
+					continue
+				}
+				if sess, ok := m.sessions[id]; ok {
+					st := sess.Status()
+					if st == projects.StatusRunning || st == projects.StatusStarting {
+						toStop = append(toStop, id)
+					}
 				}
 			}
-		}
-		m.mu.RUnlock()
+			m.mu.RUnlock()
 
 		for _, id := range toStop {
 			log.Printf("[runtime] idle stop project=%s after %s", id, m.idleAfter)
@@ -480,6 +495,7 @@ func (m *manager) idleSweeper() {
 			m.mu.Lock()
 			delete(m.idleSince, id)
 			m.mu.Unlock()
+		}
 		}
 	}
 }
@@ -509,6 +525,14 @@ func (m *manager) StopAll() {
 	for _, pgid := range pgids {
 		_ = killPGID(pgid)
 	}
+}
+
+func (m *manager) Close() error {
+	m.StopAll()
+	if m.cancel != nil {
+		m.cancel()
+	}
+	return nil
 }
 
 func (m *manager) readPipe(sess *Session, r io.Reader, stream string) {
@@ -555,8 +579,12 @@ func (m *manager) supervise(sess *Session, handle *processHandle, _ *projects.Pr
 			m.finalize(sess, err, true)
 		case <-time.After(m.stopGrace):
 			_ = handle.forceKill()
-			err := <-doneCh
-			m.finalize(sess, err, true)
+			select {
+			case err := <-doneCh:
+				m.finalize(sess, err, true)
+			case <-time.After(time.Second):
+				m.finalize(sess, errors.New("killed forcefully"), true)
+			}
 		}
 	}
 }
@@ -669,7 +697,7 @@ func pickPort(preferred int) int {
 	return port
 }
 
-var localhostPortRe = regexp.MustCompile(`(?i)(?:localhost|127\.0\.0\.1|0\.0\.0\.0)[: ](\d{2,5})`)
+var localhostPortRe = regexp.MustCompile(`(?i)(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])[: ](\d{2,5})`)
 var portFlagRe = regexp.MustCompile(`(?i)\bport[:= ]\s*(\d{2,5})\b`)
 
 // extractPortFromLine returns (port, strong). A "strong" match is one tied to
