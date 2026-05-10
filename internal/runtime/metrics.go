@@ -10,8 +10,6 @@ import (
 	"orbit-app/internal/projects"
 )
 
-// Sample is a single point in the per-project metrics time series. Persisted
-// to SQLite (table metric_samples) so it survives Orbit restarts.
 type Sample struct {
 	Ts        int64           `json:"ts"`
 	ProjectID string          `json:"projectId"`
@@ -20,35 +18,25 @@ type Sample struct {
 	Conns     int             `json:"conns"`
 	UptimeMs  int64           `json:"uptimeMs"`
 	Attempts  int             `json:"attempts"`
-	// Traffic counters (per-sample window, ~5s)
-	ReqCount int   `json:"reqCount"`
-	ErrCount int   `json:"errCount"`
-	HTTPReqs int   `json:"httpReqs"`
-	WSReqs   int   `json:"wsReqs"`
-	BytesIn  int64 `json:"bytesIn"`
-	BytesOut int64 `json:"bytesOut"`
-	// Latency percentiles in ms over a sliding window
-	P50Ms int `json:"p50Ms"`
-	P95Ms int `json:"p95Ms"`
-	P99Ms int `json:"p99Ms"`
-	// Process resource use
-	MemKB  int     `json:"memKb"`
-	CPUPct float64 `json:"cpuPct"`
-	// Lifetime counters
-	Crashes   int `json:"crashes"`
-	Autostops int `json:"autostops"`
-	// Wake latency (ms from Start() to first Running) for the current run
-	WakeMs int `json:"wakeMs"`
+	ReqCount  int             `json:"reqCount"`
+	ErrCount  int             `json:"errCount"`
+	HTTPReqs  int             `json:"httpReqs"`
+	WSReqs    int             `json:"wsReqs"`
+	BytesIn   int64           `json:"bytesIn"`
+	BytesOut  int64           `json:"bytesOut"`
+	P50Ms     int             `json:"p50Ms"`
+	P95Ms     int             `json:"p95Ms"`
+	P99Ms     int             `json:"p99Ms"`
+	MemKB     int             `json:"memKb"`
+	CPUPct    float64         `json:"cpuPct"`
+	Crashes   int             `json:"crashes"`
+	Autostops int             `json:"autostops"`
+	WakeMs    int             `json:"wakeMs"`
 }
 
 const (
-	sampleInterval = 5 * time.Second
-	// retainSamples bounds how far back we keep history. Charts show last
-	// 30 minutes by default but we hold a longer trail in case the user
-	// extends the time range later.
-	retainSamples = 24 * time.Hour
-	// metricsCleanupInterval drives the background prune job that removes
-	// rows older than retainSamples.
+	sampleInterval         = 5 * time.Second
+	retainSamples          = 24 * time.Hour
 	metricsCleanupInterval = 10 * time.Minute
 )
 
@@ -64,33 +52,49 @@ func newMetrics(db *sql.DB, cfg *config.Config) *metrics {
 }
 
 func (m *metrics) push(s Sample) {
-	if m.db == nil {
+	m.pushBatch([]Sample{s})
+}
+
+func (m *metrics) pushBatch(samples []Sample) {
+	if m.db == nil || len(samples) == 0 {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_, err := m.db.ExecContext(ctx, `
+	tx, err := m.db.BeginTx(ctx, nil)
+	if err != nil {
+		log.Printf("[metrics] begin: %v", err)
+		return
+	}
+	stmt, err := tx.PrepareContext(ctx, `
 		INSERT OR REPLACE INTO metric_samples
 		(project_id, ts, status, port, conns, uptime_ms, attempts,
 		 req_count, err_count, p50_ms, p95_ms, p99_ms,
 		 bytes_in, bytes_out, http_reqs, ws_reqs,
 		 mem_kb, cpu_pct, crashes, autostops, wake_ms)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`,
-		s.ProjectID, s.Ts, string(s.Status), s.Port, s.Conns, s.UptimeMs, s.Attempts,
-		s.ReqCount, s.ErrCount, s.P50Ms, s.P95Ms, s.P99Ms,
-		s.BytesIn, s.BytesOut, s.HTTPReqs, s.WSReqs,
-		s.MemKB, s.CPUPct, s.Crashes, s.Autostops, s.WakeMs,
-	)
+	`)
 	if err != nil {
-		log.Printf("[metrics] insert: %v", err)
+		_ = tx.Rollback()
+		log.Printf("[metrics] prepare: %v", err)
+		return
+	}
+	defer stmt.Close()
+	for _, s := range samples {
+		if _, err := stmt.ExecContext(ctx,
+			s.ProjectID, s.Ts, string(s.Status), s.Port, s.Conns, s.UptimeMs, s.Attempts,
+			s.ReqCount, s.ErrCount, s.P50Ms, s.P95Ms, s.P99Ms,
+			s.BytesIn, s.BytesOut, s.HTTPReqs, s.WSReqs,
+			s.MemKB, s.CPUPct, s.Crashes, s.Autostops, s.WakeMs,
+		); err != nil {
+			log.Printf("[metrics] exec: %v", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("[metrics] commit: %v", err)
 	}
 }
 
-// maxReturnedSamples caps how many points we ship back per call. We
-// downsample by bucketing into N evenly-spaced time windows, keeping the
-// last sample in each bucket. With 100 projects on a 30d range this caps
-// the payload at 100 * maxReturnedSamples points instead of millions.
 const maxReturnedSamples = 200
 
 func (m *metrics) get(projectID string, sinceTs int64) []Sample {
@@ -145,9 +149,6 @@ func (m *metrics) all(sinceTs int64, ids []string) map[string][]Sample {
 		sinceTs = time.Now().Add(-30 * time.Minute).Unix()
 	}
 
-	// Optional id filter so the global page can restrict to the projects
-	// the user actually has visible — keeps the payload small even with
-	// hundreds of registered projects.
 	query := `SELECT project_id, ts, status, port, conns, uptime_ms, attempts,
 	       req_count, err_count, p50_ms, p95_ms, p99_ms,
 	       bytes_in, bytes_out, http_reqs, ws_reqs,
@@ -195,19 +196,6 @@ func (m *metrics) all(sinceTs int64, ids []string) map[string][]Sample {
 	return out
 }
 
-// downsample compresses a sorted-by-ts slice into at most max points by
-// time-bucketing. Inside each bucket we aggregate fields the right way:
-//
-//   - counters (req/err/bytes/http/ws) are SUMMED so totals stay correct
-//     when the user widens the time range
-//   - gauges (status, port, conns, mem, cpu, uptime, attempts, lifetime
-//     counters) take the LAST value in the bucket — that's the most
-//     recent reading the user would expect to see
-//   - latency percentiles take the MAX in the bucket so spikes don't
-//     get washed out by averaging
-//
-// Without this, simply picking every Nth point would make totalReq drop
-// as the user widened the range — which is exactly the bug we're fixing.
 func downsample(in []Sample, max int) []Sample {
 	if max <= 0 || len(in) <= max {
 		return in
@@ -227,8 +215,6 @@ func downsample(in []Sample, max int) []Sample {
 	return out
 }
 
-// aggregateBucket merges a contiguous slice of samples into one. Bucket ts
-// is the LAST sample's ts so the chart's x-axis still reads as "now".
 func aggregateBucket(b []Sample) Sample {
 	if len(b) == 0 {
 		return Sample{}
@@ -250,14 +236,12 @@ func aggregateBucket(b []Sample) Sample {
 		WakeMs:    last.WakeMs,
 	}
 	for _, s := range b {
-		// counters: sum
 		agg.ReqCount += s.ReqCount
 		agg.ErrCount += s.ErrCount
 		agg.HTTPReqs += s.HTTPReqs
 		agg.WSReqs += s.WSReqs
 		agg.BytesIn += s.BytesIn
 		agg.BytesOut += s.BytesOut
-		// percentiles: max so spikes survive
 		if s.P50Ms > agg.P50Ms {
 			agg.P50Ms = s.P50Ms
 		}

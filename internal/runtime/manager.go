@@ -191,11 +191,12 @@ func (m *manager) sampleNow() {
 	}
 	m.mu.RUnlock()
 
+	batch := make([]Sample, 0, len(activeIDs))
 	for _, id := range activeIDs {
 		snap := m.Status(id)
 		d := m.projMetricsFor(id).Drain()
 		ps := readProcStat(pgids[id])
-		m.metrics.push(Sample{
+		batch = append(batch, Sample{
 			Ts:        now,
 			ProjectID: id,
 			Status:    snap.Status,
@@ -219,6 +220,7 @@ func (m *manager) sampleNow() {
 			WakeMs:    d.WakeMs,
 		})
 	}
+	m.metrics.pushBatch(batch)
 }
 
 func (m *manager) SetEmitter(e Emitter) {

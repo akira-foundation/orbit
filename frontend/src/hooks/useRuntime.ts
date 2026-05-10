@@ -75,17 +75,35 @@ export function useRuntime(projectId: string | null): UseRuntime {
     [projectId],
   );
 
+  const pendingLogs = useRef<RuntimeLogLine[]>([]);
+  const flushScheduled = useRef(false);
+  const flushLogs = useCallback(() => {
+    flushScheduled.current = false;
+    const incoming = pendingLogs.current;
+    if (incoming.length === 0) return;
+    pendingLogs.current = [];
+    setLogs((prev) => {
+      const merged =
+        prev.length + incoming.length > MAX_LOGS
+          ? [
+              ...prev.slice(prev.length + incoming.length - MAX_LOGS),
+              ...incoming,
+            ]
+          : [...prev, ...incoming];
+      return merged;
+    });
+  }, []);
+
   const onLog = useCallback(
     (e: RuntimeLogEvent) => {
       if (!projectId || e.projectId !== projectId) return;
-      setLogs((prev) => {
-        const next =
-          prev.length >= MAX_LOGS ? prev.slice(prev.length - MAX_LOGS + 1) : prev.slice();
-        next.push(e.line);
-        return next;
-      });
+      pendingLogs.current.push(e.line);
+      if (!flushScheduled.current) {
+        flushScheduled.current = true;
+        requestAnimationFrame(flushLogs);
+      }
     },
-    [projectId],
+    [projectId, flushLogs],
   );
 
   useWailsEvent<RuntimeStatusEvent>(STATUS_EVENTS, onStatus, !!projectId);
@@ -102,10 +120,6 @@ export function useRuntime(projectId: string | null): UseRuntime {
     }
   }, 1000);
 
-  // Poll Status() every 2s while a project is open so live metrics
-  // (active connections, last activity) refresh between status events.
-  // Status events only fire on state changes; conns and lastActivity move
-  // independently as the user browses, so without this they would freeze.
   useInterval(
     () => {
       if (!projectId) return;
@@ -114,7 +128,7 @@ export function useRuntime(projectId: string | null): UseRuntime {
         .then((snap) => setSnapshot(snap))
         .catch(() => {});
     },
-    projectId ? 2000 : null,
+    projectId ? 5000 : null,
   );
 
   return {

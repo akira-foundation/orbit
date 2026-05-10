@@ -33,7 +33,6 @@ import { cn } from "../lib/cn";
 import { MetricsFilter, MetricInterval, getSinceTsForInterval } from "../components/MetricsFilter";
 import { Skeleton } from "../components/ui/skeleton";
 
-// Lightweight palette so each project line has a stable color.
 const PALETTE = [
   "#22d3ee",
   "#a78bfa",
@@ -310,7 +309,6 @@ export function MetricsPage() {
   );
 }
 
-// ─── Project filter chips ────────────────────────────────────────────────
 
 function ProjectFilter({
   projects,
@@ -401,7 +399,6 @@ function ProjectFilter({
   );
 }
 
-// ─── Aggregations ────────────────────────────────────────────────────────
 
 function tickTime(v: number) {
   return new Date(v * 1000).toLocaleTimeString([], {
@@ -503,7 +500,6 @@ function aggregate(
   return { totalReq, totalErr, lats };
 }
 
-// ─── Aggregate cards ─────────────────────────────────────────────────────
 
 function AggregateStatusCard({
   visible,
@@ -722,7 +718,6 @@ function AggregateVolumeCard({
   );
 }
 
-// ─── Top rankings ────────────────────────────────────────────────────────
 
 type RankKey = "rps" | "p95" | "errs";
 
@@ -846,7 +841,6 @@ function TopProjectsCard({
   );
 }
 
-// ─── Fleet Health Table ──────────────────────────────────────────────────
 
 function FleetHealthTable({
   projects,
@@ -934,7 +928,6 @@ function formatKB(kb: number): string {
   return `${(kb / (1024 * 1024)).toFixed(2)} GB`;
 }
 
-// ─── Aggregate Heatmap ───────────────────────────────────────────────────
 
 function UsageHeatmapAggregate({
   samples,

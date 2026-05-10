@@ -60,7 +60,13 @@ export function ProjectMetricsPage({ id }: { id: string }) {
     setLoaded(false);
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, range]);
+  }, [id]);
+
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range]);
+
   useInterval(refresh, 30000);
 
   if (!project) {
@@ -96,7 +102,7 @@ export function ProjectMetricsPage({ id }: { id: string }) {
   }
 
   const last = samples[samples.length - 1];
-  const SAMPLE_S = 5; // matches backend sampleInterval
+  const SAMPLE_S = 5;
   const rps = last ? last.reqCount / SAMPLE_S : 0;
   const errPct =
     last && last.reqCount > 0 ? (last.errCount / last.reqCount) * 100 : 0;
@@ -141,9 +147,6 @@ export function ProjectMetricsPage({ id }: { id: string }) {
           <ResponsiveContainer width="100%" height={220}>
             <LineChart
               data={(() => {
-                // Walk samples in order, accumulating seconds in each
-                // category. Sample interval is 5s, so each sample adds 5s
-                // to one bucket depending on its status.
                 const SAMPLE_S = 5;
                 let upS = 0;
                 let downS = 0;
@@ -257,9 +260,6 @@ export function ProjectMetricsPage({ id }: { id: string }) {
   );
 }
 
-// ResourceCard splits memory and CPU into two small filled-area sub-charts
-// stacked inside one card. Decoupled scales so a memory spike doesn't crush
-// the CPU line into the floor (or vice versa).
 function ResourceCard({ samples }: { samples: MetricSample[] }) {
   const last = samples[samples.length - 1];
   return (
@@ -356,11 +356,6 @@ function ResourceCard({ samples }: { samples: MetricSample[] }) {
   );
 }
 
-// StatusTimeline draws one horizontal strip showing the runtime's state over
-// time. Each sample becomes a colored block (running / starting / error /
-// stopped / idle). Lets the user see at a glance "I had 3 minutes of running,
-// then it crashed, restarted, idle, then auto-stopped". More valuable for
-// dev workflow than a mixed-scale traffic chart.
 function StatusTimeline({ samples }: { samples: MetricSample[] }) {
   const colors: Record<string, { bg: string; label: string; text: string }> = {
     running:   { bg: "#34d399", text: "text-emerald-300", label: "Running" },
@@ -372,13 +367,11 @@ function StatusTimeline({ samples }: { samples: MetricSample[] }) {
   };
   const seen = new Set<string>(samples.map((s) => s.status as string));
 
-  // Bucket counts for "time spent in state" summary.
   const counts: Record<string, number> = {};
   samples.forEach((s) => {
     counts[s.status] = (counts[s.status] ?? 0) + 1;
   });
 
-  // Sample interval is 5s — convert counts into seconds for the summary.
   const SAMPLE_S = 5;
 
   const lastStatus = samples[samples.length - 1]?.status;
@@ -702,9 +695,6 @@ function VolumeCard({ samples }: { samples: MetricSample[] }) {
   );
 }
 
-// UsageHeatmap renders a 7×24 grid (day-of-week × hour-of-day) where each
-// cell's opacity reflects request volume bucketed from samples. Lightweight
-// — just divs, no chart lib. Mirrors the screenshot's "usage by hour" feel.
 function UsageHeatmap({ samples }: { samples: MetricSample[] }) {
   const grid = useMemo(() => {
     const cells: number[][] = Array.from({ length: 7 }, () =>
