@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -13,17 +14,37 @@ import (
 )
 
 type Server struct {
-	addr   string
-	router *Router
-	http   *http.Server
+	addr      string
+	router    *Router
+	http      *http.Server
+	transport *http.Transport
 }
 
 func NewServer(addr string, router *Router) *Server {
-	s := &Server{addr: addr, router: router}
+	tr := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   5 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   16,
+		IdleConnTimeout:       120 * time.Second,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		// Keep upstream HTTP/1.1 so websocket Upgrade works reliably with all
+		// JS dev servers. ResponseHeaderTimeout is left zero so long-polling
+		// and slow first-render dev builds don't get killed mid-flight.
+		ForceAttemptHTTP2: false,
+	}
+
+	s := &Server{addr: addr, router: router, transport: tr}
 	s.http = &http.Server{
 		Addr:              addr,
 		Handler:           s,
 		ReadHeaderTimeout: 10 * time.Second,
+		// ReadTimeout / WriteTimeout / IdleTimeout intentionally unset:
+		// HMR websockets and SSE streams must stay open indefinitely.
 	}
 	return s
 }
@@ -51,24 +72,52 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rp := httputil.NewSingleHostReverseProxy(target.URL)
-	rp.ErrorHandler = func(rw http.ResponseWriter, _ *http.Request, perr error) {
-		log.Printf("[proxy] upstream error host=%s target=%s err=%v", r.Host, target.URL, perr)
-		writeBadGateway(rw, target.URL.String(), perr)
-	}
-
-	originalDirector := rp.Director
-	rp.Director = func(req *http.Request) {
-		originalDirector(req)
-		req.Host = target.URL.Host
-		req.Header.Set("X-Forwarded-Host", r.Host)
-		req.Header.Set("X-Forwarded-Proto", schemeOf(r))
-		if ip, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-			req.Header.Set("X-Forwarded-For", ip)
-		}
+	rp := &httputil.ReverseProxy{
+		Transport:     s.transport,
+		FlushInterval: -1, // flush after every write -> SSE / streamed responses
+		Director: func(req *http.Request) {
+			req.URL.Scheme = target.URL.Scheme
+			req.URL.Host = target.URL.Host
+			req.Host = target.URL.Host
+			if _, ok := req.Header["User-Agent"]; !ok {
+				req.Header.Set("User-Agent", "")
+			}
+			req.Header.Set("X-Forwarded-Host", r.Host)
+			req.Header.Set("X-Forwarded-Proto", schemeOf(r))
+			if ip, _, e := net.SplitHostPort(r.RemoteAddr); e == nil {
+				req.Header.Set("X-Forwarded-For", ip)
+			}
+		},
+		ErrorHandler: func(rw http.ResponseWriter, req *http.Request, perr error) {
+			if isClientGone(perr) || isWebSocket(req) {
+				return
+			}
+			log.Printf("[proxy] upstream error host=%s target=%s err=%v", r.Host, target.URL, perr)
+			writeBadGateway(rw, target.URL.String(), perr)
+		},
 	}
 
 	rp.ServeHTTP(w, r)
+}
+
+func isWebSocket(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
+}
+
+func isClientGone(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, io.EOF) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "use of closed network connection")
 }
 
 func (s *Server) handleError(w http.ResponseWriter, r *http.Request, err error) {
