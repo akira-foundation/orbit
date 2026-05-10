@@ -84,7 +84,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Director: func(req *http.Request) {
 			req.URL.Scheme = target.URL.Scheme
 			req.URL.Host = target.URL.Host
-			req.Host = target.URL.Host
+			// Always send Host: localhost:<port>. Vite (and tools using its
+			// allowedHosts check) reject unfamiliar hosts like "::1" or our
+			// "*.orbit.test". "localhost" is in the default allow list.
+			_, port, _ := net.SplitHostPort(target.URL.Host)
+			if port == "" {
+				req.Host = "localhost"
+			} else {
+				req.Host = "localhost:" + port
+			}
 			if _, ok := req.Header["User-Agent"]; !ok {
 				req.Header.Set("User-Agent", "")
 			}

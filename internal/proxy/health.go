@@ -53,6 +53,33 @@ func WaitTCP(ctx context.Context, host string, port int, opts HealthOptions) err
 	}
 }
 
+// dialableHost returns the first host (127.0.0.1 / ::1 / localhost) that
+// accepts a TCP connection on port within HealthOptions.Timeout. Frameworks
+// vary: Astro binds to "localhost" which on macOS may resolve to ::1 only;
+// most others bind 127.0.0.1. Try all in parallel-ish polling.
+func dialableHost(ctx context.Context, port int, opts HealthOptions) (string, error) {
+	if opts.Timeout == 0 {
+		opts = defaultHealthOptions()
+	}
+	candidates := []string{"127.0.0.1", "::1", "localhost"}
+	deadline := time.Now().Add(opts.Timeout)
+	dctx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	for {
+		for _, h := range candidates {
+			addr := net.JoinHostPort(h, strconv.Itoa(port))
+			if dialOnce(dctx, addr, opts.DialTimeout) == nil {
+				return h, nil
+			}
+		}
+		select {
+		case <-dctx.Done():
+			return "", fmt.Errorf("%w: port %d after %s", ErrUnhealthy, port, opts.Timeout)
+		case <-time.After(opts.PollInterval):
+		}
+	}
+}
+
 func dialOnce(ctx context.Context, addr string, timeout time.Duration) error {
 	dctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()

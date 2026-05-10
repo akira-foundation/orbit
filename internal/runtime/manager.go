@@ -122,8 +122,10 @@ func (m *manager) Start(ctx context.Context, projectID string) error {
 	}
 
 	sess.setPID(handle.cmd.Process.Pid)
-	sess.setPort(port)
 	sess.pgid = handle.pgid
+	// Don't pre-set sess.Port. The framework may ignore $PORT (Astro reads
+	// astro.config, Vite reads vite.config) and bind a different one. Let
+	// log parsing in readPipe resolve the actual listening port.
 
 	_ = m.projects.UpdateStatus(ctx, projectID, projects.StatusStarting)
 	m.emit(EvtStarting, StatusEvent{ProjectID: projectID, Snapshot: sess.Snapshot()})

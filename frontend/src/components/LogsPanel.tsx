@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Anser from "anser";
-import { Eraser, Pause, Play } from "lucide-react";
+import { useCopyToClipboard } from "usehooks-ts";
+import { Check, Copy, Eraser, Pause, Play } from "lucide-react";
 import type { RuntimeLogLine } from "../types";
 import { cn } from "../lib/cn";
 
@@ -20,6 +21,19 @@ interface Props {
 export function LogsPanel({ logs, onClear }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const [, copy] = useCopyToClipboard();
+
+  const onCopy = async () => {
+    const text = logs
+      .map((l) => l.text.replace(CURSOR_CTRL_RE, "").replace(STRAY_BRACKET_RE, ""))
+      .join("\n");
+    const ok = await copy(text);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }
+  };
 
   const rendered = useMemo(
     () => logs.map((l) => ({ ...l, html: renderAnsi(l.text) })),
@@ -59,6 +73,18 @@ export function LogsPanel({ logs, onClear }: Props) {
             title={autoScroll ? "Pause auto-scroll" : "Resume auto-scroll"}
           >
             {autoScroll ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
+          </button>
+          <button
+            onClick={onCopy}
+            disabled={logs.length === 0}
+            className={cn(
+              "size-6 inline-flex items-center justify-center rounded text-[var(--orbit-muted)] hover:text-[var(--orbit-text)] hover:bg-white/5 transition-colors",
+              copied && "text-emerald-400 hover:text-emerald-300",
+              logs.length === 0 && "opacity-40 cursor-default",
+            )}
+            title={copied ? "Copied" : "Copy logs"}
+          >
+            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
           </button>
           <button
             onClick={onClear}

@@ -50,29 +50,31 @@ func (r *Router) Route(ctx context.Context, host string) (*Target, error) {
 		return nil, err
 	}
 
-	if err := WaitTCP(ctx, "127.0.0.1", port, r.health); err != nil {
-		return nil, err
+	host, herr := dialableHost(ctx, port, r.health)
+	if herr != nil {
+		return nil, herr
 	}
 
-	u, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
-	if err != nil {
-		return nil, err
+	u, perr := url.Parse(fmt.Sprintf("http://%s:%d", host, port))
+	if perr != nil {
+		return nil, perr
 	}
 	return &Target{Project: proj, URL: u}, nil
 }
 
 func (r *Router) waitForPort(ctx context.Context, proj *projects.Project) (int, error) {
-	if p := r.runtime.Port(proj.ID); p > 0 {
-		return p, nil
-	}
-	if proj.DevPort > 0 {
-		return proj.DevPort, nil
-	}
-
+	// Always wait for the runtime to advertise the port the framework
+	// actually bound. Don't fall back to the analyzed devPort — frameworks
+	// often pick a different port (Astro auto-increments on conflict, Vite
+	// reads vite.config, Next obeys $PORT) and routing to the wrong one
+	// just yields a useless 502.
 	deadline := time.Now().Add(r.health.Timeout)
-	for time.Now().Before(deadline) {
+	for {
 		if p := r.runtime.Port(proj.ID); p > 0 {
 			return p, nil
+		}
+		if time.Now().After(deadline) {
+			return 0, ErrNoPort
 		}
 		select {
 		case <-ctx.Done():
@@ -80,5 +82,4 @@ func (r *Router) waitForPort(ctx context.Context, proj *projects.Project) (int, 
 		case <-time.After(r.health.PollInterval):
 		}
 	}
-	return 0, ErrNoPort
 }
