@@ -8,6 +8,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { ProjectDetail } from "./pages/ProjectDetail";
 import { useProjects } from "./store";
 import { useWailsEvent } from "./hooks/useWailsEvent";
+import { SetupBanner } from "./components/SetupBanner";
 import type { RuntimeStatusEvent } from "./types";
 
 const STATUS_EVENTS = [
@@ -72,6 +73,8 @@ export function App() {
               onAdd={() => setDialog(true)}
             />
           </header>
+
+          <SetupBanner />
 
           <div className="flex-1 min-h-0">
             {selected ? (

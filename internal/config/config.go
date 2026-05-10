@@ -10,6 +10,7 @@ type Config struct {
 	DBPath       string
 	DomainSuffix string
 	ProxyAddr    string
+	PublicPort   string
 }
 
 func Load() (*Config, error) {
@@ -25,7 +26,8 @@ func Load() (*Config, error) {
 		DataDir:      dir,
 		DBPath:       filepath.Join(dir, "orbit.db"),
 		DomainSuffix: "orbit.test",
-		ProxyAddr:    ":2080",
+		ProxyAddr:    "127.0.0.1:2080",
+		PublicPort:   "80",
 	}, nil
 }
 
@@ -34,13 +36,13 @@ func (c *Config) DomainFor(slug string) string {
 }
 
 func (c *Config) ProxyPort() string {
+	if c.PublicPort != "" {
+		return c.PublicPort
+	}
 	if c.ProxyAddr == "" {
 		return "80"
 	}
 	addr := c.ProxyAddr
-	if addr[0] == ':' {
-		return addr[1:]
-	}
 	for i := len(addr) - 1; i >= 0; i-- {
 		if addr[i] == ':' {
 			return addr[i+1:]

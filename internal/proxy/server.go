@@ -16,11 +16,12 @@ import (
 type Server struct {
 	addr      string
 	router    *Router
+	recovery  *RecoveryHandler
 	http      *http.Server
 	transport *http.Transport
 }
 
-func NewServer(addr string, router *Router) *Server {
+func NewServer(addr string, router *Router, recovery *RecoveryHandler) *Server {
 	tr := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
@@ -38,7 +39,7 @@ func NewServer(addr string, router *Router) *Server {
 		ForceAttemptHTTP2: false,
 	}
 
-	s := &Server{addr: addr, router: router, transport: tr}
+	s := &Server{addr: addr, router: router, recovery: recovery, transport: tr}
 	s.http = &http.Server{
 		Addr:              addr,
 		Handler:           s,
@@ -66,6 +67,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if s.recovery != nil && strings.HasPrefix(r.URL.Path, "/__orbit__/") {
+		s.recovery.ServeHTTP(w, r)
+		return
+	}
+
 	target, err := s.router.Route(r.Context(), r.Host)
 	if err != nil {
 		s.handleError(w, r, err)
@@ -93,7 +99,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			log.Printf("[proxy] upstream error host=%s target=%s err=%v", r.Host, target.URL, perr)
-			writeBadGateway(rw, target.URL.String(), perr)
+			s.renderRecovery(rw, r)
 		},
 	}
 
@@ -125,17 +131,29 @@ func (s *Server) handleError(w http.ResponseWriter, r *http.Request, err error) 
 		writeNotRegistered(w, r.Host)
 		return
 	}
-	if errors.Is(err, ErrUnhealthy) {
-		log.Printf("[proxy] unhealthy host=%s err=%v", r.Host, err)
-		writeUnhealthy(w, r.Host)
-		return
-	}
-	if errors.Is(err, ErrNoPort) {
-		writeNoPort(w, r.Host)
+	if errors.Is(err, ErrUnhealthy) || errors.Is(err, ErrNoPort) {
+		log.Printf("[proxy] route degraded host=%s err=%v", r.Host, err)
+		s.renderRecovery(w, r)
 		return
 	}
 	log.Printf("[proxy] route error host=%s err=%v", r.Host, err)
-	http.Error(w, "Orbit: routing error", http.StatusInternalServerError)
+	s.renderRecovery(w, r)
+}
+
+func (s *Server) renderRecovery(w http.ResponseWriter, r *http.Request) {
+	if s.recovery == nil {
+		writeUnhealthy(w, r.Host)
+		return
+	}
+	proj, err := s.router.registry.Resolve(r.Context(), r.Host)
+	if err != nil {
+		writeNotRegistered(w, r.Host)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusBadGateway)
+	fmt.Fprint(w, recoveryPage(proj))
 }
 
 func schemeOf(r *http.Request) string {

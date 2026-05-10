@@ -11,12 +11,14 @@ import (
 	"time"
 
 	"orbit-app/internal/projects"
+	"orbit-app/internal/runtime"
 )
 
 type fakeRuntime struct {
 	mu      sync.Mutex
 	running map[string]bool
 	port    int
+	logs    []runtime.LogLine
 }
 
 func (f *fakeRuntime) Start(_ context.Context, id string) error {
@@ -29,6 +31,10 @@ func (f *fakeRuntime) Start(_ context.Context, id string) error {
 	return nil
 }
 
+func (f *fakeRuntime) Restart(ctx context.Context, id string) error {
+	return f.Start(ctx, id)
+}
+
 func (f *fakeRuntime) Port(string) int { return f.port }
 
 func (f *fakeRuntime) IsRunning(id string) bool {
@@ -36,6 +42,16 @@ func (f *fakeRuntime) IsRunning(id string) bool {
 	defer f.mu.Unlock()
 	return f.running[id]
 }
+
+func (f *fakeRuntime) Status(id string) runtime.Snapshot {
+	st := projects.StatusStopped
+	if f.IsRunning(id) {
+		st = projects.StatusRunning
+	}
+	return runtime.Snapshot{ProjectID: id, Status: st, Port: f.port}
+}
+
+func (f *fakeRuntime) Logs(string) []runtime.LogLine { return f.logs }
 
 func TestRouter_Route(t *testing.T) {
 	srv := httptest.NewServer(nil)

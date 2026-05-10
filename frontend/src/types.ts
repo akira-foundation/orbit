@@ -57,6 +57,17 @@ export interface RuntimeStatusEvent {
   snapshot: RuntimeSnapshot
 }
 
+export interface SystemStatus {
+  os: string
+  setup: boolean
+  loopbackOk: boolean
+  dnsmasqOk: boolean
+  resolverOk: boolean
+  daemonOk: boolean
+  herdConflict: boolean
+  message: string
+}
+
 export interface AnalyzeResult {
   name: string
   path: string

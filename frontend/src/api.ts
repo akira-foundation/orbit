@@ -11,12 +11,15 @@ import {
   RuntimeLogs,
   SelectProjectFolder,
   OpenProject,
+  SystemStatus,
+  SystemSetup,
 } from "../wailsjs/go/main/App";
 import type {
   AnalyzeResult,
   Project,
   RuntimeSnapshot,
   RuntimeLogLine,
+  SystemStatus as SystemStatusType,
 } from "./types";
 
 function cast<T>(p: Promise<unknown>): Promise<T> {
@@ -40,6 +43,8 @@ export const api = {
     (await cast<RuntimeLogLine[] | null>(RuntimeLogs(id))) ?? [],
   selectFolder: (): Promise<string> => SelectProjectFolder(),
   openProject: (id: string): Promise<void> => OpenProject(id),
+  systemStatus: (): Promise<SystemStatusType> => cast(SystemStatus()),
+  systemSetup: (): Promise<void> => SystemSetup(),
 };
 
 export type { Project, AnalyzeResult };

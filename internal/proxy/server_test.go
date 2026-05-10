@@ -129,7 +129,8 @@ func newTestServer(t *testing.T, upstreamURL string) *httptest.Server {
 		DialTimeout:  200 * time.Millisecond,
 	}
 
-	proxy := NewServer("", router)
+	rec := NewRecoveryHandler(reg, rt)
+	proxy := NewServer("", router, rec)
 	ts := httptest.NewServer(proxy)
 	t.Cleanup(func() {
 		_ = proxy.Shutdown(context.Background())

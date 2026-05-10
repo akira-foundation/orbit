@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"orbit-app/internal/analyzer"
@@ -13,6 +14,7 @@ import (
 	"orbit-app/internal/projects"
 	"orbit-app/internal/proxy"
 	"orbit-app/internal/runtime"
+	"orbit-app/internal/system"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -53,7 +55,8 @@ func (a *App) startup(ctx context.Context) {
 	a.registry = proxy.New(a.service, cfg.DomainSuffix)
 
 	router := proxy.NewRouter(a.registry, a.runtime)
-	a.proxyServer = proxy.NewServer(cfg.ProxyAddr, router)
+	recovery := proxy.NewRecoveryHandler(a.registry, a.runtime)
+	a.proxyServer = proxy.NewServer(cfg.ProxyAddr, router, recovery)
 	go func() {
 		if err := a.proxyServer.ListenAndServe(); err != nil {
 			log.Printf("[proxy] server error: %v", err)
@@ -172,5 +175,21 @@ func (a *App) OpenProject(id string) error {
 		return err
 	}
 	wailsruntime.BrowserOpenURL(a.ctx, u.URL)
+	return nil
+}
+
+func (a *App) SystemStatus() system.Status {
+	return system.Check()
+}
+
+func (a *App) SystemSetup() error {
+	cwd, _ := os.Getwd()
+	if err := system.Install(cwd); err != nil {
+		exe, eerr := os.Executable()
+		if eerr == nil {
+			return system.Install(exe)
+		}
+		return err
+	}
 	return nil
 }
