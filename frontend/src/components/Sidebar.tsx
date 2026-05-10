@@ -8,9 +8,6 @@ import {
   Square,
   PauseCircle,
   AlertTriangle,
-  Folder,
-  Star,
-  Clock,
   Box,
   BarChart3,
   Settings,
@@ -92,11 +89,6 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
           </Section>
         )}
 
-        <Section title="Locations">
-          <Row icon={Folder} label="Local Projects" muted />
-          <Row icon={Star} label="Favorites" muted />
-          <Row icon={Clock} label="Last 7 days" muted />
-        </Section>
       </nav>
 
       <ul className="shrink-0 px-2 pb-2 space-y-1">

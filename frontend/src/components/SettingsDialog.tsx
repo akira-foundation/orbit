@@ -9,6 +9,7 @@ import { Switch } from "./ui/switch";
 import {
   Globe,
   Info,
+  Orbit,
   RotateCcw,
   Settings as SettingsIcon,
   ShieldCheck,
@@ -199,14 +200,42 @@ function AboutSection() {
   return (
     <>
       <SectionHeader title="About" />
-      <div className="px-6 py-6 space-y-1 text-[13px]">
-        <p className="font-semibold">Orbit</p>
-        <p className="text-[var(--orbit-muted)]">Smart Runtime Orchestration</p>
-        <p className="text-[var(--orbit-muted)] pt-2 text-[11px]">
-          © Akira Foundation
+
+      <div className="px-6 py-10 flex flex-col items-center text-center">
+        <Orbit
+          className="size-20 text-[var(--orbit-accent)]"
+          strokeWidth={1.25}
+        />
+        <h2 className="mt-5 text-2xl font-semibold tracking-tight">Orbit</h2>
+        <p className="mt-1 text-[11px] font-mono uppercase tracking-[0.18em] text-[var(--orbit-muted)]">
+          Version 0.1.0
+        </p>
+        <p className="mt-5 max-w-xs text-[12px] text-[var(--orbit-muted)] leading-relaxed">
+          An ambient runtime layer for local web development.
+        </p>
+
+        <div className="mt-8 w-full max-w-sm rounded-lg border border-white/[0.06] bg-white/[0.02] divide-y divide-white/[0.04] text-[12px]">
+          <InfoRow k="Platform" v="macOS" />
+          <InfoRow k="Domain suffix" v="*.orbit.test" />
+          <InfoRow k="Proxy" v="127.0.0.2:80" />
+        </div>
+
+        <p className="mt-8 text-[11px] text-[var(--orbit-muted)]">
+          <span className="text-[var(--orbit-text)]">kidiatoliny</span>
+          <span className="mx-1.5 text-[var(--orbit-subtle)]">@</span>
+          <span className="text-[var(--orbit-text)]">Akira Foundation</span>
         </p>
       </div>
     </>
+  );
+}
+
+function InfoRow({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex items-center justify-between px-4 py-2">
+      <span className="text-[var(--orbit-muted)]">{k}</span>
+      <span className="font-mono text-[var(--orbit-text)]">{v}</span>
+    </div>
   );
 }
 
