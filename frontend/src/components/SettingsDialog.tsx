@@ -5,6 +5,7 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { Button } from "./ui/button";
+import { Switch } from "./ui/switch";
 import {
   Globe,
   Info,
@@ -96,7 +97,7 @@ function SectionHeader({
   description,
 }: {
   title: string;
-  description?: string;
+  description?: React.ReactNode;
 }) {
   return (
     <div className="px-6 pt-6 pb-4 border-b border-white/[0.06]">
@@ -111,13 +112,86 @@ function SectionHeader({
 }
 
 function GeneralSection() {
+  const [status, setStatus] = useState<SystemStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = async () => {
+    try {
+      setStatus(await api.systemStatus());
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+    }
+  };
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const toggle = async (next: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.setLaunchAtLogin(next);
+      await refresh();
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <>
       <SectionHeader title="General" description="Application preferences." />
-      <div className="px-6 py-6 text-[13px] text-[var(--orbit-muted)]">
-        Nothing here yet.
+      <div className="px-6 py-5 space-y-4">
+        <ToggleRow
+          label="Start Orbit at login"
+          description="Open Orbit silently in the background when you log in, so *.orbit.test sites work without thinking about it."
+          checked={!!status?.launchAtLogin}
+          disabled={busy || !status}
+          onChange={toggle}
+        />
+        {error && (
+          <p className="text-[11px] text-rose-300 font-mono whitespace-pre-wrap">
+            {error}
+          </p>
+        )}
       </div>
     </>
+  );
+}
+
+function ToggleRow({
+  label,
+  description,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  description?: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-lg border border-white/10 bg-white/[0.03] p-4">
+      <div className="min-w-0 space-y-1">
+        <p className="text-[13px] font-medium">{label}</p>
+        {description && (
+          <p className="text-[11px] text-[var(--orbit-muted)] leading-relaxed">
+            {description}
+          </p>
+        )}
+      </div>
+      <Switch
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onChange}
+        className="mt-0.5 shrink-0"
+      />
+    </div>
   );
 }
 
@@ -147,13 +221,19 @@ function LocalDomainsSection({
 }) {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [busy, setBusy] = useState<"setup" | "reset" | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = async () => {
+    setRefreshing(true);
     try {
       setStatus(await api.systemStatus());
     } catch (e: any) {
       setError(e?.message ?? String(e));
+    } finally {
+      // Keep spinner visible briefly so user sees feedback even on instant
+      // returns.
+      setTimeout(() => setRefreshing(false), 350);
     }
   };
 
@@ -199,34 +279,47 @@ function LocalDomainsSection({
   }, [visible, autoAction]);
 
   return (
-    <>
+    <div className="flex flex-col h-full">
       <SectionHeader
         title="Local Domains"
-        description="orbit-proxyd serves *.orbit.test on 127.0.0.2 — coexists with Herd's *.test on 127.0.0.1."
+        description={
+          <>
+            <code className="font-mono">orbit-proxyd</code> serves{" "}
+            <code className="font-mono">*.orbit.test</code> on 127.0.0.2,
+            coexisting with Herd's <code className="font-mono">*.test</code> on
+            127.0.0.1.
+          </>
+        }
       />
-      <div className="px-6 py-5 space-y-4">
-        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-[13px] font-semibold">System status</p>
+
+      <div className="flex-1 overflow-auto px-6 py-5 space-y-5">
+        {/* Overall status banner */}
+        <StatusBanner status={status} />
+
+        {/* Detailed checks list */}
+        <div className="rounded-lg border border-white/10 bg-white/[0.02] overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06]">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--orbit-subtle)]">
+              System checks
+            </p>
             <button
+              type="button"
               onClick={refresh}
-              disabled={!!busy}
-              className="size-7 inline-flex items-center justify-center rounded-md border border-white/10 hover:bg-white/5 text-white/70"
+              disabled={!!busy || refreshing}
+              className="size-6 inline-flex items-center justify-center rounded text-[var(--orbit-muted)] hover:text-[var(--orbit-text)] hover:bg-white/5 disabled:opacity-50"
               title="Re-check"
             >
-              <RotateCcw className="size-3.5" />
+              <RotateCcw
+                className={cn("size-3.5", refreshing && "animate-spin")}
+              />
             </button>
           </div>
-          {status && <Checks status={status} />}
-          {status && (
-            <p
-              className={cn(
-                "text-[12px]",
-                status.setup ? "text-emerald-300" : "text-amber-200/80",
-              )}
-            >
-              {status.message}
-            </p>
+          {status ? (
+            <CheckList status={status} />
+          ) : (
+            <div className="px-4 py-6 text-[12px] text-[var(--orbit-muted)] italic text-center">
+              Loading…
+            </div>
           )}
         </div>
 
@@ -235,23 +328,142 @@ function LocalDomainsSection({
             {error}
           </pre>
         )}
-
-        <div className="flex items-center justify-end gap-2 pt-1">
-          <Button variant="ghost" onClick={runReset} disabled={!!busy}>
-            <Trash2 className="size-3.5 mr-1.5" />
-            {busy === "reset" ? "Resetting…" : "Reset"}
-          </Button>
-          <Button onClick={runSetup} disabled={!!busy}>
-            <ShieldCheck className="size-3.5 mr-1.5" />
-            {busy === "setup"
-              ? "Setting up…"
-              : status?.setup
-                ? "Re-run setup"
-                : "Set up"}
-          </Button>
-        </div>
       </div>
-    </>
+
+      <footer className="flex items-center justify-between gap-2 px-6 py-3 border-t border-white/[0.06] bg-white/[0.02]">
+        <p className="text-[10px] text-[var(--orbit-muted)] flex-1 min-w-0 truncate">
+          {status?.setup
+            ? "Already configured. Re-run if you reset DNS / loopback."
+            : "Requires admin password once."}
+        </p>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={runReset}
+          disabled={!!busy || !status?.setup}
+        >
+          <Trash2 className="size-3.5 mr-1.5" />
+          {busy === "reset" ? "Resetting…" : "Reset"}
+        </Button>
+        <Button size="sm" onClick={runSetup} disabled={!!busy}>
+          <ShieldCheck className="size-3.5 mr-1.5" />
+          {busy === "setup"
+            ? "Setting up…"
+            : status?.setup
+              ? "Re-run setup"
+              : "Set up"}
+        </Button>
+      </footer>
+    </div>
+  );
+}
+
+function StatusBanner({ status }: { status: SystemStatus | null }) {
+  if (!status) return null;
+  const ok = status.setup;
+  const conflict = status.herdConflict;
+  const tone = conflict
+    ? {
+        ring: "border-rose-400/30 bg-rose-400/8",
+        dot: "bg-rose-400 shadow-[0_0_10px_#fb7185]",
+        title: "Conflict detected",
+        text: status.message,
+        textColor: "text-rose-200",
+      }
+    : ok
+      ? {
+          ring: "border-emerald-400/30 bg-emerald-400/8",
+          dot: "bg-emerald-400 shadow-[0_0_10px_#34d399]",
+          title: "Local domains ready",
+          text: status.message,
+          textColor: "text-emerald-200/80",
+        }
+      : {
+          ring: "border-amber-400/30 bg-amber-400/8",
+          dot: "bg-amber-400 shadow-[0_0_10px_#fbbf24]",
+          title: "Setup needed",
+          text: status.message,
+          textColor: "text-amber-200/80",
+        };
+  return (
+    <div
+      className={cn(
+        "rounded-lg border px-4 py-3 flex items-start gap-3",
+        tone.ring,
+      )}
+    >
+      <span
+        className={cn("mt-1 size-2 rounded-full shrink-0", tone.dot)}
+      />
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-semibold">{tone.title}</p>
+        <p className={cn("text-[11px] mt-0.5", tone.textColor)}>{tone.text}</p>
+      </div>
+    </div>
+  );
+}
+
+function CheckList({ status }: { status: SystemStatus }) {
+  const items: {
+    label: string;
+    hint: string;
+    ok: boolean;
+  }[] = [
+    {
+      label: "Loopback alias 127.0.0.2",
+      hint: "Extra IP on lo0 so proxyd can listen without colliding with 127.0.0.1.",
+      ok: status.loopbackOk,
+    },
+    {
+      label: "DNS responder *.orbit.test",
+      hint: "Custom DNS on 127.0.0.2:53 answering the orbit subdomain only.",
+      ok: status.dnsmasqOk,
+    },
+    {
+      label: "/etc/resolver/orbit.test",
+      hint: "macOS resolver entry routing the suffix to the local DNS responder.",
+      ok: status.resolverOk,
+    },
+    {
+      label: "Proxy daemon",
+      hint: "orbit-proxyd LaunchDaemon listening on 127.0.0.2:80.",
+      ok: status.daemonOk,
+    },
+  ];
+  return (
+    <ul className="divide-y divide-white/[0.04]">
+      {items.map((it) => (
+        <li
+          key={it.label}
+          className="flex items-start gap-3 px-4 py-2.5"
+        >
+          <span
+            className={cn(
+              "mt-1 size-2 rounded-full shrink-0",
+              it.ok
+                ? "bg-emerald-400 shadow-[0_0_8px_#34d399]"
+                : "bg-amber-400 shadow-[0_0_8px_#fbbf24]",
+            )}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-[12px] font-medium text-[var(--orbit-text)]">
+              {it.label}
+            </p>
+            <p className="text-[10px] text-[var(--orbit-muted)] leading-relaxed">
+              {it.hint}
+            </p>
+          </div>
+          <span
+            className={cn(
+              "text-[10px] font-mono uppercase tracking-widest shrink-0",
+              it.ok ? "text-emerald-300" : "text-amber-300",
+            )}
+          >
+            {it.ok ? "OK" : "Pending"}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

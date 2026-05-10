@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useProjects } from '../store'
-import { ExternalLink, Loader2, Orbit, Play, Plus, Square } from 'lucide-react'
+import { BarChart3, ExternalLink, FileText, Loader2, Orbit, Play, Plus, Square } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import type { Project } from '../types'
 import { cn } from '../lib/cn'
@@ -86,7 +86,7 @@ function ListView({
               onDoubleClick={() => onOpen(p)}
               className={cn(
                 'cursor-default border-t border-[var(--orbit-border)] transition-colors',
-                focusId === p.id ? 'bg-[var(--orbit-accent)]/20' : 'hover:bg-white/4',
+                focusId === p.id ? 'bg-white/[0.10]' : 'hover:bg-white/4',
               )}
             >
               <Td className="font-medium">{p.name}</Td>
@@ -108,13 +108,49 @@ function ListView({
                 </div>
               </Td>
               <Td className="w-px text-right pr-3">
-                <RowAction project={p} />
+                <div className="flex items-center justify-end gap-1">
+                  <RowLogsButton projectId={p.id} />
+                  <RowMetricsButton projectId={p.id} />
+                  <RowAction project={p} />
+                </div>
               </Td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  )
+}
+
+function RowLogsButton({ projectId }: { projectId: string }) {
+  const { showProjectLogs } = useProjects()
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation()
+        showProjectLogs(projectId)
+      }}
+      title="Logs"
+      className="no-drag inline-flex items-center justify-center size-7 rounded-md text-[var(--orbit-muted)] hover:text-amber-300 hover:bg-white/5 transition-colors"
+    >
+      <FileText className="size-3.5" />
+    </button>
+  )
+}
+
+function RowMetricsButton({ projectId }: { projectId: string }) {
+  const { showProjectMetrics } = useProjects()
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation()
+        showProjectMetrics(projectId)
+      }}
+      title="Metrics"
+      className="no-drag inline-flex items-center justify-center size-7 rounded-md text-[var(--orbit-muted)] hover:text-cyan-300 hover:bg-white/5 transition-colors"
+    >
+      <BarChart3 className="size-3.5" />
+    </button>
   )
 }
 

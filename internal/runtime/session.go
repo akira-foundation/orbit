@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"sync"
 	"time"
 
@@ -23,6 +25,7 @@ type Snapshot struct {
 	UptimeMs     int64           `json:"uptimeMs"`
 	StartupMs    int64           `json:"startupMs,omitempty"`
 	Attempts     int             `json:"attempts,omitempty"`
+	Conns        int             `json:"conns"`
 	LastActivity string          `json:"lastActivity"`
 	Error        string          `json:"error,omitempty"`
 }
@@ -31,6 +34,7 @@ type Session struct {
 	mu sync.RWMutex
 
 	projectID    string
+	sessionID    string
 	status       projects.Status
 	pid          int
 	port         int
@@ -59,12 +63,21 @@ type Session struct {
 func newSession(projectID string, logCap int) *Session {
 	return &Session{
 		projectID: projectID,
+		sessionID: newSessionID(),
 		status:    projects.StatusStarting,
 		startedAt: time.Now().UTC(),
 		logs:      make([]LogLine, 0, logCap),
 		logCap:    logCap,
 		stopCh:    make(chan struct{}),
 	}
+}
+
+// newSessionID returns a short random hex token used as session_id in
+// runtime_logs. 8 bytes of entropy is plenty to disambiguate concurrent runs.
+func newSessionID() string {
+	var b [8]byte
+	_, _ = rand.Read(b[:])
+	return hex.EncodeToString(b[:])
 }
 
 func (s *Session) setStatus(st projects.Status) {

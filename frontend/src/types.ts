@@ -42,7 +42,11 @@ export interface RuntimeSnapshot {
   pid: number
   port: number
   startedAt: string
+  readyAt?: string
   uptimeMs: number
+  startupMs?: number
+  attempts?: number
+  conns: number
   lastActivity: string
   error?: string
 }
@@ -57,6 +61,30 @@ export interface RuntimeStatusEvent {
   snapshot: RuntimeSnapshot
 }
 
+export interface MetricSample {
+  ts: number
+  projectId: string
+  status: ProjectStatus
+  port: number
+  conns: number
+  uptimeMs: number
+  attempts: number
+  reqCount: number
+  errCount: number
+  httpReqs: number
+  wsReqs: number
+  bytesIn: number
+  bytesOut: number
+  p50Ms: number
+  p95Ms: number
+  p99Ms: number
+  memKb: number
+  cpuPct: number
+  crashes: number
+  autostops: number
+  wakeMs: number
+}
+
 export interface SystemStatus {
   os: string
   setup: boolean
@@ -65,6 +93,7 @@ export interface SystemStatus {
   resolverOk: boolean
   daemonOk: boolean
   herdConflict: boolean
+  launchAtLogin: boolean
   message: string
 }
 

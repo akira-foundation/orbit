@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -33,11 +34,16 @@ type Manager interface {
 	IsRunning(projectID string) bool
 	ConnOpen(projectID string)
 	ConnClose(projectID string)
+	Metrics(projectID string) []Sample
+	MetricsAll() map[string][]Sample
+	LogsHistory(projectID string, sinceTs int64, limit int) []LogLine
+	RecordEvent(projectID string, level EventLevel, source EventSource, text string)
+	RecordRequest(projectID string, statusCode int, durationMs float64, bytesIn, bytesOut int64, isWS bool)
 	StopAll()
 	SetEmitter(e Emitter)
 }
 
-func New(projects ProjectLookup) Manager {
+func New(projects ProjectLookup, db *sql.DB) Manager {
 	m := &manager{
 		projects:   projects,
 		emitter:    nopEmitter{},
@@ -47,8 +53,11 @@ func New(projects ProjectLookup) Manager {
 		idleAfter:  10 * time.Second,
 		activeConn: make(map[string]int),
 		idleSince:  make(map[string]time.Time),
+		metrics:    newMetrics(db),
+		logs:       newLogStore(db),
 	}
 	go m.idleSweeper()
+	go m.metricsSampler()
 	return m
 }
 
@@ -64,6 +73,146 @@ type manager struct {
 	idleAfter  time.Duration
 	activeConn map[string]int
 	idleSince  map[string]time.Time
+
+	metrics *metrics
+	logs    *logStore
+
+	projMu      sync.Mutex
+	projCounter map[string]*projMetrics
+}
+
+func (m *manager) projMetricsFor(projectID string) *projMetrics {
+	m.projMu.Lock()
+	defer m.projMu.Unlock()
+	if m.projCounter == nil {
+		m.projCounter = make(map[string]*projMetrics)
+	}
+	pm, ok := m.projCounter[projectID]
+	if !ok {
+		pm = &projMetrics{}
+		m.projCounter[projectID] = pm
+	}
+	return pm
+}
+
+// RecordRequest is called by the proxy on every completed request. Increments
+// counters used for req-rate, error-rate, latency percentiles, byte volume,
+// HTTP-vs-WS breakdown.
+func (m *manager) RecordRequest(projectID string, statusCode int, durationMs float64, bytesIn, bytesOut int64, isWS bool) {
+	if projectID == "" {
+		return
+	}
+	m.projMetricsFor(projectID).RecordRequest(statusCode, durationMs, bytesIn, bytesOut, isWS)
+}
+
+// addLog appends to the session's in-memory ring buffer (hot path for the
+// streaming UI) and persists the line to the events table.
+//
+// Stream-based level inference: stderr -> warn, system -> info, stdout ->
+// info. The events table is the single audit log for everything that
+// happens in Orbit, kept forever by user request.
+func (m *manager) addLog(sess *Session, line LogLine) {
+	sess.appendLog(line)
+	if m.logs == nil {
+		return
+	}
+	level := LevelInfo
+	if line.Stream == "stderr" {
+		level = LevelWarn
+	}
+	m.logs.push(Event{
+		Ts:        time.Now().UnixNano(),
+		ProjectID: sess.projectID,
+		SessionID: sess.sessionID,
+		Level:     level,
+		Source:    SourceRuntime,
+		Stream:    line.Stream,
+		Text:      line.Text,
+	})
+}
+
+// recordSystem persists a non-runtime event (lifecycle marker, self-heal
+// retry, crash detected, etc.). Project ID may be empty for app-wide events.
+func (m *manager) recordSystem(projectID string, level EventLevel, source EventSource, text string) {
+	if m.logs == nil {
+		return
+	}
+	m.logs.push(Event{
+		Ts:        time.Now().UnixNano(),
+		ProjectID: projectID,
+		Level:     level,
+		Source:    source,
+		Text:      text,
+	})
+}
+
+func (m *manager) Metrics(projectID string) []Sample {
+	return m.metrics.get(projectID)
+}
+
+func (m *manager) MetricsAll() map[string][]Sample {
+	return m.metrics.all()
+}
+
+func (m *manager) LogsHistory(projectID string, sinceTs int64, limit int) []LogLine {
+	if m.logs == nil {
+		return nil
+	}
+	return m.logs.History(projectID, sinceTs, limit)
+}
+
+func (m *manager) RecordEvent(projectID string, level EventLevel, source EventSource, text string) {
+	m.recordSystem(projectID, level, source, text)
+}
+
+// metricsSampler walks every active session every sampleInterval and pushes
+// a snapshot point into the metric_samples table. Pulls in:
+//   - session state (status, port, conns, uptime, attempts)
+//   - traffic counters drained from projMetrics (reqs, errors, latency, bytes)
+//   - OS process stats from ps (RSS, CPU%) for the child process group
+//   - lifetime counters (crashes, autostops) and most recent wake latency
+func (m *manager) metricsSampler() {
+	tk := time.NewTicker(sampleInterval)
+	defer tk.Stop()
+	for range tk.C {
+		m.mu.RLock()
+		ids := make([]string, 0, len(m.sessions))
+		pgids := make(map[string]int, len(m.sessions))
+		for id, sess := range m.sessions {
+			ids = append(ids, id)
+			pgids[id] = sess.pgid
+		}
+		m.mu.RUnlock()
+		now := time.Now().Unix()
+		for _, id := range ids {
+			snap := m.Status(id)
+			d := m.projMetricsFor(id).Drain()
+			ps := readProcStat(pgids[id])
+			m.metrics.push(Sample{
+				Ts:        now,
+				ProjectID: id,
+				Status:    snap.Status,
+				Port:      snap.Port,
+				Conns:     snap.Conns,
+				UptimeMs:  snap.UptimeMs,
+				Attempts:  snap.Attempts,
+				ReqCount:  d.ReqCount,
+				ErrCount:  d.ErrCount,
+				HTTPReqs:  d.HTTPReqs,
+				WSReqs:    d.WSReqs,
+				BytesIn:   d.BytesIn,
+				BytesOut:  d.BytesOut,
+				P50Ms:     d.P50,
+				P95Ms:     d.P95,
+				P99Ms:     d.P99,
+				MemKB:     ps.MemKB,
+				CPUPct:    ps.CPUPct,
+				Crashes:   d.Crashes,
+				Autostops: d.Autostops,
+				WakeMs:    d.WakeMs,
+			})
+		}
+	}
 }
 
 func (m *manager) SetEmitter(e Emitter) {
@@ -81,6 +230,17 @@ func (m *manager) emit(name string, data ...any) {
 	e := m.emitter
 	m.mu.RUnlock()
 	e.Emit(name, data...)
+}
+
+// snap takes a session and wraps the per-session Snapshot with manager-level
+// metadata (currently the live connection count). Use this whenever you build
+// a StatusEvent so emitted snapshots match what Status(id) returns.
+func (m *manager) snap(sess *Session) Snapshot {
+	s := sess.Snapshot()
+	m.mu.RLock()
+	s.Conns = m.activeConn[sess.projectID]
+	m.mu.RUnlock()
+	return s
 }
 
 func (m *manager) Start(ctx context.Context, projectID string) error {
@@ -128,6 +288,8 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 	port := pickPort(proj.DevPort)
 	log.Printf("[runtime] start project=%s devPort=%d picked=%d cmd=%q",
 		proj.ID, proj.DevPort, port, proj.DevCommand)
+	m.recordSystem(proj.ID, LevelInfo, SourceSystem,
+		fmt.Sprintf("starting runtime (cmd=%q port=%d)", proj.DevCommand, port))
 	env := append(os.Environ(),
 		"FORCE_COLOR=1",
 		"CI=false",
@@ -147,7 +309,7 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 	// log parsing in readPipe resolve the actual listening port.
 
 	_ = m.projects.UpdateStatus(ctx, projectID, projects.StatusStarting)
-	m.emit(EvtStarting, StatusEvent{ProjectID: projectID, Snapshot: sess.Snapshot()})
+	m.emit(EvtStarting, StatusEvent{ProjectID: projectID, Snapshot: m.snap(sess)})
 
 	go m.readPipe(sess, handle.stdout, "stdout")
 	go m.readPipe(sess, handle.stderr, "stderr")
@@ -170,6 +332,8 @@ func (m *manager) watchdog(sess *Session, handle *processHandle, timeout time.Du
 		if sess.Status() == projects.StatusStarting {
 			log.Printf("[runtime] watchdog: project=%s never became ready in %s, killing pgid=%d",
 				sess.projectID, timeout, handle.pgid)
+			m.recordSystem(sess.projectID, LevelError, SourceSystem,
+				fmt.Sprintf("watchdog killed runtime: never became ready in %s", timeout))
 			_ = handle.forceKill()
 		}
 	}
@@ -177,7 +341,7 @@ func (m *manager) watchdog(sess *Session, handle *processHandle, timeout time.Du
 
 func (m *manager) markStartFailed(sess *Session, err error) {
 	sess.setError(err.Error())
-	m.emit(EvtError, StatusEvent{ProjectID: sess.projectID, Snapshot: sess.Snapshot()})
+	m.emit(EvtError, StatusEvent{ProjectID: sess.projectID, Snapshot: m.snap(sess)})
 }
 
 func (m *manager) Stop(ctx context.Context, projectID string) error {
@@ -218,7 +382,9 @@ func (m *manager) Status(projectID string) Snapshot {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if sess, ok := m.sessions[projectID]; ok {
-		return sess.Snapshot()
+		s := sess.Snapshot()
+		s.Conns = m.activeConn[projectID]
+		return s
 	}
 	return Snapshot{ProjectID: projectID, Status: projects.StatusStopped}
 }
@@ -305,6 +471,9 @@ func (m *manager) idleSweeper() {
 
 		for _, id := range toStop {
 			log.Printf("[runtime] idle stop project=%s after %s", id, m.idleAfter)
+			m.recordSystem(id, LevelInfo, SourceSystem,
+				fmt.Sprintf("idle auto-stop after %s with no active connections", m.idleAfter))
+			m.projMetricsFor(id).IncAutostop()
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			_ = m.Stop(ctx, id)
 			cancel()
@@ -349,7 +518,7 @@ func (m *manager) readPipe(sess *Session, r io.Reader, stream string) {
 			Stream:    stream,
 			Text:      text,
 		}
-		sess.appendLog(line)
+		m.addLog(sess, line)
 		m.emit(EvtLog, LogEvent{ProjectID: sess.projectID, Line: line})
 
 		if port, strong := extractPortFromLine(text); port > 0 {
@@ -359,8 +528,9 @@ func (m *manager) readPipe(sess *Session, r io.Reader, stream string) {
 		}
 		if sess.Status() == projects.StatusStarting && looksReady(text) {
 			sess.setStatus(projects.StatusRunning)
+			m.projMetricsFor(sess.projectID).SetWakeMs(sinceMs(sess.startedAt))
 			_ = m.projects.UpdateStatus(context.Background(), sess.projectID, projects.StatusRunning)
-			m.emit(EvtRunning, StatusEvent{ProjectID: sess.projectID, Snapshot: sess.Snapshot()})
+			m.emit(EvtRunning, StatusEvent{ProjectID: sess.projectID, Snapshot: m.snap(sess)})
 		}
 		return true
 	})
@@ -394,7 +564,7 @@ func (m *manager) supervise(sess *Session, handle *processHandle, _ *projects.Pr
 func (m *manager) finalize(sess *Session, err error, requested bool) {
 	if requested {
 		sess.markStopped()
-		m.emit(EvtStopped, StatusEvent{ProjectID: sess.projectID, Snapshot: sess.Snapshot()})
+		m.emit(EvtStopped, StatusEvent{ProjectID: sess.projectID, Snapshot: m.snap(sess)})
 		_ = m.projects.UpdateStatus(context.Background(), sess.projectID, projects.StatusStopped)
 		return
 	}
@@ -408,13 +578,18 @@ func (m *manager) finalize(sess *Session, err error, requested bool) {
 			msg = "process exited: " + err.Error()
 		}
 		sess.setError(msg)
-		sess.appendLog(LogLine{
+		m.addLog(sess, LogLine{
 			Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
 			Stream:    "system",
 			Text:      msg,
 		})
-		m.emit(EvtError, StatusEvent{ProjectID: sess.projectID, Snapshot: sess.Snapshot()})
+		m.emit(EvtError, StatusEvent{ProjectID: sess.projectID, Snapshot: m.snap(sess)})
 		_ = m.projects.UpdateStatus(context.Background(), sess.projectID, projects.StatusError)
+		if wasRunning {
+			// Treat as a real crash for metrics purposes — startups that
+			// never reached Running are config bugs, not crashes.
+			m.projMetricsFor(sess.projectID).IncCrash()
+		}
 		// Self-healing: only retry runtimes that previously reached Running.
 		// A startup that never went healthy is most likely a config bug
 		// (wrong port, missing dep) and retrying just spams the user.
@@ -427,7 +602,7 @@ func (m *manager) finalize(sess *Session, err error, requested bool) {
 	// Clean exit (code 0) of a previously-running session: still try to
 	// recover — the user did not request a stop.
 	sess.markStopped()
-	m.emit(EvtStopped, StatusEvent{ProjectID: sess.projectID, Snapshot: sess.Snapshot()})
+	m.emit(EvtStopped, StatusEvent{ProjectID: sess.projectID, Snapshot: m.snap(sess)})
 	_ = m.projects.UpdateStatus(context.Background(), sess.projectID, projects.StatusStopped)
 	if wasRunning {
 		m.scheduleRestart(sess)
@@ -448,6 +623,8 @@ func (m *manager) scheduleRestart(sess *Session) {
 	if n > maxRestartAttempts {
 		log.Printf("[runtime] self-heal giving up project=%s attempts=%d",
 			sess.projectID, n)
+		m.recordSystem(sess.projectID, LevelError, SourceSystem,
+			fmt.Sprintf("self-heal giving up after %d attempts", n))
 		return
 	}
 	delay := time.Duration(1<<uint(n-1)) * time.Second
@@ -456,6 +633,8 @@ func (m *manager) scheduleRestart(sess *Session) {
 	}
 	log.Printf("[runtime] self-heal scheduling project=%s attempt=%d in=%s",
 		sess.projectID, n, delay)
+	m.recordSystem(sess.projectID, LevelWarn, SourceSystem,
+		fmt.Sprintf("self-heal restart attempt %d scheduled in %s", n, delay))
 	go func() {
 		t := time.NewTimer(delay)
 		defer t.Stop()

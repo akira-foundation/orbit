@@ -20,6 +20,7 @@ type RuntimeProvider interface {
 	Status(projectID string) runtime.Snapshot
 	ConnOpen(projectID string)
 	ConnClose(projectID string)
+	RecordRequest(projectID string, statusCode int, durationMs float64, bytesIn, bytesOut int64, isWS bool)
 }
 
 type Target struct {

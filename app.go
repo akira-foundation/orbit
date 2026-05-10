@@ -50,7 +50,7 @@ func (a *App) startup(ctx context.Context) {
 
 	repo := projects.NewRepository(sqlDB, queries)
 	a.service = projects.NewService(repo, analyzer.New(), cfg.DomainSuffix)
-	a.runtime = runtime.New(a.service)
+	a.runtime = runtime.New(a.service, sqlDB)
 	a.runtime.SetEmitter(runtime.NewWailsEmitter(ctx))
 	a.registry = proxy.New(a.service, cfg.DomainSuffix)
 
@@ -110,7 +110,15 @@ func (a *App) AnalyzePath(path string) (*AnalyzeResult, error) {
 }
 
 func (a *App) AddProject(path string) (*projects.Project, error) {
-	return a.service.Create(a.ctx, path)
+	p, err := a.service.Create(a.ctx, path)
+	if err != nil {
+		a.runtime.RecordEvent("", runtime.LevelError, runtime.SourceProject,
+			fmt.Sprintf("add project %q failed: %v", path, err))
+		return nil, err
+	}
+	a.runtime.RecordEvent(p.ID, runtime.LevelInfo, runtime.SourceProject,
+		fmt.Sprintf("project added: %s (%s)", p.Name, p.LocalDomain))
+	return p, nil
 }
 
 func (a *App) ListProjects() ([]projects.Project, error) {
@@ -122,6 +130,8 @@ func (a *App) GetProject(id string) (*projects.Project, error) {
 }
 
 func (a *App) DeleteProject(id string) error {
+	a.runtime.RecordEvent(id, runtime.LevelWarn, runtime.SourceProject,
+		"project deleted")
 	return a.service.Delete(a.ctx, id)
 }
 
@@ -143,6 +153,18 @@ func (a *App) RuntimeStatus(id string) runtime.Snapshot {
 
 func (a *App) RuntimeLogs(id string) []runtime.LogLine {
 	return a.runtime.Logs(id)
+}
+
+func (a *App) RuntimeLogsHistory(id string, sinceTs int64, limit int) []runtime.LogLine {
+	return a.runtime.LogsHistory(id, sinceTs, limit)
+}
+
+func (a *App) RuntimeMetrics(id string) []runtime.Sample {
+	return a.runtime.Metrics(id)
+}
+
+func (a *App) RuntimeMetricsAll() map[string][]runtime.Sample {
+	return a.runtime.MetricsAll()
 }
 
 func (a *App) SelectProjectFolder() (string, error) {
@@ -184,6 +206,10 @@ func (a *App) SystemStatus() system.Status {
 
 func (a *App) SystemUninstall() error {
 	return system.Uninstall()
+}
+
+func (a *App) SetLaunchAtLogin(enabled bool) error {
+	return system.SetLaunchAtLogin(enabled)
 }
 
 func (a *App) SystemSetup() error {

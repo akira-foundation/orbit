@@ -102,6 +102,21 @@ export function useRuntime(projectId: string | null): UseRuntime {
     }
   }, 1000);
 
+  // Poll Status() every 2s while a project is open so live metrics
+  // (active connections, last activity) refresh between status events.
+  // Status events only fire on state changes; conns and lastActivity move
+  // independently as the user browses, so without this they would freeze.
+  useInterval(
+    () => {
+      if (!projectId) return;
+      api
+        .runtimeStatus(projectId)
+        .then((snap) => setSnapshot(snap))
+        .catch(() => {});
+    },
+    projectId ? 2000 : null,
+  );
+
   return {
     snapshot,
     logs,

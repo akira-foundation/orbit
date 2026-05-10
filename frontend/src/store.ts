@@ -3,10 +3,12 @@ import type { Project } from './types'
 import { api } from './api'
 
 export type Filter = 'all' | 'running' | 'idle' | 'stopped' | 'suspended' | 'error'
+export type View = 'projects' | 'metrics' | 'project-metrics' | 'project-logs'
 
 interface State {
   projects: Project[]
   selectedId: string | null
+  view: View
   history: Array<string | null>
   historyIndex: number
   filter: Filter
@@ -15,12 +17,15 @@ interface State {
   error: string | null
   load: () => Promise<void>
   select: (id: string | null) => void
+  setView: (v: View) => void
   back: () => void
   forward: () => void
   canBack: boolean
   canForward: boolean
   setFilter: (f: Filter) => void
   setQuery: (q: string) => void
+  showProjectMetrics: (id: string) => void
+  showProjectLogs: (id: string) => void
   add: (p: Project) => void
   remove: (id: string) => Promise<void>
   start: (id: string) => Promise<void>
@@ -31,6 +36,7 @@ interface State {
 export const useProjects = create<State>((set, get) => ({
   projects: [],
   selectedId: null,
+  view: 'projects',
   history: [null],
   historyIndex: 0,
   canBack: false,
@@ -41,6 +47,9 @@ export const useProjects = create<State>((set, get) => ({
   error: null,
   setFilter(f) { set({ filter: f }) },
   setQuery(q) { set({ query: q }) },
+  setView(v) { set({ view: v, selectedId: v === 'metrics' ? null : get().selectedId }) },
+  showProjectMetrics(id) { set({ view: 'project-metrics', selectedId: id }) },
+  showProjectLogs(id) { set({ view: 'project-logs', selectedId: id }) },
   async load() {
     set({ loading: true, error: null })
     try {
@@ -56,6 +65,7 @@ export const useProjects = create<State>((set, get) => ({
     const newIndex = newHistory.length - 1
     set({
       selectedId: id,
+      view: 'projects',
       history: newHistory,
       historyIndex: newIndex,
       canBack: newIndex > 0,

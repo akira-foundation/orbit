@@ -37,8 +37,9 @@ func (f *fakeRuntime) Restart(ctx context.Context, id string) error {
 
 func (f *fakeRuntime) Port(string) int { return f.port }
 
-func (f *fakeRuntime) ConnOpen(string)  {}
-func (f *fakeRuntime) ConnClose(string) {}
+func (f *fakeRuntime) ConnOpen(string)                                            {}
+func (f *fakeRuntime) ConnClose(string)                                           {}
+func (f *fakeRuntime) RecordRequest(string, int, float64, int64, int64, bool)     {}
 
 func (f *fakeRuntime) IsRunning(id string) bool {
 	f.mu.Lock()

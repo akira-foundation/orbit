@@ -39,6 +39,7 @@ type Status struct {
 	ResolverOK   bool   `json:"resolverOk"`
 	DaemonOK     bool   `json:"daemonOk"`
 	HerdConflict bool   `json:"herdConflict"`
+	LaunchAtLoginOK bool `json:"launchAtLogin"`
 	Message      string `json:"message"`
 }
 
@@ -53,6 +54,7 @@ func Check() Status {
 	s.DaemonOK = checkProxydReachable()
 	s.DnsOK = checkOrbitDNS()
 	s.HerdConflict = !s.DaemonOK && checkAddrInUse()
+	s.LaunchAtLoginOK = checkLoginAgent()
 	s.Setup = s.LoopbackOK && s.DnsOK && s.ResolverOK && s.DaemonOK
 	switch {
 	case s.HerdConflict:
@@ -124,6 +126,115 @@ func checkProxydReachable() bool {
 	}
 	_ = c.Close()
 	return true
+}
+
+// loginAgentPlistPath returns ~/Library/LaunchAgents/com.orbit.app.plist.
+// The agent file lives in the user's home, not /Library, so installing it
+// does not require admin privileges.
+func loginAgentPlistPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "Library", "LaunchAgents", "com.orbit.app.plist"), nil
+}
+
+func checkLoginAgent() bool {
+	p, err := loginAgentPlistPath()
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(p)
+	return err == nil
+}
+
+// SetLaunchAtLogin installs (or removes) a per-user LaunchAgent that opens
+// Orbit silently in the background at login. Returns nil on success.
+//
+// The plist runs `open -gj` against the running .app bundle:
+//
+//	-g  do not bring app to foreground
+//	-j  hidden (Dock icon dimmed, no window steal)
+//
+// We resolve the .app bundle path from os.Executable so this works whether
+// the user runs the dev build or the packaged release.
+func SetLaunchAtLogin(enabled bool) error {
+	if runtime.GOOS != "darwin" {
+		return fmt.Errorf("launch-at-login is macOS-only")
+	}
+	plistPath, err := loginAgentPlistPath()
+	if err != nil {
+		return err
+	}
+	if !enabled {
+		_ = exec.Command("launchctl", "bootout",
+			fmt.Sprintf("gui/%d/com.orbit.app", os.Getuid()),
+		).Run()
+		_ = os.Remove(plistPath)
+		return nil
+	}
+
+	appPath, err := orbitAppPath()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(plistPath), 0o755); err != nil {
+		return err
+	}
+	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.orbit.app</string>
+  <key>RunAtLoad</key><true/>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/open</string>
+    <string>-gj</string>
+    <string>%s</string>
+  </array>
+</dict>
+</plist>
+`, appPath)
+	if err := os.WriteFile(plistPath, []byte(plist), 0o644); err != nil {
+		return err
+	}
+	_ = exec.Command("launchctl", "bootout",
+		fmt.Sprintf("gui/%d/com.orbit.app", os.Getuid()),
+	).Run()
+	cmd := exec.Command("launchctl", "bootstrap",
+		fmt.Sprintf("gui/%d", os.Getuid()), plistPath,
+	)
+	var errb bytes.Buffer
+	cmd.Stderr = &errb
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("launchctl bootstrap: %v: %s", err, strings.TrimSpace(errb.String()))
+	}
+	return nil
+}
+
+// orbitAppPath walks up from the current executable to find the enclosing
+// .app bundle so the plist points at the actual installed app, not the
+// wails-dev binary inside build/bin.
+func orbitAppPath() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	exe, _ = filepath.Abs(exe)
+	dir := filepath.Dir(exe)
+	for i := 0; i < 6; i++ {
+		if strings.HasSuffix(dir, ".app") {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	// Dev build / non-app exe: just point at the binary itself.
+	return exe, nil
 }
 
 func checkAddrInUse() bool {

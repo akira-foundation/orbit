@@ -9,14 +9,19 @@ import {
   RestartProject,
   RuntimeStatus,
   RuntimeLogs,
+  RuntimeLogsHistory,
+  RuntimeMetrics,
+  RuntimeMetricsAll,
   SelectProjectFolder,
   OpenProject,
   SystemStatus,
   SystemSetup,
   SystemUninstall,
+  SetLaunchAtLogin,
 } from "../wailsjs/go/main/App";
 import type {
   AnalyzeResult,
+  MetricSample,
   Project,
   RuntimeSnapshot,
   RuntimeLogLine,
@@ -42,11 +47,27 @@ export const api = {
     cast(RuntimeStatus(id)),
   runtimeLogs: async (id: string): Promise<RuntimeLogLine[]> =>
     (await cast<RuntimeLogLine[] | null>(RuntimeLogs(id))) ?? [],
+  runtimeLogsHistory: async (
+    id: string,
+    sinceTs: number,
+    limit: number,
+  ): Promise<RuntimeLogLine[]> =>
+    (await cast<RuntimeLogLine[] | null>(
+      RuntimeLogsHistory(id, sinceTs, limit),
+    )) ?? [],
+  runtimeMetrics: async (id: string): Promise<MetricSample[]> =>
+    (await cast<MetricSample[] | null>(RuntimeMetrics(id))) ?? [],
+  runtimeMetricsAll: async (): Promise<Record<string, MetricSample[]>> =>
+    (await cast<Record<string, MetricSample[]> | null>(
+      RuntimeMetricsAll(),
+    )) ?? {},
   selectFolder: (): Promise<string> => SelectProjectFolder(),
   openProject: (id: string): Promise<void> => OpenProject(id),
   systemStatus: (): Promise<SystemStatusType> => cast(SystemStatus()),
   systemSetup: (): Promise<void> => SystemSetup(),
   systemUninstall: (): Promise<void> => SystemUninstall(),
+  setLaunchAtLogin: (enabled: boolean): Promise<void> =>
+    SetLaunchAtLogin(enabled),
 };
 
 export type { Project, AnalyzeResult };

@@ -12,6 +12,7 @@ import {
   Star,
   Clock,
   Box,
+  BarChart3,
   Settings,
 } from "lucide-react";
 
@@ -30,26 +31,50 @@ const filterItems: Item[] = [
   { id: "error", label: "Errors", icon: AlertTriangle },
 ];
 
+function countFor(filter: Filter, projects: { status: ProjectStatus }[]): number {
+  if (filter === "all") return projects.length;
+  return projects.filter((p) => p.status === filter).length;
+}
+
 export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
-  const { projects, filter, setFilter, selectedId, select } = useProjects();
+  const { projects, filter, setFilter, selectedId, select, view, setView } =
+    useProjects();
   const recent = projects.slice(0, 8);
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       <nav className="flex-1 overflow-auto scrollbar-thin px-2 pt-2 pb-2">
         <Section title="Workspace">
-          {filterItems.map((it) => (
-            <Row
-              key={it.id}
-              icon={it.icon}
-              label={it.label}
-              active={!selectedId && filter === it.id}
-              onClick={() => {
-                select(null);
-                setFilter(it.id);
-              }}
-            />
-          ))}
+          <Row
+            icon={BarChart3}
+            label="Metrics"
+            active={view === "metrics"}
+            onClick={() => setView("metrics")}
+          />
+          {filterItems.map((it) => {
+            const count = countFor(it.id, projects);
+            return (
+              <Row
+                key={it.id}
+                icon={it.icon}
+                label={it.label}
+                badge={count > 0 ? count : undefined}
+                tone={
+                  it.id === "running"
+                    ? "ok"
+                    : it.id === "error"
+                      ? "warn"
+                      : undefined
+                }
+                active={view === "projects" && !selectedId && filter === it.id}
+                onClick={() => {
+                  select(null);
+                  setView("projects");
+                  setFilter(it.id);
+                }}
+              />
+            );
+          })}
         </Section>
 
         {recent.length > 0 && (
@@ -105,14 +130,28 @@ function Row({
   onClick,
   muted,
   dot,
+  badge,
+  tone,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   active?: boolean;
   muted?: boolean;
   dot?: string;
+  badge?: number;
+  tone?: "ok" | "warn";
   onClick?: () => void;
 }) {
+  const badgeCls = cn(
+    "ml-auto inline-flex items-center justify-center size-5 shrink-0 rounded-full text-[10px] font-semibold tabular-nums leading-none",
+    tone === "ok"
+      ? "bg-emerald-400/15 text-emerald-300"
+      : tone === "warn"
+        ? "bg-rose-400/15 text-rose-300"
+        : "bg-white/8 text-[var(--orbit-muted)]",
+  );
+  const badgeText =
+    badge !== undefined ? (badge > 99 ? "99+" : String(badge)) : "";
   return (
     <li>
       <button
@@ -127,6 +166,7 @@ function Row({
       >
         <Icon className="h-[17px] w-[17px] shrink-0 text-[var(--orbit-muted)]" />
         <span className="truncate flex-1 text-left">{label}</span>
+        {badge !== undefined && <span className={badgeCls}>{badgeText}</span>}
         {dot && <span className={cn("h-1.5 w-1.5 rounded-full", dot)} />}
       </button>
     </li>

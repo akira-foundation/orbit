@@ -5,7 +5,10 @@ import { StatusBar } from "./components/StatusBar";
 import { AddProjectDialog } from "./components/AddProjectDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { Dashboard } from "./pages/Dashboard";
+import { MetricsPage } from "./pages/Metrics";
 import { ProjectDetail } from "./pages/ProjectDetail";
+import { ProjectMetricsPage } from "./pages/ProjectMetrics";
+import { ProjectLogsPage } from "./pages/ProjectLogs";
 import { useProjects } from "./store";
 import { useWailsEvent } from "./hooks/useWailsEvent";
 import { SetupBanner } from "./components/SetupBanner";
@@ -20,7 +23,7 @@ const STATUS_EVENTS = [
 ];
 
 export function App() {
-  const { selectedId, projects, filter, query, load, add, patchStatus } =
+  const { selectedId, projects, filter, query, view, load, add, patchStatus } =
     useProjects();
   const [dialog, setDialog] = useState(false);
   const [palette, setPalette] = useState(false);
@@ -88,14 +91,24 @@ export function App() {
           <SetupBanner />
 
           <div className="flex-1 min-h-0">
-            {selected ? (
+            {view === "metrics" ? (
+              <MetricsPage />
+            ) : view === "project-metrics" && selected ? (
+              <ProjectMetricsPage id={selected.id} />
+            ) : view === "project-logs" && selected ? (
+              <ProjectLogsPage id={selected.id} />
+            ) : selected ? (
               <ProjectDetail id={selected.id} />
             ) : (
               <Dashboard onAdd={() => setDialog(true)} />
             )}
           </div>
 
-          {!selected && <StatusBar count={visibleCount} />}
+          {view === "projects" && !selected && (
+            <StatusBar count={visibleCount} />
+          )}
+          {/* Hide StatusBar on detail and metrics views. */}
+          {(view === "metrics" || view === "project-metrics") && null}
         </main>
       </div>
 

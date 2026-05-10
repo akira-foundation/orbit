@@ -5,7 +5,9 @@ import type { Project } from "../types";
 import { RuntimeStatusBadge } from "../components/RuntimeStatusBadge";
 import { Button } from "../components/ui/button";
 import {
+  BarChart3,
   ExternalLink,
+  FileText,
   Play,
   RotateCcw,
   Square,
@@ -21,7 +23,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { cn } from "../lib/cn";
 
 export function ProjectDetail({ id }: { id: string }) {
-  const { select, remove } = useProjects();
+  const { select, remove, showProjectMetrics, showProjectLogs } = useProjects();
   const { snapshot, logs, uptimeMs, start, stop, restart, clearLogs } =
     useRuntime(id);
   const [project, setProject] = useState<Project | null>(null);
@@ -118,32 +120,24 @@ export function ProjectDetail({ id }: { id: string }) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {isRunning ? (
-              <>
-                <Button
-                  variant="secondary"
-                  onClick={() => wrap(restart)}
-                  disabled={busy}
-                  title="Restart"
-                >
-                  <RotateCcw />
-                  Restart
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => wrap(stop)}
-                  disabled={busy}
-                >
-                  <Square />
-                  Stop
-                </Button>
-              </>
-            ) : (
-              <Button onClick={() => wrap(start)} disabled={busy}>
-                <Play />
-                Start
-              </Button>
-            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => showProjectLogs(project.id)}
+              disabled={busy}
+              title="Logs"
+            >
+              <FileText />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => showProjectMetrics(project.id)}
+              disabled={busy}
+              title="Metrics"
+            >
+              <BarChart3 />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -153,6 +147,40 @@ export function ProjectDetail({ id }: { id: string }) {
             >
               <Trash2 />
             </Button>
+            {isRunning ? (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => wrap(restart)}
+                  disabled={busy}
+                  title="Restart"
+                >
+                  <RotateCcw />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => wrap(stop)}
+                  disabled={busy}
+                  title="Stop"
+                  className="text-rose-300 hover:text-rose-200"
+                >
+                  <Square />
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => wrap(start)}
+                disabled={busy}
+                title="Start"
+                className="text-emerald-300 hover:text-emerald-200"
+              >
+                <Play />
+              </Button>
+            )}
           </div>
         </header>
 

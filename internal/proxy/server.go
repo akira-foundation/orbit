@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -108,6 +109,24 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.router.runtime.ConnOpen(target.Project.ID)
 	defer s.router.runtime.ConnClose(target.Project.ID)
 
+	// Wrap the response writer so we can capture status code and bytes-out,
+	// and time the round-trip for the latency histogram. WebSocket upgrades
+	// keep the connection open for the lifetime of the socket — we record
+	// them as a single "request" with the full duration.
+	start := time.Now()
+	rec := &meteredWriter{ResponseWriter: w, status: http.StatusOK}
+	bytesIn := r.ContentLength
+	if bytesIn < 0 {
+		bytesIn = 0
+	}
+	isWS := isWebSocket(r)
+	defer func() {
+		ms := float64(time.Since(start).Microseconds()) / 1000.0
+		s.router.runtime.RecordRequest(
+			target.Project.ID, rec.status, ms, bytesIn, rec.bytes, isWS,
+		)
+	}()
+
 	rp := &httputil.ReverseProxy{
 		Transport:     s.transport,
 		FlushInterval: -1, // flush after every write -> SSE / streamed responses
@@ -141,7 +160,49 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	rp.ServeHTTP(w, r)
+	rp.ServeHTTP(rec, r)
+}
+
+// meteredWriter wraps http.ResponseWriter to capture the final status code
+// and the number of body bytes written, for proxy-level metrics.
+type meteredWriter struct {
+	http.ResponseWriter
+	status      int
+	bytes       int64
+	wroteHeader bool
+}
+
+func (m *meteredWriter) WriteHeader(code int) {
+	if !m.wroteHeader {
+		m.status = code
+		m.wroteHeader = true
+	}
+	m.ResponseWriter.WriteHeader(code)
+}
+
+func (m *meteredWriter) Write(b []byte) (int, error) {
+	if !m.wroteHeader {
+		m.status = http.StatusOK
+		m.wroteHeader = true
+	}
+	n, err := m.ResponseWriter.Write(b)
+	m.bytes += int64(n)
+	return n, err
+}
+
+// Flush passes through so SSE / chunked responses keep streaming.
+func (m *meteredWriter) Flush() {
+	if f, ok := m.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Hijack passes through so WebSocket upgrades work.
+func (m *meteredWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if h, ok := m.ResponseWriter.(http.Hijacker); ok {
+		return h.Hijack()
+	}
+	return nil, nil, http.ErrNotSupported
 }
 
 func (s *Server) lookup(r *http.Request) (*projects.Project, bool) {
