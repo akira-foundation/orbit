@@ -12,6 +12,7 @@ import {
   Star,
   Clock,
   Box,
+  Settings,
 } from "lucide-react";
 
 interface Item {
@@ -29,48 +30,54 @@ const filterItems: Item[] = [
   { id: "error", label: "Errors", icon: AlertTriangle },
 ];
 
-export function Sidebar() {
+export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const { projects, filter, setFilter, selectedId, select } = useProjects();
   const recent = projects.slice(0, 8);
 
   return (
-    <nav className="flex-1 overflow-auto scrollbar-thin px-2 pt-2 pb-4">
-      <Section title="Workspace">
-        {filterItems.map((it) => (
-          <Row
-            key={it.id}
-            icon={it.icon}
-            label={it.label}
-            active={!selectedId && filter === it.id}
-            onClick={() => {
-              select(null);
-              setFilter(it.id);
-            }}
-          />
-        ))}
-      </Section>
-
-      {recent.length > 0 && (
-        <Section title="Recent">
-          {recent.map((p) => (
+    <div className="flex-1 min-h-0 flex flex-col">
+      <nav className="flex-1 overflow-auto scrollbar-thin px-2 pt-2 pb-2">
+        <Section title="Workspace">
+          {filterItems.map((it) => (
             <Row
-              key={p.id}
-              icon={Box}
-              label={p.name}
-              dot={dotForStatus(p.status)}
-              active={selectedId === p.id}
-              onClick={() => select(p.id)}
+              key={it.id}
+              icon={it.icon}
+              label={it.label}
+              active={!selectedId && filter === it.id}
+              onClick={() => {
+                select(null);
+                setFilter(it.id);
+              }}
             />
           ))}
         </Section>
-      )}
 
-      <Section title="Locations">
-        <Row icon={Folder} label="Local Projects" muted />
-        <Row icon={Star} label="Favorites" muted />
-        <Row icon={Clock} label="Last 7 days" muted />
-      </Section>
-    </nav>
+        {recent.length > 0 && (
+          <Section title="Recent">
+            {recent.map((p) => (
+              <Row
+                key={p.id}
+                icon={Box}
+                label={p.name}
+                dot={dotForStatus(p.status)}
+                active={selectedId === p.id}
+                onClick={() => select(p.id)}
+              />
+            ))}
+          </Section>
+        )}
+
+        <Section title="Locations">
+          <Row icon={Folder} label="Local Projects" muted />
+          <Row icon={Star} label="Favorites" muted />
+          <Row icon={Clock} label="Last 7 days" muted />
+        </Section>
+      </nav>
+
+      <ul className="shrink-0 px-2 pb-2 space-y-1">
+        <Row icon={Settings} label="Settings" onClick={onOpenSettings} />
+      </ul>
+    </div>
   );
 }
 

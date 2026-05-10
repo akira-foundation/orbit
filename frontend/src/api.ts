@@ -13,6 +13,7 @@ import {
   OpenProject,
   SystemStatus,
   SystemSetup,
+  SystemUninstall,
 } from "../wailsjs/go/main/App";
 import type {
   AnalyzeResult,
@@ -45,6 +46,7 @@ export const api = {
   openProject: (id: string): Promise<void> => OpenProject(id),
   systemStatus: (): Promise<SystemStatusType> => cast(SystemStatus()),
   systemSetup: (): Promise<void> => SystemSetup(),
+  systemUninstall: (): Promise<void> => SystemUninstall(),
 };
 
 export type { Project, AnalyzeResult };

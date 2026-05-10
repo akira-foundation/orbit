@@ -145,3 +145,9 @@ func (s *Session) Port() int {
 	defer s.mu.RUnlock()
 	return s.port
 }
+
+func (s *Session) LastActivity() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.lastActivity
+}

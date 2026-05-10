@@ -9,6 +9,7 @@ import { ProjectDetail } from "./pages/ProjectDetail";
 import { useProjects } from "./store";
 import { useWailsEvent } from "./hooks/useWailsEvent";
 import { SetupBanner } from "./components/SetupBanner";
+import { SettingsDialog } from "./components/SettingsDialog";
 import type { RuntimeStatusEvent } from "./types";
 
 const STATUS_EVENTS = [
@@ -23,6 +24,8 @@ export function App() {
     useProjects();
   const [dialog, setDialog] = useState(false);
   const [palette, setPalette] = useState(false);
+  const [settings, setSettings] = useState(false);
+  const [autoAction, setAutoAction] = useState<"setup" | "reset" | null>(null);
 
   useEffect(() => {
     load();
@@ -33,6 +36,14 @@ export function App() {
     [patchStatus],
   );
   useWailsEvent<RuntimeStatusEvent>(STATUS_EVENTS, onRuntimeStatus);
+
+  const openSettings = useCallback((action: "setup" | "reset" | null) => {
+    setAutoAction(action);
+    setSettings(true);
+  }, []);
+  useWailsEvent("menu:open-settings", () => openSettings(null));
+  useWailsEvent("menu:system-setup", () => openSettings("setup"));
+  useWailsEvent("menu:system-reset", () => openSettings("reset"));
 
   const selected = useMemo(
     () => projects.find((p) => p.id === selectedId) ?? null,
@@ -63,7 +74,7 @@ export function App() {
       <div className="relative z-10 h-full flex gap-1.5 p-2">
         <aside className="island w-72 shrink-0 flex flex-col">
           <div className="drag h-12 shrink-0 pl-[68px]" />
-          <Sidebar />
+          <Sidebar onOpenSettings={() => openSettings(null)} />
         </aside>
 
         <main className="flex-1 min-w-0 flex flex-col">
@@ -98,6 +109,13 @@ export function App() {
         open={palette}
         onOpenChange={setPalette}
         onAdd={() => setDialog(true)}
+      />
+
+      <SettingsDialog
+        open={settings}
+        onOpenChange={setSettings}
+        autoAction={autoAction}
+        onAutoActionConsumed={() => setAutoAction(null)}
       />
     </div>
   );

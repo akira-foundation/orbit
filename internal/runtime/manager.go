@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
+	"net"
 	"os"
 	"regexp"
 	"strconv"
@@ -78,33 +80,44 @@ func (m *manager) Start(ctx context.Context, projectID string) error {
 			m.mu.Unlock()
 			return errors.New("runtime: already running")
 		}
+		if st == projects.StatusError && time.Since(existing.LastActivity()) < 10*time.Second {
+			m.mu.Unlock()
+			return errors.New("runtime: cooling down after recent failure")
+		}
 	}
+	sess := newSession(projectID, m.logCap)
+	sess.setStatus(projects.StatusStarting)
+	m.sessions[projectID] = sess
 	m.mu.Unlock()
 
 	proj, err := m.projects.Get(ctx, projectID)
 	if err != nil {
+		m.markStartFailed(sess, err)
 		return fmt.Errorf("runtime: load project: %w", err)
 	}
 	if proj.DevCommand == "" {
-		return errors.New("runtime: project has no dev command")
+		err := errors.New("runtime: project has no dev command")
+		m.markStartFailed(sess, err)
+		return err
 	}
 
+	port := pickPort(proj.DevPort)
+	log.Printf("[runtime] start project=%s devPort=%d picked=%d cmd=%q",
+		proj.ID, proj.DevPort, port, proj.DevCommand)
 	env := append(os.Environ(),
 		"FORCE_COLOR=1",
 		"CI=false",
+		fmt.Sprintf("PORT=%d", port),
 	)
 
 	handle, err := spawnDevCommand(proj.Path, proj.DevCommand, env)
 	if err != nil {
+		m.markStartFailed(sess, err)
 		return fmt.Errorf("runtime: spawn: %w", err)
 	}
 
-	sess := newSession(projectID, m.logCap)
 	sess.setPID(handle.cmd.Process.Pid)
-
-	m.mu.Lock()
-	m.sessions[projectID] = sess
-	m.mu.Unlock()
+	sess.setPort(port)
 
 	_ = m.projects.UpdateStatus(ctx, projectID, projects.StatusStarting)
 	m.emit(EvtStarting, StatusEvent{ProjectID: projectID, Snapshot: sess.Snapshot()})
@@ -114,6 +127,11 @@ func (m *manager) Start(ctx context.Context, projectID string) error {
 	go m.supervise(sess, handle, proj)
 
 	return nil
+}
+
+func (m *manager) markStartFailed(sess *Session, err error) {
+	sess.setError(err.Error())
+	m.emit(EvtError, StatusEvent{ProjectID: sess.projectID, Snapshot: sess.Snapshot()})
 }
 
 func (m *manager) Stop(ctx context.Context, projectID string) error {
@@ -266,12 +284,20 @@ func (m *manager) finalize(sess *Session, err error, requested bool) {
 		return
 	}
 
-	if err != nil {
-		sess.setError(err.Error())
+	// Process exited on its own. If it never reached Running, treat as a
+	// failure so the cooldown kicks in and we don't relaunch on every request.
+	prematurelyExited := sess.Status() == projects.StatusStarting
+
+	if err != nil || prematurelyExited {
+		msg := "process exited before becoming ready"
+		if err != nil {
+			msg = "process exited: " + err.Error()
+		}
+		sess.setError(msg)
 		sess.appendLog(LogLine{
 			Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
 			Stream:    "system",
-			Text:      "process exited: " + err.Error(),
+			Text:      msg,
 		})
 		m.emit(EvtError, StatusEvent{ProjectID: sess.projectID, Snapshot: sess.Snapshot()})
 		_ = m.projects.UpdateStatus(context.Background(), sess.projectID, projects.StatusError)
@@ -280,6 +306,23 @@ func (m *manager) finalize(sess *Session, err error, requested bool) {
 	sess.markStopped()
 	m.emit(EvtStopped, StatusEvent{ProjectID: sess.projectID, Snapshot: sess.Snapshot()})
 	_ = m.projects.UpdateStatus(context.Background(), sess.projectID, projects.StatusStopped)
+}
+
+// pickPort returns a free ephemeral port for the dev server. We always pick
+// fresh — the proxy hides port numbers from the user, and ephemeral avoids
+// races / collisions between multiple Orbit projects all defaulting to 3000.
+// preferred is only used as a fallback if the OS refuses to allocate.
+func pickPort(preferred int) int {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		if preferred > 0 {
+			return preferred
+		}
+		return 3000
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	_ = ln.Close()
+	return port
 }
 
 var localhostPortRe = regexp.MustCompile(`(?i)(?:localhost|127\.0\.0\.1|0\.0\.0\.0)[: ](\d{2,5})`)

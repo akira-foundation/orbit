@@ -182,6 +182,10 @@ func (a *App) SystemStatus() system.Status {
 	return system.Check()
 }
 
+func (a *App) SystemUninstall() error {
+	return system.Uninstall()
+}
+
 func (a *App) SystemSetup() error {
 	cwd, _ := os.Getwd()
 	if err := system.Install(cwd); err != nil {

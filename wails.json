@@ -6,6 +6,8 @@
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
+  "reloaddirs": "internal,cmd",
+  "debounceMS": 200,
   "author": {
     "name": "kid",
     "email": "kidiatoliny@gmail.com"

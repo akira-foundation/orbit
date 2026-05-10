@@ -17,6 +17,20 @@ import (
 //go:embed scripts/setup-macos.sh
 var setupScript []byte
 
+const uninstallScript = `#!/usr/bin/env bash
+set -u
+launchctl bootout system/com.orbit.proxyd 2>/dev/null || true
+launchctl bootout system/com.orbit.loopback 2>/dev/null || true
+rm -f /Library/LaunchDaemons/com.orbit.proxyd.plist
+rm -f /Library/LaunchDaemons/com.orbit.loopback.plist
+rm -f /usr/local/libexec/orbit-proxyd
+rm -f /etc/resolver/orbit.test
+ifconfig lo0 -alias 127.0.0.2 2>/dev/null || true
+dscacheutil -flushcache
+killall -HUP mDNSResponder 2>/dev/null || true
+echo "[orbit] uninstall done"
+`
+
 type Status struct {
 	OS           string `json:"os"`
 	Setup        bool   `json:"setup"`
@@ -195,6 +209,52 @@ func Install(repoRoot string) error {
 			osamsg = runErr.Error()
 		}
 		return fmt.Errorf("setup failed: %s", osamsg)
+	}
+	return nil
+}
+
+// Uninstall removes the loopback alias, LaunchDaemons, resolver file
+// and binary via osascript admin prompt. Idempotent.
+func Uninstall() error {
+	if runtime.GOOS != "darwin" {
+		return fmt.Errorf("uninstall is macOS-only")
+	}
+
+	tmp, err := os.CreateTemp("", "orbit-uninstall-*.sh")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.WriteString(uninstallScript); err != nil {
+		return err
+	}
+	tmp.Close()
+	if err := os.Chmod(tmp.Name(), 0o755); err != nil {
+		return err
+	}
+
+	logPath := filepath.Join(os.TempDir(), "orbit-uninstall.log")
+	apple := fmt.Sprintf(
+		`do shell script "/bin/bash %s >%s 2>&1" with administrator privileges with prompt "Orbit needs admin access to remove local domain setup."`,
+		shellQuote(tmp.Name()), shellQuote(logPath),
+	)
+
+	cmd := exec.Command("osascript", "-e", apple)
+	var errb bytes.Buffer
+	cmd.Stderr = &errb
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(errb.String())
+		if strings.Contains(msg, "User canceled") {
+			return fmt.Errorf("uninstall cancelled")
+		}
+		logBytes, _ := os.ReadFile(logPath)
+		if t := tail(string(logBytes), 40); t != "" {
+			return fmt.Errorf("uninstall failed:\n%s", t)
+		}
+		if msg == "" {
+			msg = err.Error()
+		}
+		return fmt.Errorf("uninstall failed: %s", msg)
 	}
 	return nil
 }
