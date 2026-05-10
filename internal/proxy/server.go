@@ -78,6 +78,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.router.runtime.ConnOpen(target.Project.ID)
+	defer s.router.runtime.ConnClose(target.Project.ID)
+
 	rp := &httputil.ReverseProxy{
 		Transport:     s.transport,
 		FlushInterval: -1, // flush after every write -> SSE / streamed responses

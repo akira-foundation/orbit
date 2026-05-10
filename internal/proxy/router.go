@@ -16,6 +16,8 @@ type RuntimeProvider interface {
 	Start(ctx context.Context, projectID string) error
 	Port(projectID string) int
 	IsRunning(projectID string) bool
+	ConnOpen(projectID string)
+	ConnClose(projectID string)
 }
 
 type Target struct {

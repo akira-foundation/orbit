@@ -31,18 +31,25 @@ type Manager interface {
 	GetStatus(ctx context.Context, projectID string) (projects.Status, error)
 	Port(projectID string) int
 	IsRunning(projectID string) bool
+	ConnOpen(projectID string)
+	ConnClose(projectID string)
 	StopAll()
 	SetEmitter(e Emitter)
 }
 
 func New(projects ProjectLookup) Manager {
-	return &manager{
-		projects:  projects,
-		emitter:   nopEmitter{},
-		sessions:  make(map[string]*Session),
-		stopGrace: 5 * time.Second,
-		logCap:    2000,
+	m := &manager{
+		projects:   projects,
+		emitter:    nopEmitter{},
+		sessions:   make(map[string]*Session),
+		stopGrace:  5 * time.Second,
+		logCap:     2000,
+		idleAfter:  30 * time.Second,
+		activeConn: make(map[string]int),
+		idleSince:  make(map[string]time.Time),
 	}
+	go m.idleSweeper()
+	return m
 }
 
 type manager struct {
@@ -53,6 +60,10 @@ type manager struct {
 
 	stopGrace time.Duration
 	logCap    int
+
+	idleAfter  time.Duration
+	activeConn map[string]int
+	idleSince  map[string]time.Time
 }
 
 func (m *manager) SetEmitter(e Emitter) {
@@ -234,6 +245,66 @@ func (m *manager) IsRunning(projectID string) bool {
 		return st == projects.StatusRunning || st == projects.StatusStarting
 	}
 	return false
+}
+
+// ConnOpen and ConnClose are called by the proxy on every incoming request
+// (including long-lived WebSocket / SSE connections). When a project's active
+// connection count drops to zero, idleSweeper schedules a graceful stop after
+// idleAfter so closing the browser tab actually shuts the dev server down.
+func (m *manager) ConnOpen(projectID string) {
+	if projectID == "" {
+		return
+	}
+	m.mu.Lock()
+	m.activeConn[projectID]++
+	delete(m.idleSince, projectID)
+	m.mu.Unlock()
+}
+
+func (m *manager) ConnClose(projectID string) {
+	if projectID == "" {
+		return
+	}
+	m.mu.Lock()
+	if n := m.activeConn[projectID]; n > 1 {
+		m.activeConn[projectID] = n - 1
+	} else {
+		delete(m.activeConn, projectID)
+		m.idleSince[projectID] = time.Now()
+	}
+	m.mu.Unlock()
+}
+
+func (m *manager) idleSweeper() {
+	tick := time.NewTicker(5 * time.Second)
+	defer tick.Stop()
+	for range tick.C {
+		m.mu.RLock()
+		var toStop []string
+		now := time.Now()
+		for id, since := range m.idleSince {
+			if now.Sub(since) < m.idleAfter {
+				continue
+			}
+			if sess, ok := m.sessions[id]; ok {
+				st := sess.Status()
+				if st == projects.StatusRunning || st == projects.StatusStarting {
+					toStop = append(toStop, id)
+				}
+			}
+		}
+		m.mu.RUnlock()
+
+		for _, id := range toStop {
+			log.Printf("[runtime] idle stop project=%s after %s", id, m.idleAfter)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = m.Stop(ctx, id)
+			cancel()
+			m.mu.Lock()
+			delete(m.idleSince, id)
+			m.mu.Unlock()
+		}
+	}
 }
 
 func (m *manager) StopAll() {

@@ -37,6 +37,9 @@ func (f *fakeRuntime) Restart(ctx context.Context, id string) error {
 
 func (f *fakeRuntime) Port(string) int { return f.port }
 
+func (f *fakeRuntime) ConnOpen(string)  {}
+func (f *fakeRuntime) ConnClose(string) {}
+
 func (f *fakeRuntime) IsRunning(id string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
