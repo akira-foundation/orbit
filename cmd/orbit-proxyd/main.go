@@ -26,6 +26,8 @@ import (
 func main() {
 	src := flag.String("src", "127.0.0.2:80", "tcp bind address")
 	dst := flag.String("dst", "127.0.0.1:2080", "upstream address")
+	tlsSrc := flag.String("tls-src", "", "tls bind address (e.g. 127.0.0.2:443); empty to disable")
+	tlsDst := flag.String("tls-dst", "127.0.0.1:2443", "tls upstream address")
 	dnsAddr := flag.String("dns", "127.0.0.2:53", "dns bind address")
 	suffix := flag.String("suffix", "orbit.test", "domain suffix to answer")
 	answer := flag.String("answer", "127.0.0.2", "A record IP to return")
@@ -34,6 +36,9 @@ func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	log.Printf("orbit-proxyd tcp %s -> %s | dns %s *.%s -> %s",
 		*src, *dst, *dnsAddr, *suffix, *answer)
+	if *tlsSrc != "" {
+		log.Printf("orbit-proxyd tls %s -> %s", *tlsSrc, *tlsDst)
+	}
 
 	ip := net.ParseIP(*answer).To4()
 	if ip == nil {
@@ -42,19 +47,25 @@ func main() {
 
 	go runDNS(*dnsAddr, strings.ToLower(strings.TrimPrefix(*suffix, ".")), ip)
 
-	ln, err := net.Listen("tcp", *src)
-	if err != nil {
-		log.Fatalf("listen %s: %v", *src, err)
+	if *tlsSrc != "" {
+		go runForwarder(*tlsSrc, *tlsDst)
 	}
 
 	go func() {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
 		<-sig
-		_ = ln.Close()
 		os.Exit(0)
 	}()
 
+	runForwarder(*src, *dst)
+}
+
+func runForwarder(src, dst string) {
+	ln, err := net.Listen("tcp", src)
+	if err != nil {
+		log.Fatalf("listen %s: %v", src, err)
+	}
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -62,7 +73,7 @@ func main() {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
-		go forward(conn, *dst)
+		go forward(conn, dst)
 	}
 }
 

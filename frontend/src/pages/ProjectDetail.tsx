@@ -9,6 +9,8 @@ import {
   ExternalLink,
   FileText,
   FolderOpen,
+  Lock,
+  LockOpen,
   Play,
   Plug,
   RotateCcw,
@@ -131,16 +133,44 @@ export function ProjectDetail({ id }: { id: string }) {
                 </h1>
                 <RuntimeStatusBadge status={status} />
               </div>
-              <button
-                onClick={() => api.openProject(project.id)}
-                className="mt-2 group inline-flex items-center gap-1.5 text-[13px] font-mono text-[var(--orbit-accent-2)] hover:text-[var(--orbit-accent)] transition-colors"
-              >
-                {project.localDomain}
-                <ExternalLink className="size-3 opacity-60 group-hover:opacity-100" />
-              </button>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  onClick={() => api.openProject(project.id)}
+                  className="group inline-flex items-center gap-1.5 text-[13px] font-mono text-[var(--orbit-accent-2)] hover:text-[var(--orbit-accent)] transition-colors"
+                >
+                  {project.secure ? "https://" : ""}{project.localDomain}
+                  <ExternalLink className="size-3 opacity-60 group-hover:opacity-100" />
+                </button>
+                <SecureToggle
+                  projectId={project.id}
+                  secure={project.secure}
+                  onChange={async (next) => {
+                    setProject({ ...project, secure: next });
+                    try {
+                      await api.setProjectSecure(project.id, next);
+                    } catch {
+                      setProject({ ...project, secure: !next });
+                    }
+                  }}
+                />
+              </div>
             </div>
 
             <div className="flex items-center gap-1 shrink-0">
+              <IconBtn
+                icon={project.secure ? <Lock /> : <LockOpen />}
+                onClick={async () => {
+                  const next = !project.secure;
+                  setProject({ ...project, secure: next });
+                  try {
+                    await api.setProjectSecure(project.id, next);
+                  } catch {
+                    setProject({ ...project, secure: !next });
+                  }
+                }}
+                disabled={busy}
+                title={project.secure ? "HTTPS only — click to disable" : "Force HTTPS"}
+              />
               <IconBtn icon={<FileText />} onClick={() => showProjectLogs(project.id)} disabled={busy} title="Logs" />
               <IconBtn icon={<BarChart3 />} onClick={() => showProjectMetrics(project.id)} disabled={busy} title="Metrics" />
               <IconBtn icon={<Trash2 />} onClick={() => setConfirmRemove(true)} disabled={busy} title="Remove" />
@@ -345,6 +375,33 @@ function Detail({
 }
 
 // IconBtn — small ghost icon button used in the hero toolbar.
+function SecureToggle({
+  projectId,
+  secure,
+  onChange,
+}: {
+  projectId: string;
+  secure: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  void projectId;
+  return (
+    <button
+      onClick={() => onChange(!secure)}
+      title={secure ? "HTTPS only — click to disable" : "Force HTTPS"}
+      className={cn(
+        "inline-flex items-center gap-1.5 h-6 px-2 rounded-md border text-[10.5px] font-medium tracking-wide transition-colors",
+        secure
+          ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+          : "border-white/10 bg-white/[0.03] text-[var(--orbit-muted)] hover:text-[var(--orbit-text)]",
+      )}
+    >
+      {secure ? <Lock className="size-3" /> : <LockOpen className="size-3" />}
+      {secure ? "HTTPS" : "HTTP"}
+    </button>
+  );
+}
+
 function IconBtn({
   icon,
   onClick,

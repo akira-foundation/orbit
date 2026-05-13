@@ -80,6 +80,10 @@ func (s *Service) SetInstalledHash(ctx context.Context, id, hash string) error {
 	return s.repo.SetInstalledHash(ctx, id, hash)
 }
 
+func (s *Service) SetSecure(ctx context.Context, id string, secure bool) error {
+	return s.repo.SetSecure(ctx, id, secure)
+}
+
 func (s *Service) ListDomains(ctx context.Context) ([]Domain, error) {
 	return s.repo.ListDomains(ctx)
 }

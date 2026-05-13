@@ -22,6 +22,9 @@ import {
   SystemStatus,
   SystemSetup,
   SystemUninstall,
+  TrustCA,
+  UntrustCA,
+  SetProjectSecure,
   SetLaunchAtLogin,
 } from "../wailsjs/go/main/App";
 import type {
@@ -78,6 +81,10 @@ export const api = {
   systemStatus: (): Promise<SystemStatusType> => cast(SystemStatus()),
   systemSetup: (): Promise<void> => SystemSetup(),
   systemUninstall: (): Promise<void> => SystemUninstall(),
+  trustCA: (): Promise<void> => TrustCA(),
+  untrustCA: (): Promise<void> => UntrustCA(),
+  setProjectSecure: (id: string, secure: boolean): Promise<void> =>
+    SetProjectSecure(id, secure),
   systemConfig: (): Promise<Config> => cast(SystemConfig()),
   systemSaveConfig: (cfg: Config): Promise<void> => SystemSaveConfig(cfg),
   setLaunchAtLogin: (enabled: boolean): Promise<void> =>

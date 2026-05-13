@@ -18,13 +18,30 @@ import (
 
 type Server struct {
 	addr      string
+	tlsAddr   string
+	tlsCert   string
+	tlsKey    string
 	router    *Router
 	recovery  *RecoveryHandler
 	http      *http.Server
+	https     *http.Server
 	transport *http.Transport
 }
 
+type Options struct {
+	Addr     string
+	TLSAddr  string
+	TLSCert  string
+	TLSKey   string
+	Router   *Router
+	Recovery *RecoveryHandler
+}
+
 func NewServer(addr string, router *Router, recovery *RecoveryHandler) *Server {
+	return NewServerWithOptions(Options{Addr: addr, Router: router, Recovery: recovery})
+}
+
+func NewServerWithOptions(opts Options) *Server {
 	tr := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
@@ -36,24 +53,43 @@ func NewServer(addr string, router *Router, recovery *RecoveryHandler) *Server {
 		IdleConnTimeout:       120 * time.Second,
 		TLSHandshakeTimeout:   5 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
-		// Keep upstream HTTP/1.1 so websocket Upgrade works reliably with all
-		// JS dev servers. ResponseHeaderTimeout is left zero so long-polling
-		// and slow first-render dev builds don't get killed mid-flight.
-		ForceAttemptHTTP2: false,
+		ForceAttemptHTTP2:     false,
 	}
 
-	s := &Server{addr: addr, router: router, recovery: recovery, transport: tr}
+	s := &Server{
+		addr:      opts.Addr,
+		tlsAddr:   opts.TLSAddr,
+		tlsCert:   opts.TLSCert,
+		tlsKey:    opts.TLSKey,
+		router:    opts.Router,
+		recovery:  opts.Recovery,
+		transport: tr,
+	}
 	s.http = &http.Server{
-		Addr:              addr,
+		Addr:              opts.Addr,
 		Handler:           s,
 		ReadHeaderTimeout: 10 * time.Second,
-		// ReadTimeout / WriteTimeout / IdleTimeout intentionally unset:
-		// HMR websockets and SSE streams must stay open indefinitely.
+	}
+	if opts.TLSAddr != "" && opts.TLSCert != "" && opts.TLSKey != "" {
+		s.https = &http.Server{
+			Addr:              opts.TLSAddr,
+			Handler:           s,
+			ReadHeaderTimeout: 10 * time.Second,
+		}
 	}
 	return s
 }
 
 func (s *Server) ListenAndServe() error {
+	if s.https != nil {
+		go func() {
+			log.Printf("[proxy] tls listening on %s", s.tlsAddr)
+			if err := s.https.ListenAndServeTLS(s.tlsCert, s.tlsKey); err != nil &&
+				!errors.Is(err, http.ErrServerClosed) {
+				log.Printf("[proxy] tls server error: %v", err)
+			}
+		}()
+	}
 	log.Printf("[proxy] listening on %s", s.addr)
 	err := s.http.ListenAndServe()
 	if errors.Is(err, http.ErrServerClosed) {
@@ -63,6 +99,9 @@ func (s *Server) ListenAndServe() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.https != nil {
+		_ = s.https.Shutdown(ctx)
+	}
 	if s.http == nil {
 		return nil
 	}
@@ -73,6 +112,24 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if s.recovery != nil && strings.HasPrefix(r.URL.Path, "/__orbit__/") {
 		s.recovery.ServeHTTP(w, r)
 		return
+	}
+
+	if proj, ok := s.lookup(r); ok {
+		w.Header().Set("Strict-Transport-Security", "max-age=0")
+		if proj.Secure && r.TLS == nil {
+			u := *r.URL
+			u.Scheme = "https"
+			u.Host = r.Host
+			http.Redirect(w, r, u.String(), http.StatusFound)
+			return
+		}
+		if !proj.Secure && r.TLS != nil {
+			u := *r.URL
+			u.Scheme = "http"
+			u.Host = r.Host
+			http.Redirect(w, r, u.String(), http.StatusFound)
+			return
+		}
 	}
 
 	// Fast path for navigations to a not-yet-ready runtime: render the Wake

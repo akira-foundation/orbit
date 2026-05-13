@@ -19,7 +19,9 @@ set -euo pipefail
 
 ALIAS_IP=127.0.0.2
 ORBIT_PORT=2080
+ORBIT_TLS_PORT=2443
 PUBLIC_PORT=80
+PUBLIC_TLS_PORT=443
 DNS_PORT=53
 SUFFIX=orbit.test
 
@@ -79,6 +81,8 @@ sudo tee "${PROXYD_PLIST}" >/dev/null <<EOF
     <string>${DAEMON_BIN_DST}</string>
     <string>-src</string><string>${ALIAS_IP}:${PUBLIC_PORT}</string>
     <string>-dst</string><string>127.0.0.1:${ORBIT_PORT}</string>
+    <string>-tls-src</string><string>${ALIAS_IP}:${PUBLIC_TLS_PORT}</string>
+    <string>-tls-dst</string><string>127.0.0.1:${ORBIT_TLS_PORT}</string>
     <string>-dns</string><string>${ALIAS_IP}:${DNS_PORT}</string>
     <string>-suffix</string><string>${SUFFIX}</string>
     <string>-answer</string><string>${ALIAS_IP}</string>

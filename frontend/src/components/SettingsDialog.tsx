@@ -249,7 +249,7 @@ function LocalDomainsSection({
   visible: boolean;
 }) {
   const [status, setStatus] = useState<SystemStatus | null>(null);
-  const [busy, setBusy] = useState<"setup" | "reset" | null>(null);
+  const [busy, setBusy] = useState<"setup" | "reset" | "trust" | "untrust" | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -292,6 +292,23 @@ function LocalDomainsSection({
     }
   };
 
+  const toggleHTTPS = async (next: boolean) => {
+    setBusy(next ? "trust" : "untrust");
+    setError(null);
+    try {
+      if (next) {
+        await api.trustCA();
+      } else {
+        await api.untrustCA();
+      }
+      await refresh();
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   useEffect(() => {
     if (visible) {
       setError(null);
@@ -324,6 +341,26 @@ function LocalDomainsSection({
       <div className="flex-1 overflow-auto px-6 py-5 space-y-5">
         {/* Overall status banner */}
         <StatusBanner status={status} />
+
+        {status?.setup && (
+          <div className="flex items-start justify-between gap-4 rounded-lg border border-white/10 bg-white/[0.03] p-4">
+            <div className="min-w-0 space-y-1">
+              <p className="text-[13px] font-medium">Trust Orbit CA</p>
+              <p className="text-[11px] text-[var(--orbit-muted)] leading-relaxed">
+                One-time admin step. Adds Orbit's local root CA to the System
+                keychain so <code className="font-mono">https://*.orbit.test</code>{" "}
+                doesn't trip the browser's "Not Private" warning. Per-project
+                HTTPS still works without this — just expect the warning.
+              </p>
+            </div>
+            <Switch
+              checked={!!status?.caTrustedOk}
+              disabled={busy === "trust" || busy === "untrust"}
+              onCheckedChange={toggleHTTPS}
+              className="mt-0.5 shrink-0"
+            />
+          </div>
+        )}
 
         {/* Detailed checks list */}
         <div className="rounded-lg border border-white/10 bg-white/[0.02] overflow-hidden">
@@ -457,6 +494,16 @@ function CheckList({ status }: { status: SystemStatus }) {
       label: "Proxy daemon",
       hint: "orbit-proxyd LaunchDaemon listening on 127.0.0.2:80.",
       ok: status.daemonOk,
+    },
+    {
+      label: "HTTPS forwarder",
+      hint: "orbit-proxyd accepting TLS on 127.0.0.2:443 for https://*.orbit.test.",
+      ok: status.tlsDaemonOk,
+    },
+    {
+      label: "Trusted root CA",
+      hint: "Orbit's local CA installed in the System keychain so browsers trust the certs.",
+      ok: status.caTrustedOk,
     },
   ];
   return (

@@ -26,6 +26,7 @@ type Project struct {
 	DevCommand        string   `json:"devCommand"`
 	DevPort           int      `json:"devPort"`
 	Status            Status   `json:"status"`
+	Secure            bool     `json:"secure"`
 	InstalledHash     string   `json:"installedHash"`
 	CreatedAt         string   `json:"createdAt"`
 	UpdatedAt         string   `json:"updatedAt"`

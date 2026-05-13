@@ -28,6 +28,7 @@ export interface Project {
   devCommand: string
   devPort: number
   status: ProjectStatus
+  secure: boolean
   createdAt: string
   updatedAt: string
   scripts?: ProjectScript[]
@@ -95,6 +96,8 @@ export interface SystemStatus {
   dnsmasqOk: boolean
   resolverOk: boolean
   daemonOk: boolean
+  tlsDaemonOk: boolean
+  caTrustedOk: boolean
   herdConflict: boolean
   launchAtLogin: boolean
   message: string

@@ -17,6 +17,7 @@ import (
 	"orbit-app/internal/proxy"
 	"orbit-app/internal/runtime"
 	"orbit-app/internal/system"
+	orbittls "orbit-app/internal/tls"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -58,7 +59,20 @@ func (a *App) startup(ctx context.Context) {
 
 	router := proxy.NewRouter(a.registry, a.runtime)
 	recovery := proxy.NewRecoveryHandler(a.registry, a.runtime)
-	a.proxyServer = proxy.NewServer(cfg.ProxyAddr, router, recovery)
+
+	opts := proxy.Options{
+		Addr:     cfg.ProxyAddr,
+		Router:   router,
+		Recovery: recovery,
+	}
+	if mat, err := orbittls.Ensure(cfg.DomainSuffix); err == nil {
+		opts.TLSAddr = cfg.ProxyTLSAddr
+		opts.TLSCert = mat.LeafCert
+		opts.TLSKey = mat.LeafKey
+	} else {
+		log.Printf("[tls] ensure: %v (internal tls listener disabled)", err)
+	}
+	a.proxyServer = proxy.NewServerWithOptions(opts)
 	go func() {
 		if err := a.proxyServer.ListenAndServe(); err != nil {
 			log.Printf("[proxy] server error: %v", err)
@@ -143,6 +157,10 @@ func (a *App) ListProjects() ([]projects.Project, error) {
 
 func (a *App) GetProject(id string) (*projects.Project, error) {
 	return a.service.Get(a.ctx, id)
+}
+
+func (a *App) SetProjectSecure(id string, secure bool) error {
+	return a.service.SetSecure(a.ctx, id, secure)
 }
 
 func (a *App) DeleteProject(id string) error {
@@ -240,6 +258,15 @@ func (a *App) SystemStatus() system.Status {
 func (a *App) SystemUninstall() error {
 	return system.Uninstall()
 }
+
+func (a *App) TrustCA() error {
+	return system.TrustCA()
+}
+
+func (a *App) UntrustCA() error {
+	return system.UntrustCA()
+}
+
 
 func (a *App) SetLaunchAtLogin(enabled bool) error {
 	return system.SetLaunchAtLogin(enabled)

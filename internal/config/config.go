@@ -9,9 +9,11 @@ import (
 type Config struct {
 	DataDir              string `json:"-"`
 	DBPath               string `json:"-"`
-	DomainSuffix string `json:"domainSuffix"`
-	ProxyAddr    string `json:"proxyAddr"`
-	PublicPort   string `json:"publicPort"`
+	DomainSuffix    string `json:"domainSuffix"`
+	ProxyAddr       string `json:"proxyAddr"`
+	ProxyTLSAddr    string `json:"proxyTlsAddr"`
+	PublicPort      string `json:"publicPort"`
+	PublicTLSPort   string `json:"publicTlsPort"`
 }
 
 func Load() (*Config, error) {
@@ -26,9 +28,11 @@ func Load() (*Config, error) {
 	c := &Config{
 		DataDir:      dir,
 		DBPath:       filepath.Join(dir, "orbit.db"),
-		DomainSuffix: "orbit.test",
-		ProxyAddr:    "127.0.0.1:2080",
-		PublicPort:   "80",
+		DomainSuffix:  "orbit.test",
+		ProxyAddr:     "127.0.0.1:2080",
+		ProxyTLSAddr:  "127.0.0.1:2443",
+		PublicPort:    "80",
+		PublicTLSPort: "443",
 	}
 
 	configPath := filepath.Join(dir, "orbit.json")

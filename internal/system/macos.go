@@ -32,15 +32,17 @@ echo "[orbit] uninstall done"
 `
 
 type Status struct {
-	OS           string `json:"os"`
-	Setup        bool   `json:"setup"`
-	LoopbackOK   bool   `json:"loopbackOk"`
-	DnsOK        bool   `json:"dnsmasqOk"`
-	ResolverOK   bool   `json:"resolverOk"`
-	DaemonOK     bool   `json:"daemonOk"`
-	HerdConflict bool   `json:"herdConflict"`
-	LaunchAtLoginOK bool `json:"launchAtLogin"`
-	Message      string `json:"message"`
+	OS              string `json:"os"`
+	Setup           bool   `json:"setup"`
+	LoopbackOK      bool   `json:"loopbackOk"`
+	DnsOK           bool   `json:"dnsmasqOk"`
+	ResolverOK      bool   `json:"resolverOk"`
+	DaemonOK        bool   `json:"daemonOk"`
+	TLSDaemonOK     bool   `json:"tlsDaemonOk"`
+	CATrustedOK     bool   `json:"caTrustedOk"`
+	HerdConflict    bool   `json:"herdConflict"`
+	LaunchAtLoginOK bool   `json:"launchAtLogin"`
+	Message         string `json:"message"`
 }
 
 func Check() Status {
@@ -55,6 +57,8 @@ func Check() Status {
 	s.DnsOK = checkOrbitDNS()
 	s.HerdConflict = !s.DaemonOK && checkAddrInUse()
 	s.LaunchAtLoginOK = checkLoginAgent()
+	s.TLSDaemonOK = checkTLSReachable()
+	s.CATrustedOK = checkCATrusted()
 	s.Setup = s.LoopbackOK && s.DnsOK && s.ResolverOK && s.DaemonOK
 	switch {
 	case s.HerdConflict:
@@ -117,6 +121,25 @@ func checkOrbitDNS() bool {
 		return false
 	}
 	return bytes.Contains(buf[:n], []byte{127, 0, 0, 2})
+}
+
+func checkTLSReachable() bool {
+	c, err := net.DialTimeout("tcp", "127.0.0.2:443", 300*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = c.Close()
+	return true
+}
+
+func checkCATrusted() bool {
+	out, err := exec.Command("security", "find-certificate", "-c",
+		"Orbit Local Development CA", "/Library/Keychains/System.keychain",
+	).CombinedOutput()
+	if err == nil && bytes.Contains(out, []byte("Orbit Local Development CA")) {
+		return true
+	}
+	return false
 }
 
 func checkProxydReachable() bool {
@@ -247,9 +270,6 @@ func checkAddrInUse() bool {
 	return false
 }
 
-// Install runs the embedded setup script via osascript with admin prompt.
-// repoRoot must point to the Orbit source tree so the script can build
-// orbit-proxyd from cmd/orbit-proxyd.
 func Install(repoRoot string) error {
 	if runtime.GOOS != "darwin" {
 		return fmt.Errorf("setup is macOS-only")
@@ -366,6 +386,66 @@ func Uninstall() error {
 			msg = err.Error()
 		}
 		return fmt.Errorf("uninstall failed: %s", msg)
+	}
+	return nil
+}
+
+// TrustCA installs the Orbit root CA into the System keychain so the
+// browser stops complaining about https://*.orbit.test. Requires admin
+// privileges (osascript prompt).
+func TrustCA() error {
+	if runtime.GOOS != "darwin" {
+		return fmt.Errorf("TrustCA: macOS-only")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	caPath := filepath.Join(home, "Library", "Application Support", "Orbit", "tls", "orbit-ca.pem")
+	if _, err := os.Stat(caPath); err != nil {
+		return fmt.Errorf("CA not found at %s — start Orbit once so it generates", caPath)
+	}
+	apple := fmt.Sprintf(
+		`do shell script "security delete-certificate -c 'Orbit Local Development CA' /Library/Keychains/System.keychain >/dev/null 2>&1; security add-trusted-cert -d -r trustRoot -p ssl -p basic -k /Library/Keychains/System.keychain %s" with administrator privileges with prompt "Orbit needs admin access to trust its local development CA."`,
+		shellQuote(caPath),
+	)
+	cmd := exec.Command("osascript", "-e", apple)
+	var errb bytes.Buffer
+	cmd.Stderr = &errb
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(errb.String())
+		if strings.Contains(msg, "User canceled") {
+			return fmt.Errorf("trust cancelled")
+		}
+		if msg == "" {
+			msg = err.Error()
+		}
+		if strings.Contains(msg, "no user interaction was possible") || strings.Contains(msg, "-1743") {
+			return fmt.Errorf("admin prompt blocked — run Orbit as bundled .app (not via wails dev), or trust manually:\n  sudo security delete-certificate -c \"Orbit Local Development CA\" /Library/Keychains/System.keychain\n  sudo security add-trusted-cert -d -r trustRoot -p ssl -p basic -k /Library/Keychains/System.keychain %s", caPath)
+		}
+		return fmt.Errorf("trust CA failed: %s", msg)
+	}
+	return nil
+}
+
+// UntrustCA removes the Orbit root CA from the System keychain.
+func UntrustCA() error {
+	if runtime.GOOS != "darwin" {
+		return fmt.Errorf("UntrustCA: macOS-only")
+	}
+	apple := `do shell script "security delete-certificate -c 'Orbit Local Development CA' /Library/Keychains/System.keychain" with administrator privileges with prompt "Orbit needs admin access to remove its local development CA."`
+	cmd := exec.Command("osascript", "-e", apple)
+	var errb bytes.Buffer
+	cmd.Stderr = &errb
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(errb.String())
+		if strings.Contains(msg, "User canceled") {
+			return fmt.Errorf("untrust cancelled")
+		}
+		if msg == "" {
+			msg = err.Error()
+		}
+		return fmt.Errorf("untrust CA failed: %s", msg)
 	}
 	return nil
 }

@@ -170,6 +170,29 @@ func (r *Repository) InstalledHash(ctx context.Context, id string) (string, erro
 	return h, err
 }
 
+func (r *Repository) Secure(ctx context.Context, id string) (bool, error) {
+	var v int
+	err := r.raw.QueryRowContext(ctx,
+		`SELECT secure FROM projects WHERE id = ?`, id,
+	).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, ErrNotFound
+	}
+	return v == 1, err
+}
+
+func (r *Repository) SetSecure(ctx context.Context, id string, secure bool) error {
+	v := 0
+	if secure {
+		v = 1
+	}
+	_, err := r.raw.ExecContext(ctx,
+		`UPDATE projects SET secure = ?, updated_at = ? WHERE id = ?`,
+		v, time.Now().UTC().Format(time.RFC3339), id,
+	)
+	return err
+}
+
 func (r *Repository) SetInstalledHash(ctx context.Context, id, hash string) error {
 	_, err := r.raw.ExecContext(ctx,
 		`UPDATE projects SET installed_hash = ?, updated_at = ? WHERE id = ?`,
@@ -189,6 +212,29 @@ func (r *Repository) List(ctx context.Context) ([]Project, error) {
 	for i, row := range rows {
 		out[i] = projectFromDB(row)
 	}
+	secureMap, err := r.secureMap(ctx)
+	if err == nil {
+		for i := range out {
+			out[i].Secure = secureMap[out[i].ID]
+		}
+	}
+	return out, nil
+}
+
+func (r *Repository) secureMap(ctx context.Context) (map[string]bool, error) {
+	rows, err := r.raw.QueryContext(ctx, `SELECT id, secure FROM projects`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var id string
+		var v int
+		if err := rows.Scan(&id, &v); err == nil {
+			out[id] = v == 1
+		}
+	}
 	return out, nil
 }
 
@@ -201,6 +247,9 @@ func (r *Repository) Get(ctx context.Context, id string) (*Project, error) {
 		return nil, err
 	}
 	p := projectFromDB(row)
+	if secure, err := r.Secure(ctx, id); err == nil {
+		p.Secure = secure
+	}
 
 	scripts, err := r.q.ListScriptsByProject(ctx, id)
 	if err != nil {
