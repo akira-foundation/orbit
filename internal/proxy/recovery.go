@@ -459,7 +459,7 @@ func wakePage(p *projects.Project) string {
     </svg>
 
     <h1 id="title">Waking %[1]s</h1>
-    <p class="version">Ambient runtime</p>
+    <p class="version" id="phase">Ambient runtime</p>
     <p class="lead" id="lead">The dev server is booting up. This page will reload automatically when it's ready.</p>
 
     <dl class="info">
@@ -480,6 +480,7 @@ func wakePage(p *projects.Project) string {
   const stateEl = document.getElementById('state');
   const titleEl = document.getElementById('title');
   const leadEl  = document.getElementById('lead');
+  const phaseEl = document.getElementById('phase');
   const portEl  = document.getElementById('port');
   const elapsedEl = document.getElementById('elapsed');
   const startedAt = Date.now();
@@ -495,6 +496,15 @@ func wakePage(p *projects.Project) string {
       let snap; try { snap = JSON.parse(ev.data); } catch { return; }
       stateEl.textContent = cap(snap.status);
       portEl.textContent = snap.port || '—';
+      if (snap.phase === 'install') {
+        titleEl.textContent = 'Installing dependencies';
+        phaseEl.textContent = 'Install phase';
+        leadEl.textContent = 'Running the package manager. The dev server will boot once dependencies are ready.';
+      } else if (titleEl.textContent === 'Installing dependencies') {
+        titleEl.textContent = 'Waking %[1]s';
+        phaseEl.textContent = 'Ambient runtime';
+        leadEl.textContent = "The dev server is booting up. This page will reload automatically when it's ready.";
+      }
       if (snap.status === 'running' && snap.port > 0) {
         titleEl.textContent = 'Ready';
         leadEl.textContent = 'Loading the app…';

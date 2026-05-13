@@ -18,6 +18,7 @@ type LogLine struct {
 type Snapshot struct {
 	ProjectID    string          `json:"projectId"`
 	Status       projects.Status `json:"status"`
+	Phase        string          `json:"phase,omitempty"`
 	PID          int             `json:"pid"`
 	Port         int             `json:"port"`
 	StartedAt    string          `json:"startedAt"`
@@ -36,6 +37,7 @@ type Session struct {
 	projectID    string
 	sessionID    string
 	status       projects.Status
+	phase        string
 	pid          int
 	port         int
 	startedAt    time.Time
@@ -78,6 +80,19 @@ func newSessionID() string {
 	var b [8]byte
 	_, _ = rand.Read(b[:])
 	return hex.EncodeToString(b[:])
+}
+
+func (s *Session) setPhase(p string) {
+	s.mu.Lock()
+	s.phase = p
+	s.lastActivity = time.Now().UTC()
+	s.mu.Unlock()
+}
+
+func (s *Session) Phase() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.phase
 }
 
 func (s *Session) setStatus(st projects.Status) {
@@ -150,6 +165,7 @@ func (s *Session) Snapshot() Snapshot {
 	return Snapshot{
 		ProjectID:    s.projectID,
 		Status:       s.status,
+		Phase:        s.phase,
 		PID:          s.pid,
 		Port:         s.port,
 		StartedAt:    s.startedAt.Format(time.RFC3339),

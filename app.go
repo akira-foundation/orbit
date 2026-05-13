@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"orbit-app/internal/analyzer"
@@ -89,6 +90,20 @@ type AnalyzeResult struct {
 	Scripts         map[string]string `json:"scripts"`
 	SuggestedSlug   string            `json:"suggestedSlug"`
 	SuggestedDomain string            `json:"suggestedDomain"`
+}
+
+// PathNeedsInstall checks if a directory lacks node_modules (used by the
+// Add Project dialog before the project exists in the DB).
+func (a *App) PathNeedsInstall(path string) bool {
+	if path == "" {
+		return false
+	}
+	st, err := os.Stat(filepath.Join(path, "node_modules"))
+	return err != nil || !st.IsDir()
+}
+
+func (a *App) InstallProject(id string) error {
+	return a.runtime.Install(a.ctx, id)
 }
 
 func (a *App) AnalyzePath(path string) (*AnalyzeResult, error) {

@@ -24,3 +24,6 @@ frontend/wailsjs
 .env
 .env.local
 /orbit-proxyd
+
+# Marketing assets (local only)
+/marketing

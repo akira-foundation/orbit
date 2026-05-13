@@ -22,6 +22,8 @@ import (
 type ProjectLookup interface {
 	Get(ctx context.Context, id string) (*projects.Project, error)
 	UpdateStatus(ctx context.Context, id string, status projects.Status) error
+	InstalledHash(ctx context.Context, id string) (string, error)
+	SetInstalledHash(ctx context.Context, id, hash string) error
 }
 
 type Manager interface {
@@ -35,6 +37,7 @@ type Manager interface {
 	IsRunning(projectID string) bool
 	ConnOpen(projectID string)
 	ConnClose(projectID string)
+	Install(ctx context.Context, projectID string) error
 	Metrics(projectID string, sinceTs int64) []Sample
 	MetricsAll(sinceTs int64, ids []string) map[string][]Sample
 	LogsHistory(projectID string, sinceTs int64, limit int) []LogLine
@@ -286,6 +289,14 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 		return err
 	}
 
+	knownHash, _ := m.projects.InstalledHash(ctx, projectID)
+	if NeedsInstall(proj, knownHash) {
+		if err := m.runInstall(ctx, sess, proj); err != nil {
+			m.markStartFailed(sess, err)
+			return fmt.Errorf("runtime: install: %w", err)
+		}
+	}
+
 	port := pickPort(proj.DevPort)
 	log.Printf("[runtime] start project=%s devPort=%d picked=%d cmd=%q",
 		proj.ID, proj.DevPort, port, proj.DevCommand)
@@ -334,6 +345,75 @@ func (m *manager) watchdog(sess *Session, handle *processHandle, timeout time.Du
 			_ = handle.forceKill()
 		}
 	}
+}
+
+func (m *manager) Install(ctx context.Context, projectID string) error {
+	m.mu.Lock()
+	if existing, ok := m.sessions[projectID]; ok {
+		st := existing.Status()
+		if st == projects.StatusStarting || st == projects.StatusRunning {
+			m.mu.Unlock()
+			return errors.New("runtime: already running")
+		}
+	}
+	sess := newSession(projectID, m.logCap)
+	sess.setStatus(projects.StatusStarting)
+	m.sessions[projectID] = sess
+	m.mu.Unlock()
+
+	proj, err := m.projects.Get(ctx, projectID)
+	if err != nil {
+		m.markStartFailed(sess, err)
+		return err
+	}
+	if err := m.runInstall(ctx, sess, proj); err != nil {
+		m.markStartFailed(sess, err)
+		return err
+	}
+	sess.markStopped()
+	m.emit(EvtStopped, StatusEvent{ProjectID: projectID, Snapshot: m.snap(sess)})
+	return nil
+}
+
+func (m *manager) runInstall(ctx context.Context, sess *Session, proj *projects.Project) error {
+	sess.setPhase("install")
+	cmd := installCommand(proj.PackageManager)
+	m.recordSystem(proj.ID, LevelInfo, SourceSystem,
+		fmt.Sprintf("installing dependencies (%s)", strings.Join(cmd, " ")))
+	m.emit(EvtStarting, StatusEvent{ProjectID: proj.ID, Snapshot: m.snap(sess)})
+
+	h, err := installHandle(proj)
+	if err != nil {
+		return err
+	}
+	sess.setPID(h.cmd.Process.Pid)
+	sess.pgid = h.pgid
+
+	done := make(chan error, 1)
+	go m.readPipe(sess, h.stdout, "stdout")
+	go m.readPipe(sess, h.stderr, "stderr")
+	go func() { done <- h.cmd.Wait() }()
+
+	select {
+	case <-sess.stopCh:
+		_ = h.forceKill()
+		<-done
+		return errors.New("install: cancelled")
+	case err := <-done:
+		if err != nil {
+			return err
+		}
+	}
+
+	hash, _ := lockfileHash(proj.Path)
+	if hash != "" {
+		if err := m.projects.SetInstalledHash(ctx, proj.ID, hash); err != nil {
+			log.Printf("[runtime] save installed hash: %v", err)
+		}
+	}
+	m.recordSystem(proj.ID, LevelInfo, SourceSystem, "install complete")
+	sess.setPhase("")
+	return nil
 }
 
 func (m *manager) markStartFailed(sess *Session, err error) {

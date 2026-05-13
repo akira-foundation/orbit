@@ -1,6 +1,8 @@
 import {
   AnalyzePath,
   AddProject,
+  PathNeedsInstall,
+  InstallProject,
   ListProjects,
   GetProject,
   DeleteProject,
@@ -40,6 +42,8 @@ export const api = {
   analyzePath: (path: string): Promise<AnalyzeResult> =>
     cast(AnalyzePath(path)),
   addProject: (path: string): Promise<Project> => cast(AddProject(path)),
+  pathNeedsInstall: (path: string): Promise<boolean> => cast(PathNeedsInstall(path)),
+  installProject: (id: string): Promise<void> => InstallProject(id),
   listProjects: async (): Promise<Project[]> =>
     (await cast<Project[] | null>(ListProjects())) ?? [],
   getProject: (id: string): Promise<Project> => cast(GetProject(id)),

@@ -159,6 +159,25 @@ func (r *Repository) UpdateStatus(ctx context.Context, id string, status Status)
 	})
 }
 
+func (r *Repository) InstalledHash(ctx context.Context, id string) (string, error) {
+	var h string
+	err := r.raw.QueryRowContext(ctx,
+		`SELECT installed_hash FROM projects WHERE id = ?`, id,
+	).Scan(&h)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return h, err
+}
+
+func (r *Repository) SetInstalledHash(ctx context.Context, id, hash string) error {
+	_, err := r.raw.ExecContext(ctx,
+		`UPDATE projects SET installed_hash = ?, updated_at = ? WHERE id = ?`,
+		hash, time.Now().UTC().Format(time.RFC3339), id,
+	)
+	return err
+}
+
 // ─── reads ────────────────────────────────────────────────────────────────────
 
 func (r *Repository) List(ctx context.Context) ([]Project, error) {

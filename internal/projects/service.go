@@ -72,6 +72,14 @@ func (s *Service) UpdateStatus(ctx context.Context, id string, status Status) er
 	return s.repo.UpdateStatus(ctx, id, status)
 }
 
+func (s *Service) InstalledHash(ctx context.Context, id string) (string, error) {
+	return s.repo.InstalledHash(ctx, id)
+}
+
+func (s *Service) SetInstalledHash(ctx context.Context, id, hash string) error {
+	return s.repo.SetInstalledHash(ctx, id, hash)
+}
+
 func (s *Service) ListDomains(ctx context.Context) ([]Domain, error) {
 	return s.repo.ListDomains(ctx)
 }

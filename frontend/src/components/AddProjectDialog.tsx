@@ -1,7 +1,8 @@
 import { useState } from "react"
 import { api } from "../api"
 import type { AnalyzeResult, Project } from "../types"
-import { FolderSearch } from "lucide-react"
+import { FolderSearch, PackageOpen } from "lucide-react"
+import { Switch } from "./ui/switch"
 import {
   Dialog,
   DialogContent,
@@ -25,12 +26,16 @@ export function AddProjectDialog({
 }) {
   const [path, setPath] = useState("")
   const [analysis, setAnalysis] = useState<AnalyzeResult | null>(null)
+  const [needsInstall, setNeedsInstall] = useState(false)
+  const [installAfterAdd, setInstallAfterAdd] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const reset = () => {
     setPath("")
     setAnalysis(null)
+    setNeedsInstall(false)
+    setInstallAfterAdd(true)
     setError(null)
     setBusy(false)
   }
@@ -47,7 +52,9 @@ export function AddProjectDialog({
     setError(null)
     setAnalysis(null)
     try {
-      setAnalysis(await api.analyzePath(t))
+      const a = await api.analyzePath(t)
+      setAnalysis(a)
+      setNeedsInstall(await api.pathNeedsInstall(t))
     } catch (e: any) {
       setError(e?.message ?? String(e))
     } finally {
@@ -72,7 +79,13 @@ export function AddProjectDialog({
     setBusy(true)
     setError(null)
     try {
-      onCreated(await api.addProject(path))
+      const proj = await api.addProject(path)
+      onCreated(proj)
+      if (needsInstall && installAfterAdd) {
+        api.installProject(proj.id).catch((e) => {
+          console.warn("install kicked off failed:", e)
+        })
+      }
       close()
     } catch (e: any) {
       setError(e?.message ?? String(e))
@@ -132,6 +145,30 @@ export function AddProjectDialog({
               <Row label="Local domain"    value={`https://${analysis.suggestedDomain}`} mono />
             </div>
           )}
+
+          {analysis && needsInstall && (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.04] p-3.5">
+              <PackageOpen className="size-4 mt-0.5 text-amber-300 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium text-amber-100">
+                  Install dependencies
+                </p>
+                <p className="text-[11px] text-amber-200/70 mt-0.5">
+                  <code className="font-mono">node_modules</code> is missing. Orbit can
+                  run{" "}
+                  <code className="font-mono">
+                    {installCmdFor(analysis.packageManager)}
+                  </code>{" "}
+                  right after adding the project.
+                </p>
+              </div>
+              <Switch
+                checked={installAfterAdd}
+                onCheckedChange={setInstallAfterAdd}
+                className="mt-0.5 shrink-0"
+              />
+            </div>
+          )}
         </DialogBody>
 
         <DialogFooter>
@@ -141,6 +178,15 @@ export function AddProjectDialog({
       </DialogContent>
     </Dialog>
   )
+}
+
+function installCmdFor(pm: string): string {
+  switch (pm) {
+    case "yarn": return "yarn install"
+    case "pnpm": return "pnpm install"
+    case "bun":  return "bun install"
+    default:     return "npm install"
+  }
 }
 
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
