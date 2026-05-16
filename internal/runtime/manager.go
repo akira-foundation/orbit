@@ -307,6 +307,7 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 		"CI=false",
 		fmt.Sprintf("PORT=%d", port),
 	)
+	env = mergeDotEnv(env, proj.Path)
 
 	handle, err := spawnDevCommand(proj.Path, proj.DevCommand, env)
 	if err != nil {
