@@ -24,6 +24,7 @@ import {
 import { useProjects } from "../store";
 import { useRuntime, formatUptime } from "../hooks/useRuntime";
 import { LogsPanel } from "../components/LogsPanel";
+import { ServicesPanel } from "../components/ServicesPanel";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { cn } from "../lib/cn";
 
@@ -103,8 +104,6 @@ export function ProjectDetail({ id }: { id: string }) {
     select(null);
   };
 
-  // Status accent — dot color + soft glow tinted by the running state.
-  // Drives the hero's left ornament and the ambient backdrop wash.
   const accent = {
     running:   { dot: "bg-emerald-400", glow: "rgba(52,211,153,0.18)" },
     starting:  { dot: "bg-cyan-400 animate-pulse", glow: "rgba(34,211,238,0.18)" },
@@ -264,6 +263,13 @@ export function ProjectDetail({ id }: { id: string }) {
         </Card>
 
         <Card
+          title="Services"
+          subtitle="Local services this project uses"
+        >
+          <ServicesPanel projectId={id} />
+        </Card>
+
+        <Card
           title="Logs"
           subtitle="Live stdout / stderr from the runtime"
         >
@@ -299,8 +305,6 @@ export function ProjectDetail({ id }: { id: string }) {
   );
 }
 
-// Cell — a single hero meta cell (Framework / Package / Port / Uptime).
-// No label uppercase tracking — just sentence case. Value mono-styled.
 function Cell({
   icon,
   label,
@@ -332,8 +336,6 @@ function Cell({
   );
 }
 
-// Card — same visual language as the Metrics page ChartCard. Rounded-2xl,
-// subtle border + bg, p-5, header with title + optional subtitle muted.
 function Card({
   title,
   subtitle,
@@ -358,7 +360,6 @@ function Card({
   );
 }
 
-// Detail — clean dt/dd row inside the Details column.
 function Detail({
   label,
   children,
@@ -374,7 +375,6 @@ function Detail({
   );
 }
 
-// IconBtn — small ghost icon button used in the hero toolbar.
 function SecureToggle({
   projectId,
   secure,

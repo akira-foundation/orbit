@@ -11,6 +11,7 @@ import {
   Info,
   Orbit,
   RotateCcw,
+  Server,
   Settings as SettingsIcon,
   ShieldCheck,
   Trash2,
@@ -18,8 +19,11 @@ import {
 import { api } from "../api";
 import type { SystemStatus, Config } from "../types";
 import { cn } from "../lib/cn";
+import { ConfirmDialog } from "./ConfirmDialog";
+import { resetOnboarding } from "./OnboardingServices";
+import type { ServiceInfo, ServicesConfig } from "../types";
 
-type Section = "general" | "domains" | "about";
+type Section = "general" | "domains" | "services" | "about";
 
 interface Props {
   open: boolean;
@@ -32,6 +36,7 @@ interface Props {
 const SECTIONS: { id: Section; label: string; icon: typeof SettingsIcon }[] = [
   { id: "general", label: "General", icon: SettingsIcon },
   { id: "domains", label: "Local Domains", icon: Globe },
+  { id: "services", label: "Services", icon: Server },
   { id: "about", label: "About", icon: Info },
 ];
 
@@ -85,6 +90,7 @@ export function SettingsDialog({
                 visible={open}
               />
             )}
+            {section === "services" && <ServicesSection />}
             {section === "about" && <AboutSection />}
           </div>
         </div>
@@ -196,6 +202,173 @@ function ToggleRow({
   );
 }
 
+function formatBytes(n: number): string {
+  if (n <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.min(Math.floor(Math.log(n) / Math.log(1024)), units.length - 1);
+  return `${(n / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+const IDLE_OPTIONS = [0, 5, 15, 30, 60];
+
+function ServicesSection() {
+  const [cfg, setCfg] = useState<ServicesConfig | null>(null);
+  const [engines, setEngines] = useState<ServiceInfo[]>([]);
+  const [disk, setDisk] = useState(0);
+  const [clearOpen, setClearOpen] = useState(false);
+
+  const refresh = async () => {
+    const [c, list, usage] = await Promise.all([
+      api.servicesConfig(),
+      api.listServices(),
+      api.servicesDiskUsage(),
+    ]);
+    setCfg(c);
+    setEngines(list);
+    setDisk(usage);
+  };
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const save = async (next: ServicesConfig) => {
+    setCfg(next);
+    await api.saveServicesConfig(next);
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      <SectionHeader
+        title="Services"
+        description="Defaults and lifecycle for bundled services. Start and stop them on the Services page."
+      />
+      <div className="flex-1 overflow-auto px-6 py-5 space-y-4">
+        {!cfg ? (
+          <p className="text-[12px] text-[var(--orbit-muted)] italic">Loading…</p>
+        ) : (
+          <>
+            <ToggleRow
+              label="Manage automatically"
+              description="Start a service when a project that uses it starts, and stop it when the last one stops."
+              checked={cfg.autoManage}
+              onChange={(v) => save({ ...cfg, autoManage: v })}
+            />
+
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/[0.03] p-4">
+              <div className="min-w-0 space-y-1">
+                <p className="text-[13px] font-medium">Idle stop</p>
+                <p className="text-[11px] text-[var(--orbit-muted)] leading-relaxed">
+                  Stop a manually started service after it sits unused. Services
+                  held by a running project are never idle-stopped.
+                </p>
+              </div>
+              <select
+                value={cfg.idleStopMinutes}
+                onChange={(e) =>
+                  save({ ...cfg, idleStopMinutes: Number(e.target.value) })
+                }
+                className="h-8 shrink-0 rounded-md border border-white/10 bg-white/[0.04] px-2 text-[12px] text-[var(--orbit-text)]"
+              >
+                {IDLE_OPTIONS.map((m) => (
+                  <option key={m} value={m} className="bg-zinc-900">
+                    {m === 0 ? "Off" : `${m} min`}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="rounded-lg border border-white/10 bg-white/[0.02] overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-white/[0.06]">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--orbit-subtle)]">
+                  Enable for new projects
+                </p>
+              </div>
+              <ul className="divide-y divide-white/[0.04]">
+                {engines.map((e) => (
+                  <li
+                    key={e.engine}
+                    className="flex items-center justify-between gap-4 px-4 py-2.5"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-medium">{e.displayName}</p>
+                      {e.description ? (
+                        <p className="text-[10px] text-[var(--orbit-muted)]">
+                          {e.description}
+                        </p>
+                      ) : null}
+                    </div>
+                    <Switch
+                      checked={!!cfg.defaults[e.engine]}
+                      onCheckedChange={(v) =>
+                        save({
+                          ...cfg,
+                          defaults: { ...cfg.defaults, [e.engine]: v },
+                        })
+                      }
+                      className="shrink-0"
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/[0.03] p-4">
+              <div className="min-w-0 space-y-1">
+                <p className="text-[13px] font-medium">Storage</p>
+                <p className="text-[11px] text-[var(--orbit-muted)] font-mono">
+                  ~/.orbit/services · {formatBytes(disk)}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="shrink-0 text-rose-300 hover:bg-rose-500/10 hover:text-rose-200"
+                onClick={() => setClearOpen(true)}
+              >
+                Clear data
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/[0.03] p-4">
+              <div className="min-w-0 space-y-1">
+                <p className="text-[13px] font-medium">Setup wizard</p>
+                <p className="text-[11px] text-[var(--orbit-muted)]">
+                  Re-open the first-run service download picker.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  resetOnboarding();
+                  location.reload();
+                }}
+              >
+                Re-run
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={clearOpen}
+        onOpenChange={setClearOpen}
+        title="Clear service data?"
+        description="Stops all services and deletes captured data (mail, databases). Binaries stay installed."
+        confirmLabel="Clear data"
+        destructive
+        onConfirm={async () => {
+          await api.clearServicesData();
+          await refresh();
+        }}
+      />
+    </div>
+  );
+}
+
 function AboutSection() {
   return (
     <>
@@ -260,8 +433,6 @@ function LocalDomainsSection({
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
-      // Keep spinner visible briefly so user sees feedback even on instant
-      // returns.
       setTimeout(() => setRefreshing(false), 350);
     }
   };
@@ -319,7 +490,7 @@ function LocalDomainsSection({
   useEffect(() => {
     if (!visible || !autoAction) return;
     if (autoAction === "setup") runSetup();
-    else if (autoAction === "reset") runReset();
+    if (autoAction === "reset") runReset();
     onAutoActionConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, autoAction]);

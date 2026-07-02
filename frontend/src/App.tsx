@@ -6,6 +6,11 @@ import { AddProjectDialog } from "./components/AddProjectDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { Dashboard } from "./pages/Dashboard";
 import { MetricsPage } from "./pages/Metrics";
+import { Services } from "./pages/Services";
+import {
+  OnboardingServices,
+  onboardingPending,
+} from "./components/OnboardingServices";
 import { ProjectDetail } from "./pages/ProjectDetail";
 import { ProjectMetricsPage } from "./pages/ProjectMetrics";
 import { ProjectLogsPage } from "./pages/ProjectLogs";
@@ -29,6 +34,7 @@ export function App() {
   const [palette, setPalette] = useState(false);
   const [settings, setSettings] = useState(false);
   const [autoAction, setAutoAction] = useState<"setup" | "reset" | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(onboardingPending());
 
   useEffect(() => {
     load();
@@ -93,6 +99,8 @@ export function App() {
           <div className="flex-1 min-h-0">
             {view === "metrics" ? (
               <MetricsPage />
+            ) : view === "services" ? (
+              <Services />
             ) : view === "project-metrics" && selected ? (
               <ProjectMetricsPage id={selected.id} />
             ) : view === "project-logs" && selected ? (
@@ -130,6 +138,10 @@ export function App() {
         autoAction={autoAction}
         onAutoActionConsumed={() => setAutoAction(null)}
       />
+
+      {showOnboarding && (
+        <OnboardingServices onDone={() => setShowOnboarding(false)} />
+      )}
     </div>
   );
 }

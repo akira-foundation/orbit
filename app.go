@@ -16,6 +16,7 @@ import (
 	"orbit-app/internal/projects"
 	"orbit-app/internal/proxy"
 	"orbit-app/internal/runtime"
+	"orbit-app/internal/services"
 	"orbit-app/internal/system"
 	orbittls "orbit-app/internal/tls"
 
@@ -30,6 +31,9 @@ type App struct {
 	runtime     runtime.Manager
 	registry    proxy.Manager
 	proxyServer *proxy.Server
+	services    *services.Manager
+	svcStore    *services.Store
+	svcConfig   *services.ConfigStore
 }
 
 func NewApp() *App {
@@ -57,13 +61,35 @@ func (a *App) startup(ctx context.Context) {
 	a.runtime.SetEmitter(runtime.NewWailsEmitter(ctx))
 	a.registry = proxy.New(a.service, cfg.DomainSuffix)
 
+	svcStore := services.NewStore(sqlDB)
+	a.svcStore = svcStore
+	svcBaseDir := filepath.Join(cfg.DataDir, "services")
+	a.svcConfig = services.LoadConfig(cfg.DataDir)
+	acq := services.NewAcquirer(svcStore, svcBaseDir)
+	resolver := services.NewResolver(svcStore, services.AllowAll())
+	a.services = services.NewManager(acq, resolver, a.svcConfig, filepath.Join(svcBaseDir, "data"))
+	a.runtime.SetServices(a.services)
+
 	router := proxy.NewRouter(a.registry, a.runtime)
 	recovery := proxy.NewRecoveryHandler(a.registry, a.runtime)
 
+	svcEntries := map[string]proxy.ServiceRoute{}
+	for _, e := range services.Catalog() {
+		if e.WebDomain != "" && e.WebPort != 0 {
+			svcEntries[e.WebDomain] = proxy.ServiceRoute{
+				Engine:      e.ID,
+				DisplayName: e.DisplayName,
+				Upstream:    fmt.Sprintf("%s:%d", e.Bind, e.WebPort),
+			}
+		}
+	}
+
 	opts := proxy.Options{
-		Addr:     cfg.ProxyAddr,
-		Router:   router,
-		Recovery: recovery,
+		Addr:           cfg.ProxyAddr,
+		Router:         router,
+		Recovery:       recovery,
+		Services:       proxy.NewServiceTable(cfg.DomainSuffix, svcEntries),
+		ServiceStarter: a.services,
 	}
 	if mat, err := orbittls.Ensure(cfg.DomainSuffix); err == nil {
 		opts.TLSAddr = cfg.ProxyTLSAddr
@@ -86,6 +112,9 @@ func (a *App) shutdown(_ context.Context) {
 		_ = a.proxyServer.Shutdown(shCtx)
 		cancel()
 	}
+	if a.services != nil {
+		a.services.StopAll()
+	}
 	if a.runtime != nil {
 		a.runtime.Close()
 	}
@@ -106,8 +135,6 @@ type AnalyzeResult struct {
 	SuggestedDomain string            `json:"suggestedDomain"`
 }
 
-// PathNeedsInstall checks if a directory lacks node_modules (used by the
-// Add Project dialog before the project exists in the DB).
 func (a *App) PathNeedsInstall(path string) bool {
 	if path == "" {
 		return false
@@ -148,6 +175,9 @@ func (a *App) AddProject(path string) (*projects.Project, error) {
 	}
 	a.runtime.RecordEvent(p.ID, runtime.LevelInfo, runtime.SourceProject,
 		fmt.Sprintf("project added: %s (%s)", p.Name, p.LocalDomain))
+	for _, engine := range a.svcConfig.DefaultEngines() {
+		_ = a.svcStore.SetEnabled(a.ctx, p.ID, engine, true)
+	}
 	return p, nil
 }
 
@@ -206,8 +236,6 @@ func (a *App) SystemConfig() *config.Config {
 }
 
 func (a *App) SystemSaveConfig(cfg *config.Config) error {
-	// For now we don't have any mutable config fields via the UI
-	// but this method is kept for future expansion.
 	return a.cfg.Save()
 }
 
@@ -235,6 +263,14 @@ func (a *App) ProjectURL(id string) (*ProjectURL, error) {
 	}, nil
 }
 
+func (a *App) OpenURL(url string) error {
+	if url == "" {
+		return fmt.Errorf("empty url")
+	}
+	wailsruntime.BrowserOpenURL(a.ctx, url)
+	return nil
+}
+
 func (a *App) RevealInFinder(path string) error {
 	if path == "" {
 		return fmt.Errorf("empty path")
@@ -249,6 +285,63 @@ func (a *App) OpenProject(id string) error {
 	}
 	wailsruntime.BrowserOpenURL(a.ctx, u.URL)
 	return nil
+}
+
+func (a *App) ListServices() []services.ServiceInfo {
+	return a.services.List(a.ctx)
+}
+
+func (a *App) ServiceStatus(engine string) services.Snapshot {
+	return a.services.Status(engine)
+}
+
+func (a *App) StartService(engine string) error {
+	return a.services.StartManual(a.ctx, engine)
+}
+
+func (a *App) StopService(engine string) error {
+	a.services.ForceStop(engine)
+	return nil
+}
+
+func (a *App) UninstallService(engine string) error {
+	return a.services.Uninstall(a.ctx, engine)
+}
+
+func (a *App) ServicesConfig() services.Config {
+	return a.svcConfig.Get()
+}
+
+func (a *App) SaveServicesConfig(cfg services.Config) error {
+	return a.svcConfig.Save(cfg)
+}
+
+func (a *App) ServicesDiskUsage() int64 {
+	return a.services.DiskUsage()
+}
+
+func (a *App) ClearServicesData() error {
+	return a.services.ClearData()
+}
+
+func (a *App) ServiceSetup(engine string) (services.SetupInfo, error) {
+	e, ok := services.ResolveEngine(engine)
+	if !ok {
+		return services.SetupInfo{}, fmt.Errorf("unknown engine %q", engine)
+	}
+	return e.Setup, nil
+}
+
+func (a *App) EnableServiceForProject(projectID, engine string) error {
+	return a.svcStore.SetEnabled(a.ctx, projectID, engine, true)
+}
+
+func (a *App) DisableServiceForProject(projectID, engine string) error {
+	return a.svcStore.SetEnabled(a.ctx, projectID, engine, false)
+}
+
+func (a *App) ProjectServices(projectID string) ([]string, error) {
+	return a.svcStore.EnabledEngines(a.ctx, projectID)
 }
 
 func (a *App) SystemStatus() system.Status {
@@ -266,7 +359,6 @@ func (a *App) TrustCA() error {
 func (a *App) UntrustCA() error {
 	return system.UntrustCA()
 }
-
 
 func (a *App) SetLaunchAtLogin(enabled bool) error {
 	return system.SetLaunchAtLogin(enabled)

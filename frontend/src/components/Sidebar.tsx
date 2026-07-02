@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import { useProjects, type Filter } from "../store";
 import type { ProjectStatus } from "../types";
+import { api } from "../api";
 import { cn } from "../lib/cn";
 import {
   Boxes,
@@ -10,6 +12,7 @@ import {
   AlertTriangle,
   Box,
   BarChart3,
+  Server,
   Settings,
 } from "lucide-react";
 
@@ -37,6 +40,17 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const { projects, filter, setFilter, selectedId, select, view, setView } =
     useProjects();
   const recent = projects.slice(0, 8);
+  const [runningServices, setRunningServices] = useState(0);
+
+  useEffect(() => {
+    const tick = async () => {
+      const list = await api.listServices();
+      setRunningServices(list.filter((s) => s.status === "running").length);
+    };
+    tick();
+    const t = setInterval(tick, 2500);
+    return () => clearInterval(t);
+  }, []);
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
@@ -47,6 +61,14 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
             label="Metrics"
             active={view === "metrics"}
             onClick={() => setView("metrics")}
+          />
+          <Row
+            icon={Server}
+            label="Services"
+            active={view === "services"}
+            badge={runningServices > 0 ? runningServices : undefined}
+            tone={runningServices > 0 ? "ok" : undefined}
+            onClick={() => setView("services")}
           />
           {filterItems.map((it) => {
             const count = countFor(it.id, projects);

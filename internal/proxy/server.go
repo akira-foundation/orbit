@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"strings"
 	"time"
 
@@ -17,24 +18,28 @@ import (
 )
 
 type Server struct {
-	addr      string
-	tlsAddr   string
-	tlsCert   string
-	tlsKey    string
-	router    *Router
-	recovery  *RecoveryHandler
-	http      *http.Server
-	https     *http.Server
-	transport *http.Transport
+	addr           string
+	tlsAddr        string
+	tlsCert        string
+	tlsKey         string
+	router         *Router
+	recovery       *RecoveryHandler
+	services       ServiceResolver
+	serviceHandler *ServiceHandler
+	http           *http.Server
+	https          *http.Server
+	transport      *http.Transport
 }
 
 type Options struct {
-	Addr     string
-	TLSAddr  string
-	TLSCert  string
-	TLSKey   string
-	Router   *Router
-	Recovery *RecoveryHandler
+	Addr           string
+	TLSAddr        string
+	TLSCert        string
+	TLSKey         string
+	Router         *Router
+	Recovery       *RecoveryHandler
+	Services       ServiceResolver
+	ServiceStarter ServiceStarter
 }
 
 func NewServer(addr string, router *Router, recovery *RecoveryHandler) *Server {
@@ -63,7 +68,11 @@ func NewServerWithOptions(opts Options) *Server {
 		tlsKey:    opts.TLSKey,
 		router:    opts.Router,
 		recovery:  opts.Recovery,
+		services:  opts.Services,
 		transport: tr,
+	}
+	if opts.Services != nil && opts.ServiceStarter != nil {
+		s.serviceHandler = NewServiceHandler(opts.Services, opts.ServiceStarter)
 	}
 	s.http = &http.Server{
 		Addr:              opts.Addr,
@@ -109,6 +118,22 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if s.serviceHandler != nil && strings.HasPrefix(r.URL.Path, servicePrefix+"/") {
+		s.serviceHandler.ServeHTTP(w, r)
+		return
+	}
+
+	if s.services != nil {
+		if route, ok := s.services.ResolveService(r.Host); ok {
+			if isPageNavigation(r) && !dialUpstream(route.Upstream) {
+				s.renderServiceWake(w, r, route)
+				return
+			}
+			s.proxyToService(w, r, route.Upstream)
+			return
+		}
+	}
+
 	if s.recovery != nil && strings.HasPrefix(r.URL.Path, "/__orbit__/") {
 		s.recovery.ServeHTTP(w, r)
 		return
@@ -132,12 +157,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Fast path for navigations to a not-yet-ready runtime: render the Wake
-	// page immediately and let it SSE-poll until the runtime is healthy,
-	// instead of holding the connection open until our 45s router timeout.
-	// We only do this for top-level GETs — XHR/fetch/asset requests still
-	// fall through to Route so HMR/SSE reconnects after a brief blip just
-	// keep working.
 	if s.recovery != nil && isPageNavigation(r) {
 		if proj, ok := s.lookup(r); ok {
 			st := s.router.runtime.Status(proj.ID)
@@ -166,10 +185,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.router.runtime.ConnOpen(target.Project.ID)
 	defer s.router.runtime.ConnClose(target.Project.ID)
 
-	// Wrap the response writer so we can capture status code and bytes-out,
-	// and time the round-trip for the latency histogram. WebSocket upgrades
-	// keep the connection open for the lifetime of the socket — we record
-	// them as a single "request" with the full duration.
 	start := time.Now()
 	rec := &meteredWriter{ResponseWriter: w, status: http.StatusOK}
 	bytesIn := r.ContentLength
@@ -190,9 +205,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Director: func(req *http.Request) {
 			req.URL.Scheme = target.URL.Scheme
 			req.URL.Host = target.URL.Host
-			// Always send Host: localhost:<port>. Vite (and tools using its
-			// allowedHosts check) reject unfamiliar hosts like "::1" or our
-			// "*.orbit.test". "localhost" is in the default allow list.
 			_, port, _ := net.SplitHostPort(target.URL.Host)
 			if port == "" {
 				req.Host = "localhost"
@@ -220,8 +232,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rp.ServeHTTP(rec, r)
 }
 
-// meteredWriter wraps http.ResponseWriter to capture the final status code
-// and the number of body bytes written, for proxy-level metrics.
 type meteredWriter struct {
 	http.ResponseWriter
 	status      int
@@ -247,19 +257,47 @@ func (m *meteredWriter) Write(b []byte) (int, error) {
 	return n, err
 }
 
-// Flush passes through so SSE / chunked responses keep streaming.
 func (m *meteredWriter) Flush() {
 	if f, ok := m.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
 }
 
-// Hijack passes through so WebSocket upgrades work.
 func (m *meteredWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if h, ok := m.ResponseWriter.(http.Hijacker); ok {
 		return h.Hijack()
 	}
 	return nil, nil, http.ErrNotSupported
+}
+
+func (s *Server) renderServiceWake(w http.ResponseWriter, r *http.Request, route ServiceRoute) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusAccepted)
+	fmt.Fprint(w, serviceWakePage(route, normalizeHost(r.Host)))
+}
+
+func (s *Server) proxyToService(w http.ResponseWriter, r *http.Request, upstream string) {
+	target := &url.URL{Scheme: "http", Host: upstream}
+	rp := &httputil.ReverseProxy{
+		Transport:     s.transport,
+		FlushInterval: -1,
+		Director: func(req *http.Request) {
+			req.URL.Scheme = target.Scheme
+			req.URL.Host = target.Host
+			req.Host = target.Host
+			req.Header.Set("X-Forwarded-Host", r.Host)
+			req.Header.Set("X-Forwarded-Proto", schemeOf(r))
+		},
+		ErrorHandler: func(rw http.ResponseWriter, _ *http.Request, perr error) {
+			if isClientGone(perr) {
+				return
+			}
+			log.Printf("[proxy] service upstream error host=%s upstream=%s err=%v", r.Host, upstream, perr)
+			writeUnhealthy(rw, r.Host)
+		},
+	}
+	rp.ServeHTTP(w, r)
 }
 
 func (s *Server) lookup(r *http.Request) (*projects.Project, bool) {
@@ -270,10 +308,6 @@ func (s *Server) lookup(r *http.Request) (*projects.Project, bool) {
 	return proj, true
 }
 
-// isPageNavigation returns true for top-level browser navigations (HTML
-// document loads). Asset / XHR / WS reconnect requests fall through to the
-// proxy so a transient downstream blip during an HMR session doesn't redirect
-// the user to the Wake page.
 func isPageNavigation(r *http.Request) bool {
 	if r.Method != http.MethodGet {
 		return false

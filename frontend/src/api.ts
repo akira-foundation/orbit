@@ -18,6 +18,7 @@ import {
   SystemSaveConfig,
   SelectProjectFolder,
   OpenProject,
+  OpenURL,
   RevealInFinder,
   SystemStatus,
   SystemSetup,
@@ -26,6 +27,19 @@ import {
   UntrustCA,
   SetProjectSecure,
   SetLaunchAtLogin,
+  ListServices,
+  ServiceStatus,
+  StartService,
+  StopService,
+  EnableServiceForProject,
+  DisableServiceForProject,
+  ProjectServices,
+  UninstallService,
+  ServiceSetup,
+  ServicesConfig,
+  SaveServicesConfig,
+  ServicesDiskUsage,
+  ClearServicesData,
 } from "../wailsjs/go/main/App";
 import type {
   AnalyzeResult,
@@ -35,6 +49,10 @@ import type {
   RuntimeLogLine,
   SystemStatus as SystemStatusType,
   Config,
+  ServiceInfo,
+  ServiceSnapshot,
+  ServiceSetup as ServiceSetupType,
+  ServicesConfig as ServicesConfigType,
 } from "./types";
 
 function cast<T>(p: Promise<unknown>): Promise<T> {
@@ -77,6 +95,7 @@ export const api = {
     )) ?? {},
   selectFolder: (): Promise<string> => SelectProjectFolder(),
   openProject: (id: string): Promise<void> => OpenProject(id),
+  openURL: (url: string): Promise<void> => OpenURL(url),
   revealInFinder: (path: string): Promise<void> => RevealInFinder(path),
   systemStatus: (): Promise<SystemStatusType> => cast(SystemStatus()),
   systemSetup: (): Promise<void> => SystemSetup(),
@@ -89,6 +108,26 @@ export const api = {
   systemSaveConfig: (cfg: Config): Promise<void> => SystemSaveConfig(cfg),
   setLaunchAtLogin: (enabled: boolean): Promise<void> =>
     SetLaunchAtLogin(enabled),
+  listServices: async (): Promise<ServiceInfo[]> =>
+    (await cast<ServiceInfo[] | null>(ListServices())) ?? [],
+  serviceStatus: (engine: string): Promise<ServiceSnapshot> =>
+    cast(ServiceStatus(engine)),
+  startService: (engine: string): Promise<void> => StartService(engine),
+  stopService: (engine: string): Promise<void> => StopService(engine),
+  enableServiceForProject: (projectId: string, engine: string): Promise<void> =>
+    EnableServiceForProject(projectId, engine),
+  disableServiceForProject: (projectId: string, engine: string): Promise<void> =>
+    DisableServiceForProject(projectId, engine),
+  projectServices: async (projectId: string): Promise<string[]> =>
+    (await cast<string[] | null>(ProjectServices(projectId))) ?? [],
+  uninstallService: (engine: string): Promise<void> => UninstallService(engine),
+  serviceSetup: (engine: string): Promise<ServiceSetupType> =>
+    cast(ServiceSetup(engine)),
+  servicesConfig: (): Promise<ServicesConfigType> => cast(ServicesConfig()),
+  saveServicesConfig: (cfg: ServicesConfigType): Promise<void> =>
+    SaveServicesConfig(cfg as never),
+  servicesDiskUsage: (): Promise<number> => cast(ServicesDiskUsage()),
+  clearServicesData: (): Promise<void> => ClearServicesData(),
 };
 
 export type { Project, AnalyzeResult, Config };

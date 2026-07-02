@@ -114,3 +114,43 @@ export interface AnalyzeResult {
   suggestedSlug: string
   suggestedDomain: string
 }
+
+export interface ServiceInfo {
+  engine: string
+  displayName: string
+  description: string
+  version: string
+  status: "stopped" | "starting" | "running" | "error"
+  webUrl: string
+  installed: boolean
+  refs: number
+}
+
+export interface ServiceSnapshot {
+  engine: string
+  status: string
+  pid: number
+  refs: number
+}
+
+export interface ServiceSetupField {
+  label: string
+  value: string
+}
+
+export interface ServiceSetupSnippet {
+  label: string
+  language: string
+  code: string
+}
+
+export interface ServiceSetup {
+  fields: ServiceSetupField[]
+  snippets: ServiceSetupSnippet[]
+}
+
+export interface ServicesConfig {
+  autoManage: boolean
+  idleStopMinutes: number
+  defaults: Record<string, boolean>
+}

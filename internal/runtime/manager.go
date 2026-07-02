@@ -26,6 +26,11 @@ type ProjectLookup interface {
 	SetInstalledHash(ctx context.Context, id, hash string) error
 }
 
+type ServiceCoordinator interface {
+	OnProjectStart(ctx context.Context, projectID, projectPath string) error
+	OnProjectStop(projectID string)
+}
+
 type Manager interface {
 	Start(ctx context.Context, projectID string) error
 	Stop(ctx context.Context, projectID string) error
@@ -46,6 +51,7 @@ type Manager interface {
 	StopAll()
 	Close() error
 	SetEmitter(e Emitter)
+	SetServices(c ServiceCoordinator)
 }
 
 func New(projects ProjectLookup, db *sql.DB, cfg *config.Config) Manager {
@@ -75,6 +81,7 @@ type manager struct {
 	mu       sync.RWMutex
 	projects ProjectLookup
 	emitter  Emitter
+	services ServiceCoordinator
 	sessions map[string]*Session
 
 	stopGrace time.Duration
@@ -105,14 +112,12 @@ func (m *manager) projMetricsFor(projectID string) *projMetrics {
 	return pm
 }
 
-
 func (m *manager) RecordRequest(projectID string, statusCode int, durationMs float64, bytesIn, bytesOut int64, isWS bool) {
 	if projectID == "" {
 		return
 	}
 	m.projMetricsFor(projectID).RecordRequest(statusCode, durationMs, bytesIn, bytesOut, isWS)
 }
-
 
 func (m *manager) addLog(sess *Session, line LogLine) {
 	sess.appendLog(line)
@@ -133,7 +138,6 @@ func (m *manager) addLog(sess *Session, line LogLine) {
 		Text:      line.Text,
 	})
 }
-
 
 func (m *manager) recordSystem(projectID string, level EventLevel, source EventSource, text string) {
 	if m.logs == nil {
@@ -167,7 +171,6 @@ func (m *manager) RecordEvent(projectID string, level EventLevel, source EventSo
 	m.recordSystem(projectID, level, source, text)
 }
 
-
 func (m *manager) metricsSampler() {
 	tk := time.NewTicker(sampleInterval)
 	defer tk.Stop()
@@ -181,7 +184,6 @@ func (m *manager) metricsSampler() {
 	}
 }
 
-// sampleNow writes one Sample per active session into metric_samples.
 func (m *manager) sampleNow() {
 	now := time.Now().Unix()
 
@@ -236,6 +238,37 @@ func (m *manager) SetEmitter(e Emitter) {
 	m.emitter = e
 }
 
+func (m *manager) SetServices(c ServiceCoordinator) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.services = c
+}
+
+func (m *manager) servicesOnStart(proj *projects.Project) {
+	m.mu.RLock()
+	c := m.services
+	m.mu.RUnlock()
+	if c == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := c.OnProjectStart(ctx, proj.ID, proj.Path); err != nil {
+		m.recordSystem(proj.ID, LevelWarn, SourceSystem,
+			fmt.Sprintf("services start: %v", err))
+	}
+}
+
+func (m *manager) servicesOnStop(projectID string) {
+	m.mu.RLock()
+	c := m.services
+	m.mu.RUnlock()
+	if c == nil {
+		return
+	}
+	c.OnProjectStop(projectID)
+}
+
 func (m *manager) emit(name string, data ...any) {
 	m.mu.RLock()
 	e := m.emitter
@@ -268,7 +301,7 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 			m.mu.Unlock()
 			return errors.New("runtime: cooling down after recent failure")
 		}
-		
+
 		if existing.pgid > 0 {
 			_ = killPGID(existing.pgid)
 		}
@@ -318,7 +351,6 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 	sess.setPID(handle.cmd.Process.Pid)
 	sess.pgid = handle.pgid
 
-
 	_ = m.projects.UpdateStatus(ctx, projectID, projects.StatusStarting)
 	m.emit(EvtStarting, StatusEvent{ProjectID: projectID, Snapshot: m.snap(sess)})
 
@@ -327,9 +359,10 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 	go m.supervise(sess, handle, proj)
 	go m.watchdog(sess, handle, 60*time.Second)
 
+	m.servicesOnStart(proj)
+
 	return nil
 }
-
 
 func (m *manager) watchdog(sess *Session, handle *processHandle, timeout time.Duration) {
 	timer := time.NewTimer(timeout)
@@ -445,6 +478,7 @@ func (m *manager) Stop(ctx context.Context, projectID string) error {
 	}
 
 	_ = m.projects.UpdateStatus(ctx, projectID, projects.StatusStopped)
+	m.servicesOnStop(projectID)
 	return nil
 }
 
@@ -547,18 +581,18 @@ func (m *manager) idleSweeper() {
 			}
 			m.mu.RUnlock()
 
-		for _, id := range toStop {
-			log.Printf("[runtime] idle stop project=%s after %s", id, m.idleAfter)
-			m.recordSystem(id, LevelInfo, SourceSystem,
-				fmt.Sprintf("idle auto-stop after %s with no active connections", m.idleAfter))
-			m.projMetricsFor(id).IncAutostop()
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			_ = m.Stop(ctx, id)
-			cancel()
-			m.mu.Lock()
-			delete(m.idleSince, id)
-			m.mu.Unlock()
-		}
+			for _, id := range toStop {
+				log.Printf("[runtime] idle stop project=%s after %s", id, m.idleAfter)
+				m.recordSystem(id, LevelInfo, SourceSystem,
+					fmt.Sprintf("idle auto-stop after %s with no active connections", m.idleAfter))
+				m.projMetricsFor(id).IncAutostop()
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				_ = m.Stop(ctx, id)
+				cancel()
+				m.mu.Lock()
+				delete(m.idleSince, id)
+				m.mu.Unlock()
+			}
 		}
 	}
 }
@@ -686,7 +720,6 @@ func (m *manager) finalize(sess *Session, err error, requested bool) {
 		return
 	}
 
-
 	sess.markStopped()
 	m.emit(EvtStopped, StatusEvent{ProjectID: sess.projectID, Snapshot: m.snap(sess)})
 	_ = m.projects.UpdateStatus(context.Background(), sess.projectID, projects.StatusStopped)
@@ -749,7 +782,6 @@ func pickPort(preferred int) int {
 
 var localhostPortRe = regexp.MustCompile(`(?i)(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])[: ](\d{2,5})`)
 var portFlagRe = regexp.MustCompile(`(?i)\bport[:= ]\s*(\d{2,5})\b`)
-
 
 func extractPortFromLine(s string) (int, bool) {
 	if m := localhostPortRe.FindStringSubmatch(s); len(m) == 2 {

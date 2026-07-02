@@ -1,9 +1,10 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import type { Project } from './types'
 import { api } from './api'
 
 export type Filter = 'all' | 'running' | 'idle' | 'stopped' | 'suspended' | 'error'
-export type View = 'projects' | 'metrics' | 'project-metrics' | 'project-logs'
+export type View = 'projects' | 'metrics' | 'project-metrics' | 'project-logs' | 'services'
 
 interface State {
   projects: Project[]
@@ -33,7 +34,7 @@ interface State {
   patchStatus: (id: string, status: Project['status']) => void
 }
 
-export const useProjects = create<State>((set, get) => ({
+export const useProjects = create<State>()(persist((set, get) => ({
   projects: [],
   selectedId: null,
   view: 'projects',
@@ -47,13 +48,19 @@ export const useProjects = create<State>((set, get) => ({
   error: null,
   setFilter(f) { set({ filter: f }) },
   setQuery(q) { set({ query: q }) },
-  setView(v) { set({ view: v, selectedId: v === 'metrics' ? null : get().selectedId }) },
+  setView(v) { set({ view: v, selectedId: v === 'metrics' || v === 'services' ? null : get().selectedId }) },
   showProjectMetrics(id) { set({ view: 'project-metrics', selectedId: id }) },
   showProjectLogs(id) { set({ view: 'project-logs', selectedId: id }) },
   async load() {
     set({ loading: true, error: null })
     try {
       const list = await api.listProjects()
+      const { selectedId, view } = get()
+      const stillExists = selectedId ? list.some(p => p.id === selectedId) : true
+      if (!stillExists) {
+        const projectScoped = view === 'project-metrics' || view === 'project-logs'
+        set({ selectedId: null, view: projectScoped ? 'projects' : view })
+      }
       set({ projects: list, loading: false })
     } catch (e: any) {
       set({ loading: false, error: e?.message ?? String(e) })
@@ -100,7 +107,6 @@ export const useProjects = create<State>((set, get) => ({
   async remove(id) {
     await api.deleteProject(id)
     const { history, historyIndex } = get()
-    // purge removed id from history
     const newHistory = history.map(h => (h === id ? null : h))
     set({
       projects: get().projects.filter(p => p.id !== id),
@@ -124,4 +130,7 @@ export const useProjects = create<State>((set, get) => ({
       projects: get().projects.map(p => p.id === id ? { ...p, status } : p),
     })
   },
+}), {
+  name: 'orbit.nav',
+  partialize: (s) => ({ view: s.view, selectedId: s.selectedId, filter: s.filter }),
 }))
