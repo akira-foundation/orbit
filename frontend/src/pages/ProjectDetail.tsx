@@ -27,11 +27,12 @@ import { useProjects } from "../store";
 import { useRuntime, formatUptime } from "../hooks/useRuntime";
 import { LogsPanel } from "../components/LogsPanel";
 import { ServicesPanel } from "../components/ServicesPanel";
+import { ProjectTerminal } from "../components/ProjectTerminal";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { cn } from "../lib/cn";
 
 const DETAIL_TABS: {
-  id: "details" | "services" | "logs";
+  id: "details" | "services" | "logs" | "terminal";
   label: string;
   subtitle: string;
   icon: typeof Info;
@@ -39,6 +40,7 @@ const DETAIL_TABS: {
   { id: "details", label: "Details", subtitle: "Resolved project metadata", icon: Info },
   { id: "services", label: "Services", subtitle: "Local services this project uses", icon: Server },
   { id: "logs", label: "Logs", subtitle: "Live stdout / stderr from the runtime", icon: FileText },
+  { id: "terminal", label: "Terminal", subtitle: "Interactive shell at the project root", icon: Terminal },
 ];
 
 export function ProjectDetail({ id }: { id: string }) {
@@ -50,7 +52,7 @@ export function ProjectDetail({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const [tab, setTab] = useState<"details" | "services" | "logs">("details");
+  const [tab, setTab] = useState<"details" | "services" | "logs" | "terminal">("details");
   const [, copyToClipboard] = useCopyToClipboard();
 
   const reload = async () => {
@@ -312,6 +314,8 @@ export function ProjectDetail({ id }: { id: string }) {
               )}
             </>
           )}
+
+          {tab === "terminal" && <ProjectTerminal projectId={id} />}
         </Card>
       </div>
 
