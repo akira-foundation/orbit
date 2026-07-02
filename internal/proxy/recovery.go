@@ -168,80 +168,125 @@ func recoveryPage(p *projects.Project) string {
 <title>Orbit · Reconnecting %[1]s</title>
 <meta name="color-scheme" content="dark">
 <style>
+  :root {
+    --accent: #a78bfa;
+    --accent-soft: rgba(167,139,250,0.18);
+    --warn: #f59e0b;
+    --danger: #f43f5e;
+    --ok: #34d399;
+    --text: #e5e7eb;
+    --muted: #a1a1aa;
+    --subtle: #71717a;
+    --border: rgba(255,255,255,0.06);
+  }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%%; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-    background: radial-gradient(circle at 30%% 20%%, rgba(124,127,255,0.18), transparent 50%%),
-                radial-gradient(circle at 70%% 80%%, rgba(45,215,255,0.12), transparent 55%%),
-                #0a0b10;
-    color: #e5e7eb;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+    background: #0c0d12;
+    color: var(--text);
     display: flex; align-items: center; justify-content: center;
+    -webkit-font-smoothing: antialiased;
   }
-  .card {
-    width: min(560px, calc(100%% - 32px));
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 18px;
-    background: rgba(20,21,28,0.65);
-    backdrop-filter: blur(28px) saturate(160%%);
-    -webkit-backdrop-filter: blur(28px) saturate(160%%);
-    box-shadow: 0 24px 64px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06);
-    padding: 28px 32px 24px;
+  main {
+    width: 440px;
+    max-width: calc(100%% - 32px);
+    min-height: 540px;
+    padding: 48px 24px 36px;
+    display: flex; flex-direction: column; align-items: center; text-align: center;
   }
-  .badge {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 3px 10px; border-radius: 999px;
-    background: rgba(124,127,255,0.14);
-    color: #a5b4fc;
-    font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
-    margin-bottom: 18px;
+  .logo {
+    width: 80px; height: 80px;
+    color: var(--warn);
+    filter: drop-shadow(0 6px 20px rgba(245,158,11,0.22));
   }
-  .dot { width: 6px; height: 6px; border-radius: 50%%; background: #f59e0b; box-shadow: 0 0 12px #f59e0b; animation: pulse 1.4s infinite; }
-  @keyframes pulse { 0%%,100%% { opacity: 1; } 50%% { opacity: 0.35; } }
-  h1 { font-size: 19px; margin: 0 0 6px; font-weight: 600; letter-spacing: -0.01em; }
-  .lead { font-size: 13px; color: #a1a1aa; margin: 0 0 22px; line-height: 1.55; }
-  .row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0;
-         border-top: 1px solid rgba(255,255,255,0.06); font-size: 12px; }
-  .row:first-of-type { border-top: 0; }
-  .row .label { color: #71717a; text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; font-weight: 600; }
-  .row .value { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #e5e7eb; }
-  .actions { display: flex; gap: 8px; margin-top: 20px; }
+  h1 { font-size: 24px; margin: 18px 0 0; font-weight: 600; letter-spacing: -0.015em; min-height: 30px; }
+  .version {
+    margin: 8px 0 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
+  }
+  .lead { margin: 18px 0 0; max-width: 320px; font-size: 12.5px; color: var(--muted); line-height: 1.55; min-height: 40px; }
+  .info {
+    margin-top: 28px; width: 100%%; max-width: 360px;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: rgba(255,255,255,0.02); overflow: hidden;
+  }
+  .info .row {
+    display: grid; grid-template-columns: 6rem 1fr; align-items: center; gap: 12px;
+    padding: 10px 14px; border-top: 1px solid rgba(255,255,255,0.04); font-size: 12px; min-width: 0;
+  }
+  .info .row:first-of-type { border-top: 0; }
+  .info dt { color: var(--muted); text-align: left; }
+  .info dd {
+    margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text);
+    text-align: right; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .status {
+    margin-top: 22px; display: inline-flex; align-items: center; gap: 8px;
+    padding: 5px 12px; border: 1px solid rgba(245,158,11,0.3); background: rgba(245,158,11,0.08);
+    color: var(--warn); border-radius: 999px;
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase;
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%%; background: var(--warn);
+         box-shadow: 0 0 10px var(--warn); animation: pulse 1.6s infinite ease-in-out; }
+  @keyframes pulse { 0%%,100%% { opacity: 1; transform: scale(1); } 50%% { opacity: 0.45; transform: scale(0.8); } }
+  .status-running { border-color: rgba(52,211,153,0.3); background: rgba(52,211,153,0.08); color: var(--ok); }
+  .status-running .dot { background: var(--ok); box-shadow: 0 0 10px var(--ok); animation: none; }
+  .status-error { border-color: rgba(244,63,94,0.3); background: rgba(244,63,94,0.08); color: var(--danger); }
+  .status-error .dot { background: var(--danger); box-shadow: 0 0 10px var(--danger); animation: none; }
+  .actions { display: flex; gap: 8px; margin-top: 24px; width: 100%%; max-width: 360px; }
   button {
     appearance: none; cursor: pointer; font: inherit;
-    flex: 1; padding: 9px 14px; border-radius: 10px;
+    flex: 1; padding: 10px 14px; border-radius: 10px;
     border: 1px solid rgba(255,255,255,0.1);
     background: rgba(255,255,255,0.04);
-    color: #e5e7eb; font-size: 13px; font-weight: 500;
+    color: var(--text); font-size: 13px; font-weight: 500;
     transition: background 0.15s, border-color 0.15s;
   }
   button:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.16); }
-  button.primary { background: rgba(124,127,255,0.18); border-color: rgba(124,127,255,0.32); color: #c7d2fe; }
-  button.primary:hover { background: rgba(124,127,255,0.26); }
+  button.primary { background: var(--accent-soft); border-color: rgba(167,139,250,0.32); color: #c7d2fe; }
+  button.primary:hover { background: rgba(167,139,250,0.26); }
   button:disabled { opacity: 0.5; cursor: default; }
-  .footer { margin-top: 18px; font-size: 11px; color: #52525b; text-align: center; }
-  .status-running .dot { background: #34d399; box-shadow: 0 0 12px #34d399; animation: none; }
-  .status-error .dot   { background: #f43f5e; box-shadow: 0 0 12px #f43f5e; animation: none; }
+  .footer { margin-top: 28px; font-size: 11px; color: var(--subtle); }
 </style>
 </head>
 <body>
-  <main class="card" id="card">
-    <div class="badge"><span class="dot" id="dot"></span><span id="state">reconnecting</span></div>
-    <h1 id="title">Reconnecting to %[1]s</h1>
+  <main aria-live="polite" id="card">
+    <svg class="logo" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="1.25"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3"/>
+      <circle cx="19" cy="5" r="2"/>
+      <circle cx="5" cy="19" r="2"/>
+      <path d="M10.4 21.9a10 10 0 0 0 9.941-15.416"/>
+      <path d="M13.5 2.1a10 10 0 0 0-9.841 15.416"/>
+    </svg>
+
+    <h1 id="title">Reconnecting %[1]s</h1>
+    <p class="version">Ambient runtime</p>
     <p class="lead" id="lead">The runtime is not responding. Orbit is watching for it to come back online and will reload this page automatically.</p>
-    <div class="row"><span class="label">Project</span><span class="value">%[1]s</span></div>
-    <div class="row"><span class="label">Domain</span><span class="value">%[2]s</span></div>
-    <div class="row"><span class="label">Port</span><span class="value" id="port">—</span></div>
-    <div class="row"><span class="label">Attempts</span><span class="value" id="attempts">0</span></div>
-    <div class="row" id="errRow" hidden><span class="label">Last error</span><span class="value" id="errVal"></span></div>
+
+    <dl class="info">
+      <div class="row"><dt>Project</dt><dd title="%[1]s">%[1]s</dd></div>
+      <div class="row"><dt>Domain</dt><dd title="%[2]s">%[2]s</dd></div>
+      <div class="row"><dt>Port</dt><dd id="port">—</dd></div>
+      <div class="row"><dt>Attempts</dt><dd id="attempts">0</dd></div>
+      <div class="row" id="errRow" hidden><dt>Last error</dt><dd id="errVal"></dd></div>
+    </dl>
+
+    <div class="status" id="statusPill"><span class="dot" id="dot"></span><span id="state">Reconnecting</span></div>
+
     <div class="actions">
       <button id="restart" class="primary">Restart runtime</button>
       <button id="logs">View logs</button>
     </div>
-    <p class="footer">Orbit · auto-reload when the runtime is healthy</p>
+
+    <p class="footer">kidiatoliny @ Akira Foundation</p>
   </main>
 <script>
 (() => {
-  const card = document.getElementById('card');
+  const card = document.getElementById('statusPill');
   const stateEl = document.getElementById('state');
   const titleEl = document.getElementById('title');
   const leadEl = document.getElementById('lead');
@@ -269,7 +314,7 @@ func recoveryPage(p *projects.Project) string {
     es.onmessage = (ev) => {
       let snap;
       try { snap = JSON.parse(ev.data); } catch { return; }
-      stateEl.textContent = snap.status;
+      stateEl.textContent = snap.status ? snap.status.charAt(0).toUpperCase() + snap.status.slice(1) : '';
       setStatusClass(snap.status);
       portEl.textContent = snap.port || '—';
       if (snap.error) { errRow.hidden = false; errVal.textContent = snap.error; }
@@ -326,11 +371,6 @@ func recoveryPage(p *projects.Project) string {
 	)
 }
 
-// wakePage is the calm "starting up" UI shown the first time someone hits a
-// stopped or starting runtime. Sibling to recoveryPage but visually distinct
-// (cool blue, no error treatment) so users immediately read it as "give me a
-// moment" instead of "something broke". Reuses /__orbit__/recovery/events
-// for the SSE stream and the same auto-reload-when-running JS.
 func wakePage(p *projects.Project) string {
 	return fmt.Sprintf(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -500,7 +540,8 @@ func wakePage(p *projects.Project) string {
         titleEl.textContent = 'Installing dependencies';
         phaseEl.textContent = 'Install phase';
         leadEl.textContent = 'Running the package manager. The dev server will boot once dependencies are ready.';
-      } else if (titleEl.textContent === 'Installing dependencies') {
+      }
+      if (snap.phase !== 'install' && titleEl.textContent === 'Installing dependencies') {
         titleEl.textContent = 'Waking %[1]s';
         phaseEl.textContent = 'Ambient runtime';
         leadEl.textContent = "The dev server is booting up. This page will reload automatically when it's ready.";
@@ -510,7 +551,9 @@ func wakePage(p *projects.Project) string {
         leadEl.textContent = 'Loading the app…';
         es.close();
         setTimeout(reload, 300);
-      } else if (snap.status === 'error') {
+        return;
+      }
+      if (snap.status === 'error') {
         es.close();
         location.replace('%[3]s/');
       }

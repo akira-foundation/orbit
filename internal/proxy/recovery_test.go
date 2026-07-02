@@ -57,7 +57,7 @@ func TestRecovery_OverlayOnUpstreamFailure(t *testing.T) {
 		t.Fatalf("status = %d, want 502", resp.StatusCode)
 	}
 	body := readAll(t, resp.Body)
-	if !strings.Contains(body, "Reconnecting to site") {
+	if !strings.Contains(body, "Reconnecting site") {
 		t.Fatalf("expected recovery overlay, body=%s", body[:min(len(body), 200)])
 	}
 	if !strings.Contains(body, "/__orbit__/recovery/events") {
