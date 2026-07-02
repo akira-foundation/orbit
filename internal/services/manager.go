@@ -46,10 +46,11 @@ func NewManager(acq *Acquirer, resolver *Resolver, cfg *ConfigStore, dataDir str
 	m.starter = spawnService
 	m.ensure = acq.Ensure
 	m.dialAddr = func(e Engine) string {
-		return fmt.Sprintf("%s:%d", e.Bind, e.WebPort)
+		return fmt.Sprintf("%s:%d", e.Bind, e.Port)
 	}
 	m.reap = func(engine string) {
 		if e, ok := ResolveEngine(engine); ok {
+			reapByPort(e.Bind, e.Port)
 			reapByPort(e.Bind, e.WebPort)
 			reapByPort(e.Bind, e.SMTPPort)
 			reapByPort(e.Bind, e.APIPort)
@@ -163,32 +164,49 @@ func (m *Manager) terminate(engine string, proc *svcProcess) {
 }
 
 func (m *Manager) reachable(e Engine) bool {
-	if e.WebPort == 0 {
+	if e.Port == 0 {
 		return false
 	}
 	return dialOnce(m.dialAddr(e))
 }
 
-func (m *Manager) OnProjectStart(ctx context.Context, projectID, projectPath string) error {
+func (m *Manager) OnProjectStart(ctx context.Context, projectID, projectPath, slug string) (map[string]string, error) {
 	if m.cfg != nil && !m.cfg.AutoManage() {
-		return nil
+		return nil, nil
 	}
 	engines, err := m.resolver.EnabledFor(ctx, projectID, projectPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	creds := map[string]string{}
 	var acquired []string
-	for _, e := range engines {
-		if err := m.Acquire(ctx, e, projectID); err != nil {
-			log.Printf("[services] acquire %s for %s: %v", e, projectID, err)
+	for _, engine := range engines {
+		if err := m.Acquire(ctx, engine, projectID); err != nil {
+			log.Printf("[services] acquire %s for %s: %v", engine, projectID, err)
 			continue
 		}
-		acquired = append(acquired, e)
+		acquired = append(acquired, engine)
+		for k, v := range m.provisionEngine(ctx, engine, slug) {
+			creds[k] = v
+		}
 	}
 	m.mu.Lock()
 	m.held[projectID] = acquired
 	m.mu.Unlock()
-	return nil
+	return creds, nil
+}
+
+func (m *Manager) provisionEngine(ctx context.Context, engine, slug string) map[string]string {
+	e, ok := ResolveEngine(engine)
+	if !ok || e.Provision == nil {
+		return nil
+	}
+	env, err := e.Provision(ctx, e.Port, slug)
+	if err != nil {
+		log.Printf("[services] provision %s for %s: %v", engine, slug, err)
+		return nil
+	}
+	return env
 }
 
 func (m *Manager) OnProjectStop(projectID string) {

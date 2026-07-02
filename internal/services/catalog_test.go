@@ -13,8 +13,8 @@ func TestCatalogHasMailpit(t *testing.T) {
 	if e.Version != "v1.30.3" {
 		t.Fatalf("version = %q", e.Version)
 	}
-	if e.SMTPPort != 1025 || e.WebPort != 8025 {
-		t.Fatalf("ports smtp=%d web=%d", e.SMTPPort, e.WebPort)
+	if e.SMTPPort != 1025 || e.WebPort != 8025 || e.Port != 8025 {
+		t.Fatalf("ports smtp=%d web=%d dial=%d", e.SMTPPort, e.WebPort, e.Port)
 	}
 	if e.Bind != "127.0.0.2" {
 		t.Fatalf("bind = %q", e.Bind)

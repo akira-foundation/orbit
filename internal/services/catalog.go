@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 )
@@ -32,14 +33,19 @@ type Engine struct {
 	Version      string
 	DisplayName  string
 	Description  string
+	Family       string
+	Port         int
 	SMTPPort     int
 	WebPort      int
 	APIPort      int
 	Bind         string
 	WebDomain    string
+	ExtractTree  bool
 	ReadyMarkers []string
 	Platforms    map[string]Platform
 	Setup        SetupInfo
+	Init         func(binDir, dataDir string) error
+	Provision    func(ctx context.Context, port int, slug string) (map[string]string, error)
 	argsTemplate func(p Platform, dataDir string) []string
 }
 
@@ -72,6 +78,7 @@ func Catalog() []Engine {
 		Version:     mpVer,
 		DisplayName: "Mailpit",
 		Description: "Captures outgoing mail from your apps in a local inbox.",
+		Port:        8025,
 		SMTPPort:    1025,
 		WebPort:     8025,
 		Bind:        "127.0.0.2",

@@ -27,7 +27,7 @@ type ProjectLookup interface {
 }
 
 type ServiceCoordinator interface {
-	OnProjectStart(ctx context.Context, projectID, projectPath string) error
+	OnProjectStart(ctx context.Context, projectID, projectPath, slug string) (map[string]string, error)
 	OnProjectStop(projectID string)
 }
 
@@ -244,19 +244,39 @@ func (m *manager) SetServices(c ServiceCoordinator) {
 	m.services = c
 }
 
-func (m *manager) servicesOnStart(proj *projects.Project) {
+func (m *manager) servicesOnStart(proj *projects.Project) map[string]string {
 	m.mu.RLock()
 	c := m.services
 	m.mu.RUnlock()
 	if c == nil {
-		return
+		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	if err := c.OnProjectStart(ctx, proj.ID, proj.Path); err != nil {
+	env, err := c.OnProjectStart(ctx, proj.ID, proj.Path, proj.Slug)
+	if err != nil {
 		m.recordSystem(proj.ID, LevelWarn, SourceSystem,
 			fmt.Sprintf("services start: %v", err))
 	}
+	return env
+}
+
+func mergeServiceEnv(base []string, injected map[string]string) []string {
+	if len(injected) == 0 {
+		return base
+	}
+	present := map[string]bool{}
+	for _, kv := range base {
+		if eq := strings.Index(kv, "="); eq >= 0 {
+			present[kv[:eq]] = true
+		}
+	}
+	for k, v := range injected {
+		if !present[k] {
+			base = append(base, k+"="+v)
+		}
+	}
+	return base
 }
 
 func (m *manager) servicesOnStop(projectID string) {
@@ -330,6 +350,8 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 		}
 	}
 
+	svcEnv := m.servicesOnStart(proj)
+
 	port := pickPort(proj.DevPort)
 	log.Printf("[runtime] start project=%s devPort=%d picked=%d cmd=%q",
 		proj.ID, proj.DevPort, port, proj.DevCommand)
@@ -340,6 +362,7 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 		"CI=false",
 		fmt.Sprintf("PORT=%d", port),
 	)
+	env = mergeServiceEnv(env, svcEnv)
 	env = mergeDotEnv(env, proj.Path)
 
 	handle, err := spawnDevCommand(proj.Path, proj.DevCommand, env)
@@ -358,8 +381,6 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 	go m.readPipe(sess, handle.stderr, "stderr")
 	go m.supervise(sess, handle, proj)
 	go m.watchdog(sess, handle, 60*time.Second)
-
-	m.servicesOnStart(proj)
 
 	return nil
 }

@@ -34,7 +34,7 @@ func TestOnProjectStartSkipsWhenAutoManageOff(t *testing.T) {
 	_ = m.cfg.Save(Config{AutoManage: false})
 	_ = m.acq.store.SetEnabled(context.Background(), "p1", "mailpit", true)
 
-	if err := m.OnProjectStart(context.Background(), "p1", t.TempDir()); err != nil {
+	if _, err := m.OnProjectStart(context.Background(), "p1", t.TempDir(), "p1"); err != nil {
 		t.Fatalf("on start: %v", err)
 	}
 	if got := m.Status("mailpit"); got.Status != "stopped" {
