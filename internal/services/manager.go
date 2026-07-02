@@ -31,6 +31,7 @@ type Manager struct {
 	ensure   func(ctx context.Context, e Engine) (string, error)
 	dialAddr func(e Engine) string
 	reap     func(engine string)
+	initHook func(e Engine, binDir, dataDir string) error
 	now      func() time.Time
 }
 
@@ -55,6 +56,12 @@ func NewManager(acq *Acquirer, resolver *Resolver, cfg *ConfigStore, dataDir str
 			reapByPort(e.Bind, e.SMTPPort)
 			reapByPort(e.Bind, e.APIPort)
 		}
+	}
+	m.initHook = func(e Engine, binDir, dataDir string) error {
+		if e.Init == nil {
+			return nil
+		}
+		return e.Init(binDir, dataDir)
 	}
 	m.now = time.Now
 	go m.idleSweeper()
@@ -102,6 +109,11 @@ func (m *Manager) Acquire(ctx context.Context, engine, projectID string) error {
 
 	dataDir := m.dataDir + "/" + engine
 	if err := ensureDir(dataDir); err != nil {
+		m.fail(engine)
+		return err
+	}
+
+	if err := m.initHook(e, filepath.Dir(bin), dataDir); err != nil {
 		m.fail(engine)
 		return err
 	}

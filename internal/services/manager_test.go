@@ -131,6 +131,39 @@ func TestManagerAcquireUnknownEngine(t *testing.T) {
 	}
 }
 
+func TestAcquireRunsInitOnceBeforeStart(t *testing.T) {
+	m, _ := newManagerForTest(t, freePort(t))
+	var initCalls int
+	var initBeforeStart bool
+	var started bool
+	origStarter := m.starter
+	m.starter = func(bin string, args, env []string) (*svcProcess, error) {
+		started = true
+		return origStarter(bin, args, env)
+	}
+	m.initHook = func(e Engine, binDir, dataDir string) error {
+		initCalls++
+		if initCalls == 1 {
+			initBeforeStart = !started
+		}
+		return nil
+	}
+
+	ctx := context.Background()
+	if err := m.Acquire(ctx, "mailpit", "p1"); err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	m.Release("mailpit", "p1")
+	time.Sleep(50 * time.Millisecond)
+	if err := m.Acquire(ctx, "mailpit", "p1"); err != nil {
+		t.Fatalf("re-acquire: %v", err)
+	}
+
+	if initCalls != 2 || !initBeforeStart {
+		t.Fatalf("initCalls=%d beforeStart=%v", initCalls, initBeforeStart)
+	}
+}
+
 func TestManagerUninstallStopsAndRemoves(t *testing.T) {
 	m, _ := newManagerForTest(t, freePort(t))
 	ctx := context.Background()
