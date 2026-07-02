@@ -16,6 +16,14 @@ func TestExtractPortIgnoresConflictLines(t *testing.T) {
 	}
 }
 
+func TestExtractPortHandlesANSIColoredOutput(t *testing.T) {
+	line := "  \x1b[32m➜\x1b[39m  \x1b[1mLocal\x1b[22m:   \x1b[36mhttp://localhost:\x1b[1m5177\x1b[22m/\x1b[39m"
+	port, strong := extractPortFromLine(line)
+	if port != 5177 || !strong {
+		t.Fatalf("ansi line = (%d,%v) want (5177,true)", port, strong)
+	}
+}
+
 func TestExtractPortStillDetectsRealPorts(t *testing.T) {
 	cases := []struct {
 		line   string

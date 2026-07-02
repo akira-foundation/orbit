@@ -804,8 +804,17 @@ func pickPort(preferred int) int {
 var localhostPortRe = regexp.MustCompile(`(?i)(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])[: ](\d{2,5})`)
 var portFlagRe = regexp.MustCompile(`(?i)\bport[:= ]\s*(\d{2,5})\b`)
 var portConflictRe = regexp.MustCompile(`(?i)in use|EADDRINUSE|trying another`)
+var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
+
+func stripANSI(s string) string {
+	if !strings.Contains(s, "\x1b") {
+		return s
+	}
+	return ansiRe.ReplaceAllString(s, "")
+}
 
 func extractPortFromLine(s string) (int, bool) {
+	s = stripANSI(s)
 	if portConflictRe.MatchString(s) {
 		return 0, false
 	}
@@ -835,7 +844,7 @@ var readyMarkers = []string{
 }
 
 func looksReady(s string) bool {
-	low := strings.ToLower(s)
+	low := strings.ToLower(stripANSI(s))
 	for _, m := range readyMarkers {
 		if strings.Contains(low, m) {
 			return true
