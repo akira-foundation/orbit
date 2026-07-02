@@ -71,7 +71,7 @@ func (m *Manager) Start(projectID, path string) error {
 	cmd.Dir = path
 	cmd.Env = os.Environ()
 
-	f, err := pty.Start(cmd)
+	f, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: 80, Rows: 24})
 	if err != nil {
 		return fmt.Errorf("terminal: start pty: %w", err)
 	}

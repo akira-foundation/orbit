@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/creack/pty"
 )
 
 type fakeEmitter struct {
@@ -98,6 +100,25 @@ func TestManagerStopKillsProcess(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("process still alive after Stop")
+}
+
+func TestManagerStartSetsNonZeroInitialSize(t *testing.T) {
+	m := NewManager()
+	m.SetEmitter(newFakeEmitter())
+	t.Cleanup(m.StopAll)
+
+	dir := t.TempDir()
+	if err := m.Start("p1", dir); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	sess := m.sessions["p1"]
+	ws, err := pty.GetsizeFull(sess.pty)
+	if err != nil {
+		t.Fatalf("getsize: %v", err)
+	}
+	if ws.Cols == 0 || ws.Rows == 0 {
+		t.Fatalf("expected non-zero initial size, got %dx%d", ws.Cols, ws.Rows)
+	}
 }
 
 func TestManagerResizeDoesNotError(t *testing.T) {
