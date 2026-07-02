@@ -803,8 +803,12 @@ func pickPort(preferred int) int {
 
 var localhostPortRe = regexp.MustCompile(`(?i)(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])[: ](\d{2,5})`)
 var portFlagRe = regexp.MustCompile(`(?i)\bport[:= ]\s*(\d{2,5})\b`)
+var portConflictRe = regexp.MustCompile(`(?i)in use|EADDRINUSE|trying another`)
 
 func extractPortFromLine(s string) (int, bool) {
+	if portConflictRe.MatchString(s) {
+		return 0, false
+	}
 	if m := localhostPortRe.FindStringSubmatch(s); len(m) == 2 {
 		if p, err := strconv.Atoi(m[1]); err == nil && p > 0 && p < 65536 {
 			return p, true
