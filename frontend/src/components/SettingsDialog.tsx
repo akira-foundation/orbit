@@ -28,7 +28,6 @@ type Section = "general" | "domains" | "services" | "about";
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initialSection?: Section;
   autoAction?: "setup" | "reset" | null;
   onAutoActionConsumed?: () => void;
 }
@@ -40,60 +39,80 @@ const SECTIONS: { id: Section; label: string; icon: typeof SettingsIcon }[] = [
   { id: "about", label: "About", icon: Info },
 ];
 
+export function SettingsBody({
+  autoAction,
+  onAutoActionConsumed,
+  visible,
+  className,
+}: {
+  autoAction?: "setup" | "reset" | null;
+  onAutoActionConsumed?: () => void;
+  visible: boolean;
+  className?: string;
+}) {
+  const [section, setSection] = useState<Section>("general");
+
+  useEffect(() => {
+    if (visible && autoAction) setSection("domains");
+  }, [visible, autoAction]);
+
+  return (
+    <div className={cn("flex", className)}>
+      <aside className="w-52 shrink-0 border-r border-white/[0.06] bg-white/[0.02] p-3">
+        <p className="px-2 pt-1 pb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--orbit-subtle)]">
+          Settings
+        </p>
+        <nav className="space-y-0.5">
+          {SECTIONS.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setSection(s.id)}
+              className={cn(
+                "w-full h-8 px-2.5 rounded-md flex items-center gap-2 text-[13px] transition",
+                section === s.id
+                  ? "bg-white/[0.10] text-white"
+                  : "text-white/75 hover:bg-white/[0.05]",
+              )}
+            >
+              <s.icon className="size-3.5 shrink-0 text-[var(--orbit-muted)]" />
+              {s.label}
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      <div className="flex-1 min-w-0 overflow-auto">
+        {section === "general" && <GeneralSection />}
+        {section === "domains" && (
+          <LocalDomainsSection
+            autoAction={autoAction}
+            onAutoActionConsumed={onAutoActionConsumed}
+            visible={visible}
+          />
+        )}
+        {section === "services" && <ServicesSection />}
+        {section === "about" && <AboutSection />}
+      </div>
+    </div>
+  );
+}
+
 export function SettingsDialog({
   open,
   onOpenChange,
-  initialSection = "general",
   autoAction,
   onAutoActionConsumed,
 }: Props) {
-  const [section, setSection] = useState<Section>(initialSection);
-
-  useEffect(() => {
-    if (open) setSection(autoAction ? "domains" : initialSection);
-  }, [open, autoAction, initialSection]);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl p-0 sm:rounded-2xl">
         <DialogTitle className="sr-only">Settings</DialogTitle>
-        <div className="flex h-[520px]">
-          <aside className="w-52 shrink-0 border-r border-white/[0.06] bg-white/[0.02] p-3">
-            <p className="px-2 pt-1 pb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--orbit-subtle)]">
-              Settings
-            </p>
-            <nav className="space-y-0.5">
-              {SECTIONS.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => setSection(s.id)}
-                  className={cn(
-                    "w-full h-8 px-2.5 rounded-md flex items-center gap-2 text-[13px] transition",
-                    section === s.id
-                      ? "bg-white/[0.10] text-white"
-                      : "text-white/75 hover:bg-white/[0.05]",
-                  )}
-                >
-                  <s.icon className="size-3.5 shrink-0 text-[var(--orbit-muted)]" />
-                  {s.label}
-                </button>
-              ))}
-            </nav>
-          </aside>
-
-          <div className="flex-1 min-w-0 overflow-auto">
-            {section === "general" && <GeneralSection />}
-            {section === "domains" && (
-              <LocalDomainsSection
-                autoAction={autoAction}
-                onAutoActionConsumed={onAutoActionConsumed}
-                visible={open}
-              />
-            )}
-            {section === "services" && <ServicesSection />}
-            {section === "about" && <AboutSection />}
-          </div>
-        </div>
+        <SettingsBody
+          autoAction={autoAction}
+          onAutoActionConsumed={onAutoActionConsumed}
+          visible={open}
+          className="h-[520px]"
+        />
       </DialogContent>
     </Dialog>
   );

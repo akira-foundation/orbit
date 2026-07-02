@@ -114,7 +114,12 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
       </nav>
 
       <ul className="shrink-0 px-2 pb-2 space-y-1">
-        <Row icon={Settings} label="Settings" onClick={onOpenSettings} />
+        <Row
+          icon={Settings}
+          label="Settings"
+          active={view === "settings"}
+          onClick={onOpenSettings}
+        />
       </ul>
     </div>
   );

@@ -4,7 +4,7 @@ import type { Project } from './types'
 import { api } from './api'
 
 export type Filter = 'all' | 'running' | 'idle' | 'stopped' | 'suspended' | 'error'
-export type View = 'projects' | 'metrics' | 'project-metrics' | 'project-logs' | 'services'
+export type View = 'projects' | 'metrics' | 'project-metrics' | 'project-logs' | 'services' | 'settings'
 
 interface State {
   projects: Project[]
@@ -48,7 +48,7 @@ export const useProjects = create<State>()(persist((set, get) => ({
   error: null,
   setFilter(f) { set({ filter: f }) },
   setQuery(q) { set({ query: q }) },
-  setView(v) { set({ view: v, selectedId: v === 'metrics' || v === 'services' ? null : get().selectedId }) },
+  setView(v) { set({ view: v, selectedId: v === 'projects' ? get().selectedId : null }) },
   showProjectMetrics(id) { set({ view: 'project-metrics', selectedId: id }) },
   showProjectLogs(id) { set({ view: 'project-logs', selectedId: id }) },
   async load() {

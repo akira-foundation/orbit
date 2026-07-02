@@ -7,6 +7,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { Dashboard } from "./pages/Dashboard";
 import { MetricsPage } from "./pages/Metrics";
 import { Services } from "./pages/Services";
+import { SettingsPage } from "./pages/Settings";
 import {
   OnboardingServices,
   onboardingPending,
@@ -17,7 +18,6 @@ import { ProjectLogsPage } from "./pages/ProjectLogs";
 import { useProjects } from "./store";
 import { useWailsEvent } from "./hooks/useWailsEvent";
 import { SetupBanner } from "./components/SetupBanner";
-import { SettingsDialog } from "./components/SettingsDialog";
 import type { RuntimeStatusEvent } from "./types";
 
 const STATUS_EVENTS = [
@@ -28,11 +28,19 @@ const STATUS_EVENTS = [
 ];
 
 export function App() {
-  const { selectedId, projects, filter, query, view, load, add, patchStatus } =
-    useProjects();
+  const {
+    selectedId,
+    projects,
+    filter,
+    query,
+    view,
+    setView,
+    load,
+    add,
+    patchStatus,
+  } = useProjects();
   const [dialog, setDialog] = useState(false);
   const [palette, setPalette] = useState(false);
-  const [settings, setSettings] = useState(false);
   const [autoAction, setAutoAction] = useState<"setup" | "reset" | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(onboardingPending());
 
@@ -46,10 +54,13 @@ export function App() {
   );
   useWailsEvent<RuntimeStatusEvent>(STATUS_EVENTS, onRuntimeStatus);
 
-  const openSettings = useCallback((action: "setup" | "reset" | null) => {
-    setAutoAction(action);
-    setSettings(true);
-  }, []);
+  const openSettings = useCallback(
+    (action: "setup" | "reset" | null) => {
+      setAutoAction(action);
+      setView("settings");
+    },
+    [setView],
+  );
   useWailsEvent("menu:open-settings", () => openSettings(null));
   useWailsEvent("menu:system-setup", () => openSettings("setup"));
   useWailsEvent("menu:system-reset", () => openSettings("reset"));
@@ -101,6 +112,11 @@ export function App() {
               <MetricsPage />
             ) : view === "services" ? (
               <Services />
+            ) : view === "settings" ? (
+              <SettingsPage
+                autoAction={autoAction}
+                onAutoActionConsumed={() => setAutoAction(null)}
+              />
             ) : view === "project-metrics" && selected ? (
               <ProjectMetricsPage id={selected.id} />
             ) : view === "project-logs" && selected ? (
@@ -130,13 +146,6 @@ export function App() {
         open={palette}
         onOpenChange={setPalette}
         onAdd={() => setDialog(true)}
-      />
-
-      <SettingsDialog
-        open={settings}
-        onOpenChange={setSettings}
-        autoAction={autoAction}
-        onAutoActionConsumed={() => setAutoAction(null)}
       />
 
       {showOnboarding && (
