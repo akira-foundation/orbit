@@ -40,6 +40,10 @@ import {
   SaveServicesConfig,
   ServicesDiskUsage,
   ClearServicesData,
+  TerminalStart,
+  TerminalWrite,
+  TerminalResize,
+  TerminalBuffer,
 } from "../wailsjs/go/main/App";
 import type {
   AnalyzeResult,
@@ -128,6 +132,17 @@ export const api = {
     SaveServicesConfig(cfg as never),
   servicesDiskUsage: (): Promise<number> => cast(ServicesDiskUsage()),
   clearServicesData: (): Promise<void> => ClearServicesData(),
+  terminalStart: (projectId: string): Promise<void> =>
+    TerminalStart(projectId),
+  terminalWrite: (projectId: string, data: string): Promise<void> =>
+    TerminalWrite(projectId, data),
+  terminalResize: (
+    projectId: string,
+    cols: number,
+    rows: number,
+  ): Promise<void> => TerminalResize(projectId, cols, rows),
+  terminalBuffer: (projectId: string): Promise<string> =>
+    TerminalBuffer(projectId),
 };
 
 export type { Project, AnalyzeResult, Config };
