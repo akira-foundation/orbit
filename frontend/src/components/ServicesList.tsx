@@ -14,6 +14,96 @@ const STATUS_DOT: Record<ServiceInfo["status"], string> = {
   stopped: "bg-white/20",
 };
 
+const FAMILY_LABELS: Record<string, string> = { postgres: "PostgreSQL" };
+
+interface RowActions {
+  busy: string | null;
+  onToggle: (svc: ServiceInfo) => void;
+  onSetup: (svc: ServiceInfo) => void;
+  onRemove: (svc: ServiceInfo) => void;
+}
+
+function ServiceRow({
+  svc,
+  compact,
+  actions,
+}: {
+  svc: ServiceInfo;
+  compact: boolean;
+  actions: RowActions;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-between gap-4 px-4 py-3",
+        !compact && "rounded-lg border border-white/10 bg-white/[0.03]",
+      )}
+    >
+      <div className="flex items-start gap-3 min-w-0">
+        <span
+          className={cn(
+            "mt-1.5 size-2 rounded-full shrink-0",
+            STATUS_DOT[svc.status],
+          )}
+        />
+        <div className="min-w-0 space-y-0.5">
+          <p className="text-[13px] font-medium">{svc.displayName}</p>
+          {!compact && svc.description ? (
+            <p className="text-[11px] text-[var(--orbit-muted)] leading-relaxed">
+              {svc.description}
+            </p>
+          ) : null}
+          <p className="text-[11px] text-[var(--orbit-subtle)]">
+            {svc.version} · {svc.installed ? "installed" : "not downloaded"} ·{" "}
+            {svc.status}
+            {svc.refs > 0 ? ` · ${svc.refs} project(s)` : ""}
+          </p>
+          {svc.webUrl ? (
+            <button
+              className="inline-flex items-center gap-1 text-[11px] text-[var(--orbit-accent-2)] hover:underline"
+              onClick={() => api.openURL(`http://${svc.webUrl}`)}
+            >
+              {svc.webUrl}
+              <ExternalLink className="size-3" />
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1.5 shrink-0">
+        <Button variant="ghost" size="sm" onClick={() => actions.onSetup(svc)}>
+          <SlidersHorizontal className="size-3.5 mr-1.5" />
+          Setup
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={actions.busy === svc.engine}
+          onClick={() => actions.onToggle(svc)}
+        >
+          {svc.status === "running" ? (
+            <Square className="size-3.5 mr-1.5" />
+          ) : (
+            <Play className="size-3.5 mr-1.5" />
+          )}
+          {svc.status === "running" ? "Stop" : "Start"}
+        </Button>
+        {svc.installed ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-rose-300 hover:bg-rose-500/10 hover:text-rose-200"
+            onClick={() => actions.onRemove(svc)}
+            title="Uninstall"
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function ServicesList() {
   const [items, setItems] = useState<ServiceInfo[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -41,76 +131,59 @@ export function ServicesList() {
     }
   }
 
+  const actions: RowActions = {
+    busy,
+    onToggle: toggle,
+    onSetup: setSetupFor,
+    onRemove: setRemoveFor,
+  };
+
+  const groups = new Map<string, ServiceInfo[]>();
+  for (const svc of items) {
+    const key = svc.family || svc.engine;
+    const list = groups.get(key) ?? [];
+    list.push(svc);
+    groups.set(key, list);
+  }
+
   return (
     <div className="space-y-2.5">
-      {items.map((svc) => (
-        <div
-          key={svc.engine}
-          className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3"
-        >
-          <div className="flex items-start gap-3 min-w-0">
-            <span
-              className={cn(
-                "mt-1.5 size-2 rounded-full shrink-0",
-                STATUS_DOT[svc.status],
-              )}
-            />
-            <div className="min-w-0 space-y-0.5">
-              <p className="text-[13px] font-medium">{svc.displayName}</p>
-              {svc.description ? (
+      {[...groups.entries()].map(([key, members]) =>
+        members.length === 1 ? (
+          <ServiceRow
+            key={key}
+            svc={members[0]}
+            compact={false}
+            actions={actions}
+          />
+        ) : (
+          <div
+            key={key}
+            className="rounded-lg border border-white/10 bg-white/[0.03] overflow-hidden"
+          >
+            <div className="px-4 pt-3 pb-2 border-b border-white/[0.06] space-y-0.5">
+              <p className="text-[13px] font-medium">
+                {FAMILY_LABELS[key] ?? key}
+              </p>
+              {members[0].description ? (
                 <p className="text-[11px] text-[var(--orbit-muted)] leading-relaxed">
-                  {svc.description}
+                  {members[0].description}
                 </p>
               ) : null}
-              <p className="text-[11px] text-[var(--orbit-subtle)]">
-                {svc.version} ·{" "}
-                {svc.installed ? "installed" : "not downloaded"} · {svc.status}
-                {svc.refs > 0 ? ` · ${svc.refs} project(s)` : ""}
-              </p>
-              {svc.webUrl ? (
-                <button
-                  className="inline-flex items-center gap-1 text-[11px] text-[var(--orbit-accent-2)] hover:underline"
-                  onClick={() => api.openURL(`http://${svc.webUrl}`)}
-                >
-                  {svc.webUrl}
-                  <ExternalLink className="size-3" />
-                </button>
-              ) : null}
+            </div>
+            <div className="divide-y divide-white/[0.04]">
+              {members.map((svc) => (
+                <ServiceRow
+                  key={svc.engine}
+                  svc={svc}
+                  compact
+                  actions={actions}
+                />
+              ))}
             </div>
           </div>
-
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Button variant="ghost" size="sm" onClick={() => setSetupFor(svc)}>
-              <SlidersHorizontal className="size-3.5 mr-1.5" />
-              Setup
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy === svc.engine}
-              onClick={() => toggle(svc)}
-            >
-              {svc.status === "running" ? (
-                <Square className="size-3.5 mr-1.5" />
-              ) : (
-                <Play className="size-3.5 mr-1.5" />
-              )}
-              {svc.status === "running" ? "Stop" : "Start"}
-            </Button>
-            {svc.installed ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-rose-300 hover:bg-rose-500/10 hover:text-rose-200"
-                onClick={() => setRemoveFor(svc)}
-                title="Uninstall"
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      ))}
+        ),
+      )}
 
       {setupFor ? (
         <ServiceSetupDialog

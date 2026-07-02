@@ -119,6 +119,7 @@ export interface ServiceInfo {
   engine: string
   displayName: string
   description: string
+  family: string
   version: string
   status: "stopped" | "starting" | "running" | "error"
   webUrl: string

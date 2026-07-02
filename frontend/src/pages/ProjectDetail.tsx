@@ -266,7 +266,7 @@ export function ProjectDetail({ id }: { id: string }) {
           title="Services"
           subtitle="Local services this project uses"
         >
-          <ServicesPanel projectId={id} />
+          <ServicesPanel projectId={id} isRunning={isRunning} />
         </Card>
 
         <Card
