@@ -145,7 +145,7 @@ func Catalog() []Engine {
 			},
 		},
 	}
-	return []Engine{mp}
+	return append([]Engine{mp}, postgresEngines()...)
 }
 
 func ResolveEngine(id string) (Engine, bool) {
