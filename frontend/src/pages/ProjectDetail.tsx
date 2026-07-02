@@ -9,11 +9,13 @@ import {
   ExternalLink,
   FileText,
   FolderOpen,
+  Info,
   Lock,
   LockOpen,
   Play,
   Plug,
   RotateCcw,
+  Server,
   Square,
   Terminal,
   Timer,
@@ -28,6 +30,17 @@ import { ServicesPanel } from "../components/ServicesPanel";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { cn } from "../lib/cn";
 
+const DETAIL_TABS: {
+  id: "details" | "services" | "logs";
+  label: string;
+  subtitle: string;
+  icon: typeof Info;
+}[] = [
+  { id: "details", label: "Details", subtitle: "Resolved project metadata", icon: Info },
+  { id: "services", label: "Services", subtitle: "Local services this project uses", icon: Server },
+  { id: "logs", label: "Logs", subtitle: "Live stdout / stderr from the runtime", icon: FileText },
+];
+
 export function ProjectDetail({ id }: { id: string }) {
   const { select, remove, showProjectMetrics, showProjectLogs } = useProjects();
   const { snapshot, logs, uptimeMs, start, stop, restart, clearLogs } =
@@ -37,6 +50,7 @@ export function ProjectDetail({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [tab, setTab] = useState<"details" | "services" | "logs">("details");
   const [, copyToClipboard] = useCopyToClipboard();
 
   const reload = async () => {
@@ -221,63 +235,82 @@ export function ProjectDetail({ id }: { id: string }) {
           </div>
         </header>
 
-        <Card title="Details" subtitle="Resolved project metadata">
-          <dl className="divide-y divide-white/[0.04]">
-            <Detail label="Dev command">
-              <code className="font-mono text-[11.5px]">
-                {project.devCommand}
-              </code>
-            </Detail>
-            <Detail label="PID">
-              <span className="font-mono text-[11.5px]">
-                {snapshot?.pid ? snapshot.pid : "—"}
-              </span>
-            </Detail>
-            <Detail label="Path">
-              <div className="group inline-flex items-center gap-1.5 min-w-0 max-w-full justify-end">
-                <button
-                  onClick={() => copy("path", project.path)}
-                  className="font-mono text-[11.5px] text-[var(--orbit-text)] hover:text-[var(--orbit-accent-2)] transition-colors truncate text-right"
-                  title="Copy path"
-                >
-                  {project.path}
-                </button>
-                <button
-                  onClick={() => api.revealInFinder(project.path)}
-                  className="text-[var(--orbit-muted)] hover:text-[var(--orbit-text)]"
-                  title="Reveal in Finder"
-                >
-                  <FolderOpen className="size-3.5" />
-                </button>
-              </div>
-            </Detail>
-            <Detail label="Slug">
-              <code className="font-mono text-[11.5px]">{project.slug}</code>
-            </Detail>
-            <Detail label="Created">
-              <span className="text-[11.5px] text-[var(--orbit-muted)]">
-                {new Date(project.createdAt).toLocaleString()}
-              </span>
-            </Detail>
-          </dl>
-        </Card>
+        <div className="flex items-center gap-1 rounded-lg border border-[var(--orbit-border)] bg-white/[0.02] p-1 w-fit">
+          {DETAIL_TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                "h-7 px-3 rounded-md inline-flex items-center gap-1.5 text-[12px] transition",
+                tab === t.id
+                  ? "bg-white/[0.10] text-white"
+                  : "text-white/70 hover:bg-white/[0.05]",
+              )}
+            >
+              <t.icon className="size-3.5 shrink-0 text-[var(--orbit-muted)]" />
+              {t.label}
+            </button>
+          ))}
+        </div>
 
         <Card
-          title="Services"
-          subtitle="Local services this project uses"
+          title={DETAIL_TABS.find((t) => t.id === tab)!.label}
+          subtitle={DETAIL_TABS.find((t) => t.id === tab)!.subtitle}
         >
-          <ServicesPanel projectId={id} isRunning={isRunning} />
-        </Card>
+          {tab === "details" && (
+            <dl className="divide-y divide-white/[0.04]">
+              <Detail label="Dev command">
+                <code className="font-mono text-[11.5px]">
+                  {project.devCommand}
+                </code>
+              </Detail>
+              <Detail label="PID">
+                <span className="font-mono text-[11.5px]">
+                  {snapshot?.pid ? snapshot.pid : "—"}
+                </span>
+              </Detail>
+              <Detail label="Path">
+                <div className="group inline-flex items-center gap-1.5 min-w-0 max-w-full justify-end">
+                  <button
+                    onClick={() => copy("path", project.path)}
+                    className="font-mono text-[11.5px] text-[var(--orbit-text)] hover:text-[var(--orbit-accent-2)] transition-colors truncate text-right"
+                    title="Copy path"
+                  >
+                    {project.path}
+                  </button>
+                  <button
+                    onClick={() => api.revealInFinder(project.path)}
+                    className="text-[var(--orbit-muted)] hover:text-[var(--orbit-text)]"
+                    title="Reveal in Finder"
+                  >
+                    <FolderOpen className="size-3.5" />
+                  </button>
+                </div>
+              </Detail>
+              <Detail label="Slug">
+                <code className="font-mono text-[11.5px]">{project.slug}</code>
+              </Detail>
+              <Detail label="Created">
+                <span className="text-[11.5px] text-[var(--orbit-muted)]">
+                  {new Date(project.createdAt).toLocaleString()}
+                </span>
+              </Detail>
+            </dl>
+          )}
 
-        <Card
-          title="Logs"
-          subtitle="Live stdout / stderr from the runtime"
-        >
-          <LogsPanel logs={logs} onClear={clearLogs} />
-          {snapshot?.error && (
-            <p className="mt-2 text-[11px] text-rose-300 font-mono">
-              {snapshot.error}
-            </p>
+          {tab === "services" && (
+            <ServicesPanel projectId={id} isRunning={isRunning} />
+          )}
+
+          {tab === "logs" && (
+            <>
+              <LogsPanel logs={logs} onClear={clearLogs} />
+              {snapshot?.error && (
+                <p className="mt-2 text-[11px] text-rose-300 font-mono">
+                  {snapshot.error}
+                </p>
+              )}
+            </>
           )}
         </Card>
       </div>
