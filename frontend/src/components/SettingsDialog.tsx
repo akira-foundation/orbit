@@ -23,7 +23,8 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { resetOnboarding } from "./OnboardingServices";
 import type { ServiceInfo, ServicesConfig } from "../types";
 
-type Section = "general" | "domains" | "services" | "about";
+export type SettingsSectionID = "general" | "domains" | "services" | "about";
+type Section = SettingsSectionID;
 
 interface Props {
   open: boolean;
@@ -32,12 +33,42 @@ interface Props {
   onAutoActionConsumed?: () => void;
 }
 
-const SECTIONS: { id: Section; label: string; icon: typeof SettingsIcon }[] = [
+export const SETTINGS_SECTIONS: {
+  id: Section;
+  label: string;
+  icon: typeof SettingsIcon;
+}[] = [
   { id: "general", label: "General", icon: SettingsIcon },
   { id: "domains", label: "Local Domains", icon: Globe },
   { id: "services", label: "Services", icon: Server },
   { id: "about", label: "About", icon: Info },
 ];
+const SECTIONS = SETTINGS_SECTIONS;
+
+export function SettingsSection({
+  section,
+  autoAction,
+  onAutoActionConsumed,
+  visible,
+}: {
+  section: Section;
+  autoAction?: "setup" | "reset" | null;
+  onAutoActionConsumed?: () => void;
+  visible: boolean;
+}) {
+  if (section === "domains") {
+    return (
+      <LocalDomainsSection
+        autoAction={autoAction}
+        onAutoActionConsumed={onAutoActionConsumed}
+        visible={visible}
+      />
+    );
+  }
+  if (section === "services") return <ServicesSection />;
+  if (section === "about") return <AboutSection />;
+  return <GeneralSection />;
+}
 
 export function SettingsBody({
   autoAction,
@@ -82,16 +113,12 @@ export function SettingsBody({
       </aside>
 
       <div className="flex-1 min-w-0 overflow-auto">
-        {section === "general" && <GeneralSection />}
-        {section === "domains" && (
-          <LocalDomainsSection
-            autoAction={autoAction}
-            onAutoActionConsumed={onAutoActionConsumed}
-            visible={visible}
-          />
-        )}
-        {section === "services" && <ServicesSection />}
-        {section === "about" && <AboutSection />}
+        <SettingsSection
+          section={section}
+          autoAction={autoAction}
+          onAutoActionConsumed={onAutoActionConsumed}
+          visible={visible}
+        />
       </div>
     </div>
   );
@@ -221,6 +248,79 @@ function ToggleRow({
   );
 }
 
+const FAMILY_LABELS: Record<string, string> = { postgres: "PostgreSQL" };
+
+function FamilyDefaultRows({
+  engines,
+  defaults,
+  onChange,
+}: {
+  engines: ServiceInfo[];
+  defaults: Record<string, boolean>;
+  onChange: (defaults: Record<string, boolean>) => void;
+}) {
+  const families = new Map<string, ServiceInfo[]>();
+  for (const e of engines) {
+    if (!e.family || e.family === e.engine) continue;
+    const list = families.get(e.family) ?? [];
+    list.push(e);
+    families.set(e.family, list);
+  }
+
+  return (
+    <>
+      {[...families.entries()].map(([family, members]) => {
+        const selected =
+          members.find((m) => defaults[m.engine]) ?? members[0];
+        const enabled = members.some((m) => defaults[m.engine]);
+
+        const withOnly = (engine: string, on: boolean) => {
+          const next = { ...defaults };
+          for (const m of members) next[m.engine] = false;
+          next[engine] = on;
+          onChange(next);
+        };
+
+        return (
+          <li
+            key={family}
+            className="flex items-center justify-between gap-4 px-4 py-2.5"
+          >
+            <div className="min-w-0">
+              <p className="text-[12px] font-medium">
+                {FAMILY_LABELS[family] ?? family}
+              </p>
+              {members[0].description ? (
+                <p className="text-[10px] text-[var(--orbit-muted)]">
+                  {members[0].description}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <select
+                value={selected.engine}
+                disabled={!enabled}
+                onChange={(ev) => withOnly(ev.target.value, true)}
+                className="h-7 rounded-md border border-white/10 bg-white/[0.04] px-1.5 text-[11px] disabled:opacity-50"
+              >
+                {members.map((m) => (
+                  <option key={m.engine} value={m.engine} className="bg-zinc-900">
+                    {m.displayName.replace(`${FAMILY_LABELS[family] ?? family} `, "")}
+                  </option>
+                ))}
+              </select>
+              <Switch
+                checked={enabled}
+                onCheckedChange={(v) => withOnly(selected.engine, v)}
+              />
+            </div>
+          </li>
+        );
+      })}
+    </>
+  );
+}
+
 function formatBytes(n: number): string {
   if (n <= 0) return "0 B";
   const units = ["B", "KB", "MB", "GB"];
@@ -304,31 +404,38 @@ function ServicesSection() {
                 </p>
               </div>
               <ul className="divide-y divide-white/[0.04]">
-                {engines.map((e) => (
-                  <li
-                    key={e.engine}
-                    className="flex items-center justify-between gap-4 px-4 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-[12px] font-medium">{e.displayName}</p>
-                      {e.description ? (
-                        <p className="text-[10px] text-[var(--orbit-muted)]">
-                          {e.description}
-                        </p>
-                      ) : null}
-                    </div>
-                    <Switch
-                      checked={!!cfg.defaults[e.engine]}
-                      onCheckedChange={(v) =>
-                        save({
-                          ...cfg,
-                          defaults: { ...cfg.defaults, [e.engine]: v },
-                        })
-                      }
-                      className="shrink-0"
-                    />
-                  </li>
-                ))}
+                {engines
+                  .filter((e) => !e.family || e.family === e.engine)
+                  .map((e) => (
+                    <li
+                      key={e.engine}
+                      className="flex items-center justify-between gap-4 px-4 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-medium">{e.displayName}</p>
+                        {e.description ? (
+                          <p className="text-[10px] text-[var(--orbit-muted)]">
+                            {e.description}
+                          </p>
+                        ) : null}
+                      </div>
+                      <Switch
+                        checked={!!cfg.defaults[e.engine]}
+                        onCheckedChange={(v) =>
+                          save({
+                            ...cfg,
+                            defaults: { ...cfg.defaults, [e.engine]: v },
+                          })
+                        }
+                        className="shrink-0"
+                      />
+                    </li>
+                  ))}
+                <FamilyDefaultRows
+                  engines={engines}
+                  defaults={cfg.defaults}
+                  onChange={(defaults) => save({ ...cfg, defaults })}
+                />
               </ul>
             </div>
 
