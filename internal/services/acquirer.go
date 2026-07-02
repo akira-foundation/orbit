@@ -26,6 +26,9 @@ func NewAcquirer(store *Store, baseDir string) *Acquirer {
 }
 
 func (a *Acquirer) binPath(e Engine, p Platform) string {
+	if e.ExtractTree {
+		return filepath.Join(a.baseDir, e.ID, e.Version, filepath.FromSlash(p.ArchiveBinaryPath))
+	}
 	return filepath.Join(a.baseDir, e.ID, e.Version, filepath.Base(p.ArchiveBinaryPath))
 }
 
@@ -66,11 +69,18 @@ func (a *Acquirer) Ensure(ctx context.Context, e Engine) (string, error) {
 		return "", fmt.Errorf("services: %s checksum mismatch: got %s want %s", e.ID, gotHex, p.SHA256)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return "", err
-	}
-	if err := extractFromTarGz(archive, p.ArchiveBinaryPath, dst); err != nil {
-		return "", fmt.Errorf("services: extract %s: %w", e.ID, err)
+	if e.ExtractTree {
+		root := filepath.Join(a.baseDir, e.ID, e.Version)
+		if err := extractTreeFromTarGz(archive, root); err != nil {
+			return "", fmt.Errorf("services: extract %s: %w", e.ID, err)
+		}
+	} else {
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return "", err
+		}
+		if err := extractFromTarGz(archive, p.ArchiveBinaryPath, dst); err != nil {
+			return "", fmt.Errorf("services: extract %s: %w", e.ID, err)
+		}
 	}
 	if err := os.Chmod(dst, 0o755); err != nil {
 		return "", err
@@ -122,6 +132,56 @@ func extractFromTarGz(archive []byte, wantPath, dst string) error {
 		defer out.Close()
 		_, err = io.Copy(out, tr)
 		return err
+	}
+}
+
+func extractTreeFromTarGz(archive []byte, root string) error {
+	gz, err := gzip.NewReader(strings.NewReader(string(archive)))
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		clean := path.Clean(hdr.Name)
+		if clean == "." || strings.HasPrefix(clean, "..") {
+			continue
+		}
+		dst := filepath.Join(root, filepath.FromSlash(clean))
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(dst, 0o755); err != nil {
+				return err
+			}
+		case tar.TypeSymlink:
+			_ = os.MkdirAll(filepath.Dir(dst), 0o755)
+			_ = os.Remove(dst)
+			if err := os.Symlink(hdr.Linkname, dst); err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+				return err
+			}
+			out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(hdr.Mode)&0o777)
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(out, tr); err != nil {
+				_ = out.Close()
+				return err
+			}
+			if err := out.Close(); err != nil {
+				return err
+			}
+		}
 	}
 }
 

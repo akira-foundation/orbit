@@ -108,3 +108,74 @@ func TestAcquirerRejectsBadChecksum(t *testing.T) {
 func e_platformKey() string {
 	return Engine{}.PlatformKey()
 }
+
+func makeTreeTarGz(t *testing.T, files map[string][]byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	for name, content := range files {
+		hdr := &tar.Header{Name: name, Mode: 0o755, Size: int64(len(content))}
+		if err := tw.WriteHeader(hdr); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write(content); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = tw.Close()
+	_ = gz.Close()
+	return buf.Bytes()
+}
+
+func TestAcquirerExtractTree(t *testing.T) {
+	archive := makeTreeTarGz(t, map[string][]byte{
+		"pgroot/bin/postgres": []byte("pg"),
+		"pgroot/bin/initdb":   []byte("init"),
+		"pgroot/lib/libx.so":  []byte("lib"),
+	})
+	sum := sha256.Sum256(archive)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/pg.tar.gz", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(archive)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	e := Engine{
+		ID:          "postgres-18",
+		Version:     "18.4.0",
+		ExtractTree: true,
+		Platforms: map[string]Platform{
+			e_platformKey(): {
+				URL:               srv.URL + "/pg.tar.gz",
+				SHA256:            hex.EncodeToString(sum[:]),
+				ArchiveBinaryPath: "pgroot/bin/postgres",
+			},
+		},
+	}
+	base := t.TempDir()
+	a := NewAcquirer(newTestDB(t), base)
+
+	bin, err := a.Ensure(context.Background(), e)
+	if err != nil {
+		t.Fatalf("ensure: %v", err)
+	}
+	want := filepath.Join(base, "postgres-18", "18.4.0", "pgroot", "bin", "postgres")
+	if bin != want {
+		t.Fatalf("bin = %s want %s", bin, want)
+	}
+	for _, rel := range []string{"pgroot/bin/initdb", "pgroot/lib/libx.so"} {
+		if _, err := os.Stat(filepath.Join(base, "postgres-18", "18.4.0", rel)); err != nil {
+			t.Fatalf("missing extracted file %s: %v", rel, err)
+		}
+	}
+	st, _ := os.Stat(bin)
+	if st.Mode().Perm()&0o111 == 0 {
+		t.Fatalf("binary not executable: %v", st.Mode())
+	}
+	if !a.IsInstalled(context.Background(), e) {
+		t.Fatal("expected installed")
+	}
+}
