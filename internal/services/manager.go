@@ -302,6 +302,7 @@ func (m *Manager) List(ctx context.Context) []ServiceInfo {
 			Engine:      e.ID,
 			DisplayName: e.DisplayName,
 			Description: e.Description,
+			Family:      e.Family,
 			Version:     e.Version,
 			Status:      snap.Status,
 			WebURL:      e.WebDomain + ".orbit.test",
@@ -426,6 +427,7 @@ type ServiceInfo struct {
 	Engine      string `json:"engine"`
 	DisplayName string `json:"displayName"`
 	Description string `json:"description"`
+	Family      string `json:"family"`
 	Version     string `json:"version"`
 	Status      string `json:"status"`
 	WebURL      string `json:"webUrl"`
