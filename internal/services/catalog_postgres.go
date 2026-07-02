@@ -95,6 +95,15 @@ func postgresEngines() []Engine {
 			if err != nil {
 				return fmt.Errorf("initdb: %w: %s", err, out)
 			}
+			hba, err := os.OpenFile(filepath.Join(dataDir, "pg_hba.conf"),
+				os.O_APPEND|os.O_WRONLY, 0o600)
+			if err != nil {
+				return fmt.Errorf("initdb: open pg_hba.conf: %w", err)
+			}
+			defer hba.Close()
+			if _, err := hba.WriteString("\nhost all all 127.0.0.0/8 trust\n"); err != nil {
+				return fmt.Errorf("initdb: extend pg_hba.conf: %w", err)
+			}
 			return nil
 		}
 		e.Provision = func(ctx context.Context, port int, slug string) (map[string]string, error) {
