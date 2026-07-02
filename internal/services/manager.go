@@ -118,7 +118,11 @@ func (m *Manager) Acquire(ctx context.Context, engine, projectID string) error {
 		return err
 	}
 
-	proc, err := m.starter(bin, e.Args(platformOrEmpty(e), dataDir), nil)
+	var procEnv []string
+	if len(e.Env) > 0 {
+		procEnv = append(os.Environ(), e.Env...)
+	}
+	proc, err := m.starter(bin, e.Args(platformOrEmpty(e), dataDir), procEnv)
 	if err != nil {
 		m.fail(engine)
 		return err

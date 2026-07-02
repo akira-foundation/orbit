@@ -179,3 +179,46 @@ func TestAcquirerExtractTree(t *testing.T) {
 		t.Fatal("expected installed")
 	}
 }
+
+func TestAcquirerRawBinary(t *testing.T) {
+	payload := []byte("#!/bin/sh\necho minio\n")
+	sum := sha256.Sum256(payload)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/minio.darwin-arm64.RELEASE.X", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(payload)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	e := Engine{
+		ID:        "minio",
+		Version:   "RELEASE.X",
+		RawBinary: true,
+		Platforms: map[string]Platform{
+			e_platformKey(): {
+				URL:               srv.URL + "/minio.darwin-arm64.RELEASE.X",
+				SHA256:            hex.EncodeToString(sum[:]),
+				ArchiveBinaryPath: "minio",
+			},
+		},
+	}
+	base := t.TempDir()
+	a := NewAcquirer(newTestDB(t), base)
+
+	bin, err := a.Ensure(context.Background(), e)
+	if err != nil {
+		t.Fatalf("ensure: %v", err)
+	}
+	if bin != filepath.Join(base, "minio", "RELEASE.X", "minio") {
+		t.Fatalf("bin = %s", bin)
+	}
+	data, err := os.ReadFile(bin)
+	if err != nil || string(data) != string(payload) {
+		t.Fatalf("content mismatch err=%v", err)
+	}
+	st, _ := os.Stat(bin)
+	if st.Mode().Perm()&0o111 == 0 {
+		t.Fatalf("not executable: %v", st.Mode())
+	}
+}

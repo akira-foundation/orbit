@@ -69,18 +69,8 @@ func (a *Acquirer) Ensure(ctx context.Context, e Engine) (string, error) {
 		return "", fmt.Errorf("services: %s checksum mismatch: got %s want %s", e.ID, gotHex, p.SHA256)
 	}
 
-	if e.ExtractTree {
-		root := filepath.Join(a.baseDir, e.ID, e.Version)
-		if err := extractTreeFromTarGz(archive, root); err != nil {
-			return "", fmt.Errorf("services: extract %s: %w", e.ID, err)
-		}
-	} else {
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return "", err
-		}
-		if err := extractFromTarGz(archive, p.ArchiveBinaryPath, dst); err != nil {
-			return "", fmt.Errorf("services: extract %s: %w", e.ID, err)
-		}
+	if err := a.materialize(e, p, archive, dst); err != nil {
+		return "", fmt.Errorf("services: extract %s: %w", e.ID, err)
 	}
 	if err := os.Chmod(dst, 0o755); err != nil {
 		return "", err
@@ -133,6 +123,22 @@ func extractFromTarGz(archive []byte, wantPath, dst string) error {
 		_, err = io.Copy(out, tr)
 		return err
 	}
+}
+
+func (a *Acquirer) materialize(e Engine, p Platform, archive []byte, dst string) error {
+	if e.RawBinary {
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(dst, archive, 0o755)
+	}
+	if e.ExtractTree {
+		return extractTreeFromTarGz(archive, filepath.Join(a.baseDir, e.ID, e.Version))
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	return extractFromTarGz(archive, p.ArchiveBinaryPath, dst)
 }
 
 func extractTreeFromTarGz(archive []byte, root string) error {
