@@ -18,6 +18,7 @@ import (
 	"orbit-app/internal/runtime"
 	"orbit-app/internal/services"
 	"orbit-app/internal/system"
+	"orbit-app/internal/terminal"
 	orbittls "orbit-app/internal/tls"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -34,6 +35,7 @@ type App struct {
 	services    *services.Manager
 	svcStore    *services.Store
 	svcConfig   *services.ConfigStore
+	terminals   *terminal.Manager
 }
 
 func NewApp() *App {
@@ -59,6 +61,8 @@ func (a *App) startup(ctx context.Context) {
 	a.service = projects.NewService(repo, analyzer.New(), cfg.DomainSuffix)
 	a.runtime = runtime.New(a.service, sqlDB, a.cfg)
 	a.runtime.SetEmitter(runtime.NewWailsEmitter(ctx))
+	a.terminals = terminal.NewManager()
+	a.terminals.SetEmitter(runtime.NewWailsEmitter(ctx))
 	a.registry = proxy.New(a.service, cfg.DomainSuffix)
 
 	svcStore := services.NewStore(sqlDB)
@@ -114,6 +118,9 @@ func (a *App) shutdown(_ context.Context) {
 	}
 	if a.services != nil {
 		a.services.StopAll()
+	}
+	if a.terminals != nil {
+		a.terminals.StopAll()
 	}
 	if a.runtime != nil {
 		a.runtime.Close()
@@ -196,6 +203,7 @@ func (a *App) SetProjectSecure(id string, secure bool) error {
 func (a *App) DeleteProject(id string) error {
 	a.runtime.RecordEvent(id, runtime.LevelWarn, runtime.SourceProject,
 		"project deleted")
+	a.terminals.Stop(id)
 	return a.service.Delete(a.ctx, id)
 }
 
@@ -330,6 +338,26 @@ func (a *App) ServiceSetup(engine string) (services.SetupInfo, error) {
 		return services.SetupInfo{}, fmt.Errorf("unknown engine %q", engine)
 	}
 	return e.Setup, nil
+}
+
+func (a *App) TerminalStart(projectID string) error {
+	proj, err := a.service.Get(a.ctx, projectID)
+	if err != nil {
+		return err
+	}
+	return a.terminals.Start(projectID, proj.Path)
+}
+
+func (a *App) TerminalWrite(projectID, data string) error {
+	return a.terminals.Write(projectID, []byte(data))
+}
+
+func (a *App) TerminalResize(projectID string, cols, rows int) error {
+	return a.terminals.Resize(projectID, cols, rows)
+}
+
+func (a *App) TerminalBuffer(projectID string) (string, error) {
+	return string(a.terminals.Buffer(projectID)), nil
 }
 
 func (a *App) EnableServiceForProject(projectID, engine string) error {
