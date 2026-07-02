@@ -36,12 +36,28 @@ export function ProjectTerminal({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     if (!term || !containerRef.current) return;
-    const observer = new ResizeObserver(() => {
+
+    const lastSize = { cols: term.cols, rows: term.rows };
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+
+    const applyResize = () => {
       fitRef.current?.fit();
+      if (term.cols === lastSize.cols && term.rows === lastSize.rows) return;
+      lastSize.cols = term.cols;
+      lastSize.rows = term.rows;
       api.terminalResize(projectId, term.cols, term.rows);
+    };
+
+    const observer = new ResizeObserver(() => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(applyResize, 120);
     });
     observer.observe(containerRef.current);
-    return () => observer.disconnect();
+
+    return () => {
+      observer.disconnect();
+      if (debounce) clearTimeout(debounce);
+    };
   }, [term, projectId]);
 
   return (
