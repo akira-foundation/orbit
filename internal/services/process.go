@@ -60,21 +60,35 @@ func (p *svcProcess) forceKill() error {
 	return syscall.Kill(-p.pgid, syscall.SIGKILL)
 }
 
-func reapByPort(host string, port int) {
+func portListenerPIDs(host string, port int) []int {
 	if port == 0 {
-		return
+		return nil
 	}
 	out, err := exec.Command("lsof", "-nP",
 		fmt.Sprintf("-iTCP@%s:%d", host, port), "-sTCP:LISTEN", "-t").Output()
 	if err != nil {
-		return
+		return nil
 	}
+	var pids []int
 	for _, line := range strings.Fields(string(out)) {
 		pid, perr := strconv.Atoi(line)
 		if perr != nil || pid <= 0 {
 			continue
 		}
+		pids = append(pids, pid)
+	}
+	return pids
+}
+
+func reapByPort(host string, port int) {
+	for _, pid := range portListenerPIDs(host, port) {
 		_ = syscall.Kill(pid, syscall.SIGTERM)
+	}
+}
+
+func killByPort(host string, port int) {
+	for _, pid := range portListenerPIDs(host, port) {
+		_ = syscall.Kill(pid, syscall.SIGKILL)
 	}
 }
 

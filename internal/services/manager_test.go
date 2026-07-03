@@ -6,14 +6,17 @@ import (
 	"net"
 	"os/exec"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
 
 type fakeRunner struct {
-	mu   sync.Mutex
-	lns  []net.Listener
-	addr string
+	mu         sync.Mutex
+	lns        []net.Listener
+	addr       string
+	ignoreTerm bool
+	lastProc   *svcProcess
 }
 
 func (f *fakeRunner) run(_ string, _, _ []string) (*svcProcess, error) {
@@ -23,6 +26,7 @@ func (f *fakeRunner) run(_ string, _, _ []string) (*svcProcess, error) {
 	}
 	f.mu.Lock()
 	f.lns = append(f.lns, ln)
+	ignoreTerm := f.ignoreTerm
 	f.mu.Unlock()
 	go func() {
 		for {
@@ -33,12 +37,20 @@ func (f *fakeRunner) run(_ string, _, _ []string) (*svcProcess, error) {
 			_ = c.Close()
 		}
 	}()
-	cmd := exec.Command("sleep", "60")
+	var cmd *exec.Cmd
+	if ignoreTerm {
+		cmd = exec.Command("sh", "-c", "trap '' TERM; while :; do sleep 1; done")
+	} else {
+		cmd = exec.Command("sleep", "60")
+	}
 	p, err := startCmdForTest(cmd)
 	if err != nil {
 		_ = ln.Close()
 		return nil, err
 	}
+	f.mu.Lock()
+	f.lastProc = p
+	f.mu.Unlock()
 	go func() {
 		_ = p.cmd.Wait()
 		_ = ln.Close()
@@ -75,6 +87,7 @@ func newManagerForTest(t *testing.T, webPort int) (*Manager, *fakeRunner) {
 	m.dialAddr = func(_ Engine) string { return fr.addr }
 	m.ensure = func(_ context.Context, _ Engine) (string, error) { return "fake-bin", nil }
 	m.reap = func(string) {}
+	m.reapForce = func(string) {}
 	t.Cleanup(fr.closeAll)
 	t.Cleanup(m.StopAll)
 	return m, fr
@@ -217,5 +230,63 @@ func TestManagerForceStopClearsAllRefs(t *testing.T) {
 	}
 	if got := m.Status("mailpit"); got.Status != "stopped" || got.Refs != 0 {
 		t.Fatalf("after force stop: %+v", got)
+	}
+}
+
+func TestForceStopReapsUntrackedProcess(t *testing.T) {
+	m, fr := newManagerForTest(t, freePort(t))
+	ctx := context.Background()
+
+	if err := m.Acquire(ctx, "mailpit", "p1"); err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+
+	fr.mu.Lock()
+	proc := fr.lastProc
+	fr.mu.Unlock()
+
+	m.mu.Lock()
+	delete(m.instances, "mailpit")
+	m.mu.Unlock()
+
+	m.reap = func(string) { _ = syscall.Kill(proc.pgid, syscall.SIGTERM) }
+	m.reapForce = func(string) { _ = syscall.Kill(proc.pgid, syscall.SIGKILL) }
+
+	if got := m.Status("mailpit"); got.Status != "running" {
+		t.Fatalf("expected untracked process to read as running, got %+v", got)
+	}
+
+	m.ForceStop("mailpit")
+
+	deadline := time.Now().Add(4 * time.Second)
+	for time.Now().Before(deadline) {
+		if m.Status("mailpit").Status == "stopped" {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("untracked process was not reaped, status=%+v", m.Status("mailpit"))
+}
+
+func TestTerminateEscalatesToSigkillWhenSigtermIgnored(t *testing.T) {
+	m, fr := newManagerForTest(t, freePort(t))
+	fr.mu.Lock()
+	fr.ignoreTerm = true
+	fr.mu.Unlock()
+
+	if err := m.Acquire(context.Background(), "mailpit", "p1"); err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	time.Sleep(200 * time.Millisecond)
+
+	start := time.Now()
+	m.ForceStop("mailpit")
+	elapsed := time.Since(start)
+
+	if got := m.Status("mailpit"); got.Status != "stopped" {
+		t.Fatalf("expected stopped after escalation, got %+v", got)
+	}
+	if elapsed < 3*time.Second {
+		t.Fatalf("expected escalation to wait out the grace period, took %s", elapsed)
 	}
 }

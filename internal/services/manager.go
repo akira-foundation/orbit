@@ -27,12 +27,13 @@ type Manager struct {
 	instances map[string]*instance
 	held      map[string][]string
 
-	starter  func(bin string, args, env []string) (*svcProcess, error)
-	ensure   func(ctx context.Context, e Engine) (string, error)
-	dialAddr func(e Engine) string
-	reap     func(engine string)
-	initHook func(e Engine, binDir, dataDir string) error
-	now      func() time.Time
+	starter   func(bin string, args, env []string) (*svcProcess, error)
+	ensure    func(ctx context.Context, e Engine) (string, error)
+	dialAddr  func(e Engine) string
+	reap      func(engine string)
+	reapForce func(engine string)
+	initHook  func(e Engine, binDir, dataDir string) error
+	now       func() time.Time
 }
 
 func NewManager(acq *Acquirer, resolver *Resolver, cfg *ConfigStore, dataDir string) *Manager {
@@ -55,6 +56,14 @@ func NewManager(acq *Acquirer, resolver *Resolver, cfg *ConfigStore, dataDir str
 			reapByPort(e.Bind, e.WebPort)
 			reapByPort(e.Bind, e.SMTPPort)
 			reapByPort(e.Bind, e.APIPort)
+		}
+	}
+	m.reapForce = func(engine string) {
+		if e, ok := ResolveEngine(engine); ok {
+			killByPort(e.Bind, e.Port)
+			killByPort(e.Bind, e.WebPort)
+			killByPort(e.Bind, e.SMTPPort)
+			killByPort(e.Bind, e.APIPort)
 		}
 	}
 	m.initHook = func(e Engine, binDir, dataDir string) error {
@@ -171,12 +180,35 @@ func (m *Manager) Release(engine, projectID string) {
 func (m *Manager) terminate(engine string, proc *svcProcess) {
 	if proc != nil {
 		_ = proc.kill()
-		go func() {
-			time.Sleep(5 * time.Second)
-			_ = proc.forceKill()
-		}()
 	}
-	m.reap(engine)
+
+	e, ok := ResolveEngine(engine)
+	if !ok {
+		return
+	}
+
+	grace := m.now().Add(3 * time.Second)
+	for m.now().Before(grace) {
+		m.reap(engine)
+		if !m.reachable(e) {
+			return
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+
+	if proc != nil {
+		_ = proc.forceKill()
+	}
+	m.reapForce(engine)
+
+	settle := m.now().Add(1 * time.Second)
+	for m.now().Before(settle) {
+		if !m.reachable(e) {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	log.Printf("[services] %s did not stop within grace period", engine)
 }
 
 func (m *Manager) reachable(e Engine) bool {

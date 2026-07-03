@@ -151,6 +151,17 @@ body {
     background: transparent;
 }
 
+.xterm-viewport::-webkit-scrollbar {
+    width: 8px;
+}
+.xterm-viewport::-webkit-scrollbar-thumb {
+    background: var(--orbit-border-strong);
+    border-radius: 4px;
+}
+.xterm-viewport::-webkit-scrollbar-track {
+    background: transparent;
+}
+
 /* mac titlebar drag region — Wails + WebKit */
 .drag {
     -webkit-app-region: drag;
