@@ -38,18 +38,23 @@ export function ServicesPanel({
 }) {
   const [all, setAll] = useState<ServiceInfo[]>([]);
   const [enabled, setEnabled] = useState<string[]>([]);
+  const [detected, setDetected] = useState<string[]>([]);
+  const [showAll, setShowAll] = useState(false);
 
   async function refresh() {
-    const [services, projEnabled] = await Promise.all([
+    const [services, projEnabled, detectedTokens] = await Promise.all([
       api.listServices(),
       api.projectServices(projectId),
+      api.detectedServices(projectId),
     ]);
     setAll(services);
     setEnabled(projEnabled);
+    setDetected(detectedTokens);
   }
 
   useEffect(() => {
     refresh();
+    setShowAll(false);
   }, [projectId]);
 
   async function toggle(engine: string, on: boolean) {
@@ -61,9 +66,22 @@ export function ServicesPanel({
     await refresh();
   }
 
-  const simple = all.filter((svc) => svc.family !== "postgres");
-  const pgMembers = all.filter((svc) => svc.family === "postgres");
+  const allSimple = all.filter((svc) => svc.family !== "postgres");
+  const allPgMembers = all.filter((svc) => svc.family === "postgres");
   const pgEnabled = enabled.find((e) => e.startsWith("postgres-")) ?? null;
+
+  const simple = showAll
+    ? allSimple
+    : allSimple.filter(
+        (svc) => detected.includes(svc.engine) || enabled.includes(svc.engine),
+      );
+  const showPostgres =
+    showAll || detected.includes("postgres") || !!pgEnabled;
+  const pgMembers = showPostgres ? allPgMembers : [];
+  const hiddenCount =
+    allSimple.length -
+    simple.length +
+    (allPgMembers.length > 0 && !showPostgres ? 1 : 0);
 
   async function setPgVersion(major: string) {
     if (pgEnabled) await api.disableServiceForProject(projectId, pgEnabled);
@@ -114,6 +132,15 @@ export function ServicesPanel({
             }
           />
         </ServiceRow>
+      ) : null}
+
+      {!showAll && hiddenCount > 0 ? (
+        <button
+          onClick={() => setShowAll(true)}
+          className="self-start text-[11px] text-[var(--orbit-accent-2)] hover:underline"
+        >
+          Show all services ({hiddenCount} not detected)
+        </button>
       ) : null}
 
       {isRunning ? (

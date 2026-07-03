@@ -34,6 +34,7 @@ import {
   EnableServiceForProject,
   DisableServiceForProject,
   ProjectServices,
+  DetectedServices,
   UninstallService,
   ServiceSetup,
   ServicesConfig,
@@ -124,6 +125,8 @@ export const api = {
     DisableServiceForProject(projectId, engine),
   projectServices: async (projectId: string): Promise<string[]> =>
     (await cast<string[] | null>(ProjectServices(projectId))) ?? [],
+  detectedServices: async (projectId: string): Promise<string[]> =>
+    (await cast<string[] | null>(DetectedServices(projectId))) ?? [],
   uninstallService: (engine: string): Promise<void> => UninstallService(engine),
   serviceSetup: (engine: string): Promise<ServiceSetupType> =>
     cast(ServiceSetup(engine)),

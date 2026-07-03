@@ -372,6 +372,14 @@ func (a *App) ProjectServices(projectID string) ([]string, error) {
 	return a.svcStore.EnabledEngines(a.ctx, projectID)
 }
 
+func (a *App) DetectedServices(projectID string) ([]string, error) {
+	p, err := a.service.Get(a.ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return services.DetectTokens(p.Path), nil
+}
+
 func (a *App) SystemStatus() system.Status {
 	return system.Check()
 }

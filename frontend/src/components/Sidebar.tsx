@@ -55,7 +55,7 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       <nav className="flex-1 overflow-auto scrollbar-thin px-2 pt-2 pb-2">
-        <Section title="Workspace">
+        <Section title="Views">
           <Row
             icon={BarChart3}
             label="Metrics"
@@ -70,30 +70,35 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
             tone={runningServices > 0 ? "ok" : undefined}
             onClick={() => setView("services")}
           />
-          {filterItems.map((it) => {
-            const count = countFor(it.id, projects);
-            return (
-              <Row
-                key={it.id}
-                icon={it.icon}
-                label={it.label}
-                badge={count > 0 ? count : undefined}
-                tone={
-                  it.id === "running"
-                    ? "ok"
-                    : it.id === "error"
-                      ? "warn"
-                      : undefined
-                }
-                active={view === "projects" && !selectedId && filter === it.id}
-                onClick={() => {
-                  select(null);
-                  setView("projects");
-                  setFilter(it.id);
-                }}
-              />
-            );
-          })}
+        </Section>
+
+        <Section title="Projects">
+          {filterItems
+            .filter((it) => it.id === "all" || countFor(it.id, projects) > 0)
+            .map((it) => {
+              const count = countFor(it.id, projects);
+              return (
+                <Row
+                  key={it.id}
+                  icon={it.icon}
+                  label={it.label}
+                  badge={count > 0 ? count : undefined}
+                  tone={
+                    it.id === "running"
+                      ? "ok"
+                      : it.id === "error"
+                        ? "warn"
+                        : undefined
+                  }
+                  active={view === "projects" && !selectedId && filter === it.id}
+                  onClick={() => {
+                    select(null);
+                    setView("projects");
+                    setFilter(it.id);
+                  }}
+                />
+              );
+            })}
         </Section>
 
         {recent.length > 0 && (
