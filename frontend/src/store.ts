@@ -4,7 +4,7 @@ import type { Project } from './types'
 import { api } from './api'
 
 export type Filter = 'all' | 'running' | 'idle' | 'stopped' | 'suspended' | 'error'
-export type View = 'projects' | 'metrics' | 'project-metrics' | 'project-logs' | 'services' | 'settings'
+export type View = 'projects' | 'metrics' | 'project-metrics' | 'project-logs' | 'services' | 'runtimes' | 'settings'
 
 interface State {
   projects: Project[]

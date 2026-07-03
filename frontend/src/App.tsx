@@ -7,6 +7,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { Dashboard } from "./pages/Dashboard";
 import { MetricsPage } from "./pages/Metrics";
 import { Services } from "./pages/Services";
+import { Runtimes } from "./pages/Runtimes";
 import { SettingsPage } from "./pages/Settings";
 import {
   OnboardingServices,
@@ -112,6 +113,8 @@ export function App() {
               <MetricsPage />
             ) : view === "services" ? (
               <Services />
+            ) : view === "runtimes" ? (
+              <Runtimes />
             ) : view === "settings" ? (
               <SettingsPage
                 autoAction={autoAction}

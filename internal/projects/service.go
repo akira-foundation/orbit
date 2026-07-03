@@ -45,6 +45,7 @@ func (s *Service) Create(ctx context.Context, path string) (*Project, error) {
 		PackageManager:    a.PackageManager,
 		DevCommand:        a.DevCommand,
 		DevPort:           a.DevPort,
+		NodeVersion:       a.NodeVersion,
 		Status:            StatusStopped,
 	}
 	for name, cmd := range a.Scripts {

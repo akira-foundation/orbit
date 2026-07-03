@@ -1,11 +1,11 @@
 -- name: CreateProject :one
 INSERT INTO projects (
     id, name, path, slug, local_domain,
-    detected_framework, package_manager, dev_command, dev_port,
+    detected_framework, package_manager, dev_command, dev_port, node_version,
     status, created_at, updated_at
 ) VALUES (
     ?, ?, ?, ?, ?,
-    ?, ?, ?, ?,
+    ?, ?, ?, ?, ?,
     ?, ?, ?
 )
 RETURNING *;

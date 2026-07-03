@@ -13,6 +13,7 @@ import {
   Box,
   BarChart3,
   Server,
+  Cpu,
   Settings,
 } from "lucide-react";
 
@@ -69,6 +70,12 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
             badge={runningServices > 0 ? runningServices : undefined}
             tone={runningServices > 0 ? "ok" : undefined}
             onClick={() => setView("services")}
+          />
+          <Row
+            icon={Cpu}
+            label="Runtimes"
+            active={view === "runtimes"}
+            onClick={() => setView("runtimes")}
           />
         </Section>
 

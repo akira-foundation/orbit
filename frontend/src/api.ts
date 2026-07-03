@@ -41,6 +41,9 @@ import {
   SaveServicesConfig,
   ServicesDiskUsage,
   ClearServicesData,
+  ListNodeVersions,
+  InstallNodeVersion,
+  RemoveNodeVersion,
   TerminalStart,
   TerminalWrite,
   TerminalResize,
@@ -58,6 +61,7 @@ import type {
   ServiceSnapshot,
   ServiceSetup as ServiceSetupType,
   ServicesConfig as ServicesConfigType,
+  NodeVersionInfo,
 } from "./types";
 
 function cast<T>(p: Promise<unknown>): Promise<T> {
@@ -135,6 +139,12 @@ export const api = {
     SaveServicesConfig(cfg as never),
   servicesDiskUsage: (): Promise<number> => cast(ServicesDiskUsage()),
   clearServicesData: (): Promise<void> => ClearServicesData(),
+  listNodeVersions: async (): Promise<NodeVersionInfo[]> =>
+    (await cast<NodeVersionInfo[] | null>(ListNodeVersions())) ?? [],
+  installNodeVersion: (version: string): Promise<void> =>
+    InstallNodeVersion(version),
+  removeNodeVersion: (version: string): Promise<void> =>
+    RemoveNodeVersion(version),
   terminalStart: (projectId: string): Promise<void> =>
     TerminalStart(projectId),
   terminalWrite: (projectId: string, data: string): Promise<void> =>

@@ -77,17 +77,18 @@ func installCommand(pm string) []string {
 
 // installHandle runs the install command in the project directory. Returns a
 // processHandle so the caller can stream stdout/stderr and wait/kill.
-func installHandle(proj *projects.Project) (*processHandle, error) {
+func installHandle(proj *projects.Project, nodeBinDir string) (*processHandle, error) {
 	cmd := installCommand(proj.PackageManager)
 	if len(cmd) == 0 {
 		return nil, errors.New("install: unknown package manager")
 	}
 	c := exec.Command(cmd[0], cmd[1:]...)
 	c.Dir = proj.Path
-	c.Env = append(os.Environ(),
+	env := append(os.Environ(),
 		"FORCE_COLOR=1",
 		"CI=false",
 	)
+	c.Env = prependNodeBinDir(env, nodeBinDir)
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	stdout, err := c.StdoutPipe()

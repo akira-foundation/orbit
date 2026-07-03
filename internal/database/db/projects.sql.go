@@ -12,14 +12,14 @@ import (
 const createProject = `-- name: CreateProject :one
 INSERT INTO projects (
     id, name, path, slug, local_domain,
-    detected_framework, package_manager, dev_command, dev_port,
+    detected_framework, package_manager, dev_command, dev_port, node_version,
     status, created_at, updated_at
 ) VALUES (
     ?, ?, ?, ?, ?,
-    ?, ?, ?, ?,
+    ?, ?, ?, ?, ?,
     ?, ?, ?
 )
-RETURNING id, name, path, slug, local_domain, detected_framework, package_manager, dev_command, dev_port, status, created_at, updated_at
+RETURNING id, name, path, slug, local_domain, detected_framework, package_manager, dev_command, dev_port, status, created_at, updated_at, installed_hash, secure, node_version
 `
 
 type CreateProjectParams struct {
@@ -32,6 +32,7 @@ type CreateProjectParams struct {
 	PackageManager    string `json:"package_manager"`
 	DevCommand        string `json:"dev_command"`
 	DevPort           int64  `json:"dev_port"`
+	NodeVersion       string `json:"node_version"`
 	Status            string `json:"status"`
 	CreatedAt         string `json:"created_at"`
 	UpdatedAt         string `json:"updated_at"`
@@ -48,6 +49,7 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		arg.PackageManager,
 		arg.DevCommand,
 		arg.DevPort,
+		arg.NodeVersion,
 		arg.Status,
 		arg.CreatedAt,
 		arg.UpdatedAt,
@@ -66,6 +68,9 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.InstalledHash,
+		&i.Secure,
+		&i.NodeVersion,
 	)
 	return i, err
 }
@@ -80,7 +85,7 @@ func (q *Queries) DeleteProject(ctx context.Context, id string) error {
 }
 
 const getProject = `-- name: GetProject :one
-SELECT id, name, path, slug, local_domain, detected_framework, package_manager, dev_command, dev_port, status, created_at, updated_at FROM projects WHERE id = ? LIMIT 1
+SELECT id, name, path, slug, local_domain, detected_framework, package_manager, dev_command, dev_port, status, created_at, updated_at, installed_hash, secure, node_version FROM projects WHERE id = ? LIMIT 1
 `
 
 func (q *Queries) GetProject(ctx context.Context, id string) (Project, error) {
@@ -99,12 +104,15 @@ func (q *Queries) GetProject(ctx context.Context, id string) (Project, error) {
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.InstalledHash,
+		&i.Secure,
+		&i.NodeVersion,
 	)
 	return i, err
 }
 
 const listProjects = `-- name: ListProjects :many
-SELECT id, name, path, slug, local_domain, detected_framework, package_manager, dev_command, dev_port, status, created_at, updated_at FROM projects ORDER BY created_at DESC
+SELECT id, name, path, slug, local_domain, detected_framework, package_manager, dev_command, dev_port, status, created_at, updated_at, installed_hash, secure, node_version FROM projects ORDER BY created_at DESC
 `
 
 func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
@@ -129,6 +137,9 @@ func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.InstalledHash,
+			&i.Secure,
+			&i.NodeVersion,
 		); err != nil {
 			return nil, err
 		}

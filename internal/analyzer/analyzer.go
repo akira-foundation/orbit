@@ -8,7 +8,6 @@ import (
 	"strings"
 )
 
-
 type Analysis struct {
 	Name           string            `json:"name"`
 	Path           string            `json:"path"`
@@ -16,6 +15,7 @@ type Analysis struct {
 	Framework      string            `json:"framework"`
 	DevCommand     string            `json:"devCommand"`
 	DevPort        int               `json:"devPort"`
+	NodeVersion    string            `json:"nodeVersion"`
 	Scripts        map[string]string `json:"scripts"`
 }
 
@@ -30,7 +30,8 @@ type packageJSON struct {
 	Dependencies    map[string]string `json:"dependencies"`
 	DevDependencies map[string]string `json:"devDependencies"`
 	// declared package manager, e.g. "pnpm@8.0.0"
-	PackageManager string `json:"packageManager"`
+	PackageManager string            `json:"packageManager"`
+	Engines        map[string]string `json:"engines"`
 }
 
 type defaultAnalyzer struct{}
@@ -122,6 +123,7 @@ func (a *defaultAnalyzer) Analyze(path string) (*Analysis, error) {
 	analysis.Framework = framework
 	analysis.DevCommand = devCmd
 	analysis.DevPort = port
+	analysis.NodeVersion = resolveNodeVersion(abs, pkg)
 	analysis.Scripts = pkg.Scripts
 
 	return analysis, nil

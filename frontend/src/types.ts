@@ -27,6 +27,7 @@ export interface Project {
   packageManager: string
   devCommand: string
   devPort: number
+  nodeVersion?: string
   status: ProjectStatus
   secure: boolean
   createdAt: string
@@ -110,6 +111,7 @@ export interface AnalyzeResult {
   framework: string
   devCommand: string
   devPort: number
+  nodeVersion?: string
   scripts: Record<string, string>
   suggestedSlug: string
   suggestedDomain: string
@@ -125,6 +127,14 @@ export interface ServiceInfo {
   webUrl: string
   installed: boolean
   refs: number
+}
+
+export interface NodeVersionInfo {
+  id: string
+  version: string
+  installed: boolean
+  diskBytes: number
+  path: string
 }
 
 export interface ServiceSnapshot {

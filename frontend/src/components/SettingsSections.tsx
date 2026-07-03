@@ -1,9 +1,4 @@
 import { useEffect, useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Switch } from "./ui/switch";
 import {
@@ -17,7 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { api } from "../api";
-import type { SystemStatus, Config } from "../types";
+import type { SystemStatus } from "../types";
 import { cn } from "../lib/cn";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { resetOnboarding } from "./OnboardingServices";
@@ -25,13 +20,6 @@ import type { ServiceInfo, ServicesConfig } from "../types";
 
 export type SettingsSectionID = "general" | "domains" | "services" | "about";
 type Section = SettingsSectionID;
-
-interface Props {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  autoAction?: "setup" | "reset" | null;
-  onAutoActionConsumed?: () => void;
-}
 
 export const SETTINGS_SECTIONS: {
   id: Section;
@@ -43,7 +31,6 @@ export const SETTINGS_SECTIONS: {
   { id: "services", label: "Services", icon: Server },
   { id: "about", label: "About", icon: Info },
 ];
-const SECTIONS = SETTINGS_SECTIONS;
 
 export function SettingsSection({
   section,
@@ -68,81 +55,6 @@ export function SettingsSection({
   if (section === "services") return <ServicesSection />;
   if (section === "about") return <AboutSection />;
   return <GeneralSection />;
-}
-
-export function SettingsBody({
-  autoAction,
-  onAutoActionConsumed,
-  visible,
-  className,
-}: {
-  autoAction?: "setup" | "reset" | null;
-  onAutoActionConsumed?: () => void;
-  visible: boolean;
-  className?: string;
-}) {
-  const [section, setSection] = useState<Section>("general");
-
-  useEffect(() => {
-    if (visible && autoAction) setSection("domains");
-  }, [visible, autoAction]);
-
-  return (
-    <div className={cn("flex", className)}>
-      <aside className="w-52 shrink-0 border-r border-white/[0.06] bg-white/[0.02] p-3">
-        <p className="px-2 pt-1 pb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--orbit-subtle)]">
-          Settings
-        </p>
-        <nav className="space-y-0.5">
-          {SECTIONS.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setSection(s.id)}
-              className={cn(
-                "w-full h-8 px-2.5 rounded-md flex items-center gap-2 text-[13px] transition",
-                section === s.id
-                  ? "bg-white/[0.10] text-white"
-                  : "text-white/75 hover:bg-white/[0.05]",
-              )}
-            >
-              <s.icon className="size-3.5 shrink-0 text-[var(--orbit-muted)]" />
-              {s.label}
-            </button>
-          ))}
-        </nav>
-      </aside>
-
-      <div className="flex-1 min-w-0 overflow-auto">
-        <SettingsSection
-          section={section}
-          autoAction={autoAction}
-          onAutoActionConsumed={onAutoActionConsumed}
-          visible={visible}
-        />
-      </div>
-    </div>
-  );
-}
-
-export function SettingsDialog({
-  open,
-  onOpenChange,
-  autoAction,
-  onAutoActionConsumed,
-}: Props) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl p-0 sm:rounded-2xl">
-        <DialogTitle className="sr-only">Settings</DialogTitle>
-        <SettingsBody
-          autoAction={autoAction}
-          onAutoActionConsumed={onAutoActionConsumed}
-          visible={open}
-          className="h-[520px]"
-        />
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 function SectionHeader({

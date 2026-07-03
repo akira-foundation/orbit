@@ -3,7 +3,7 @@ import {
   SETTINGS_SECTIONS,
   SettingsSection,
   type SettingsSectionID,
-} from "../components/SettingsDialog";
+} from "../components/SettingsSections";
 import { cn } from "../lib/cn";
 
 export function SettingsPage({

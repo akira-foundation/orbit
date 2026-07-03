@@ -25,6 +25,7 @@ type Project struct {
 	PackageManager    string   `json:"packageManager"`
 	DevCommand        string   `json:"devCommand"`
 	DevPort           int      `json:"devPort"`
+	NodeVersion       string   `json:"nodeVersion"`
 	Status            Status   `json:"status"`
 	Secure            bool     `json:"secure"`
 	InstalledHash     string   `json:"installedHash"`

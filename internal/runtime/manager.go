@@ -17,6 +17,7 @@ import (
 
 	"orbit-app/internal/config"
 	"orbit-app/internal/projects"
+	"orbit-app/internal/services"
 )
 
 type ProjectLookup interface {
@@ -52,6 +53,7 @@ type Manager interface {
 	Close() error
 	SetEmitter(e Emitter)
 	SetServices(c ServiceCoordinator)
+	SetNodeAcquirer(a *services.Acquirer)
 }
 
 func New(projects ProjectLookup, db *sql.DB, cfg *config.Config) Manager {
@@ -76,13 +78,14 @@ func New(projects ProjectLookup, db *sql.DB, cfg *config.Config) Manager {
 }
 
 type manager struct {
-	ctx      context.Context
-	cancel   context.CancelFunc
-	mu       sync.RWMutex
-	projects ProjectLookup
-	emitter  Emitter
-	services ServiceCoordinator
-	sessions map[string]*Session
+	ctx          context.Context
+	cancel       context.CancelFunc
+	mu           sync.RWMutex
+	projects     ProjectLookup
+	emitter      Emitter
+	services     ServiceCoordinator
+	nodeAcquirer *services.Acquirer
+	sessions     map[string]*Session
 
 	stopGrace time.Duration
 	logCap    int
@@ -342,9 +345,15 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 		return err
 	}
 
+	nodeBinDir, err := m.nodeBinDir(ctx, proj)
+	if err != nil {
+		m.markStartFailed(sess, err)
+		return fmt.Errorf("runtime: node runtime: %w", err)
+	}
+
 	knownHash, _ := m.projects.InstalledHash(ctx, projectID)
 	if NeedsInstall(proj, knownHash) {
-		if err := m.runInstall(ctx, sess, proj); err != nil {
+		if err := m.runInstall(ctx, sess, proj, nodeBinDir); err != nil {
 			m.markStartFailed(sess, err)
 			return fmt.Errorf("runtime: install: %w", err)
 		}
@@ -364,6 +373,7 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 	)
 	env = mergeServiceEnv(env, svcEnv)
 	env = mergeDotEnv(env, proj.Path)
+	env = prependNodeBinDir(env, nodeBinDir)
 
 	handle, err := spawnDevCommand(proj.Path, proj.DevCommand, env)
 	if err != nil {
@@ -421,7 +431,12 @@ func (m *manager) Install(ctx context.Context, projectID string) error {
 		m.markStartFailed(sess, err)
 		return err
 	}
-	if err := m.runInstall(ctx, sess, proj); err != nil {
+	nodeBinDir, err := m.nodeBinDir(ctx, proj)
+	if err != nil {
+		m.markStartFailed(sess, err)
+		return err
+	}
+	if err := m.runInstall(ctx, sess, proj, nodeBinDir); err != nil {
 		m.markStartFailed(sess, err)
 		return err
 	}
@@ -430,14 +445,14 @@ func (m *manager) Install(ctx context.Context, projectID string) error {
 	return nil
 }
 
-func (m *manager) runInstall(ctx context.Context, sess *Session, proj *projects.Project) error {
+func (m *manager) runInstall(ctx context.Context, sess *Session, proj *projects.Project, nodeBinDir string) error {
 	sess.setPhase("install")
 	cmd := installCommand(proj.PackageManager)
 	m.recordSystem(proj.ID, LevelInfo, SourceSystem,
 		fmt.Sprintf("installing dependencies (%s)", strings.Join(cmd, " ")))
 	m.emit(EvtStarting, StatusEvent{ProjectID: proj.ID, Snapshot: m.snap(sess)})
 
-	h, err := installHandle(proj)
+	h, err := installHandle(proj, nodeBinDir)
 	if err != nil {
 		return err
 	}

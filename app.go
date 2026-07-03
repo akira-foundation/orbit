@@ -35,6 +35,7 @@ type App struct {
 	services    *services.Manager
 	svcStore    *services.Store
 	svcConfig   *services.ConfigStore
+	nodeAcq     *services.Acquirer
 	terminals   *terminal.Manager
 }
 
@@ -73,6 +74,8 @@ func (a *App) startup(ctx context.Context) {
 	resolver := services.NewResolver(svcStore, services.AllowAll())
 	a.services = services.NewManager(acq, resolver, a.svcConfig, filepath.Join(svcBaseDir, "data"))
 	a.runtime.SetServices(a.services)
+	a.nodeAcq = acq
+	a.runtime.SetNodeAcquirer(acq)
 
 	router := proxy.NewRouter(a.registry, a.runtime)
 	recovery := proxy.NewRecoveryHandler(a.registry, a.runtime)
@@ -330,6 +333,18 @@ func (a *App) ServicesDiskUsage() int64 {
 
 func (a *App) ClearServicesData() error {
 	return a.services.ClearData()
+}
+
+func (a *App) ListNodeVersions() []services.NodeVersionInfo {
+	return services.NodeVersionsInfo(a.ctx, a.nodeAcq)
+}
+
+func (a *App) InstallNodeVersion(version string) error {
+	return services.InstallNodeVersion(a.ctx, a.nodeAcq, version)
+}
+
+func (a *App) RemoveNodeVersion(version string) error {
+	return services.RemoveNodeVersion(a.ctx, a.nodeAcq, version)
 }
 
 func (a *App) ServiceSetup(engine string) (services.SetupInfo, error) {

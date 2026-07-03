@@ -4,6 +4,41 @@
 
 package db
 
+type Event struct {
+	ID        int64  `json:"id"`
+	ProjectID string `json:"project_id"`
+	SessionID string `json:"session_id"`
+	Ts        int64  `json:"ts"`
+	Stream    string `json:"stream"`
+	Text      string `json:"text"`
+	Level     string `json:"level"`
+	Source    string `json:"source"`
+}
+
+type MetricSample struct {
+	ProjectID string  `json:"project_id"`
+	Ts        int64   `json:"ts"`
+	Status    string  `json:"status"`
+	Port      int64   `json:"port"`
+	Conns     int64   `json:"conns"`
+	UptimeMs  int64   `json:"uptime_ms"`
+	Attempts  int64   `json:"attempts"`
+	ReqCount  int64   `json:"req_count"`
+	ErrCount  int64   `json:"err_count"`
+	P50Ms     int64   `json:"p50_ms"`
+	P95Ms     int64   `json:"p95_ms"`
+	P99Ms     int64   `json:"p99_ms"`
+	BytesIn   int64   `json:"bytes_in"`
+	BytesOut  int64   `json:"bytes_out"`
+	HttpReqs  int64   `json:"http_reqs"`
+	WsReqs    int64   `json:"ws_reqs"`
+	MemKb     int64   `json:"mem_kb"`
+	CpuPct    float64 `json:"cpu_pct"`
+	Crashes   int64   `json:"crashes"`
+	Autostops int64   `json:"autostops"`
+	WakeMs    int64   `json:"wake_ms"`
+}
+
 type Project struct {
 	ID                string `json:"id"`
 	Name              string `json:"name"`
@@ -17,6 +52,9 @@ type Project struct {
 	Status            string `json:"status"`
 	CreatedAt         string `json:"created_at"`
 	UpdatedAt         string `json:"updated_at"`
+	InstalledHash     string `json:"installed_hash"`
+	Secure            int64  `json:"secure"`
+	NodeVersion       string `json:"node_version"`
 }
 
 type ProjectDomain struct {
@@ -35,4 +73,22 @@ type ProjectScript struct {
 	Name      string `json:"name"`
 	Command   string `json:"command"`
 	CreatedAt string `json:"created_at"`
+}
+
+type ProjectService struct {
+	ID         string `json:"id"`
+	ProjectID  string `json:"project_id"`
+	Engine     string `json:"engine"`
+	Enabled    int64  `json:"enabled"`
+	ConfigJson string `json:"config_json"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
+}
+
+type ServiceBinary struct {
+	Engine      string `json:"engine"`
+	Version     string `json:"version"`
+	Path        string `json:"path"`
+	Hash        string `json:"hash"`
+	InstalledAt string `json:"installed_at"`
 }
