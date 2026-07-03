@@ -52,8 +52,6 @@ export function Dashboard({ onAdd }: { onAdd: () => void }) {
   )
 }
 
-// ─── List ────────────────────────────────────────────────────────────────────
-
 function ListView({
   projects,
   focusId,
@@ -109,6 +107,7 @@ function ListView({
               </Td>
               <Td className="w-px text-right pr-3">
                 <div className="flex items-center justify-end gap-1">
+                  <RowOpenButton projectId={p.id} />
                   <RowLogsButton projectId={p.id} />
                   <RowMetricsButton projectId={p.id} />
                   <RowAction project={p} />
@@ -119,6 +118,21 @@ function ListView({
         </tbody>
       </table>
     </div>
+  )
+}
+
+function RowOpenButton({ projectId }: { projectId: string }) {
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation()
+        api.openProject(projectId)
+      }}
+      title="Open in browser"
+      className="no-drag inline-flex items-center justify-center size-7 rounded-md text-[var(--orbit-muted)] hover:text-[var(--orbit-accent-2)] hover:bg-white/5 transition-colors"
+    >
+      <ExternalLink className="size-3.5" />
+    </button>
   )
 }
 
@@ -193,8 +207,6 @@ function Th({ children }: { children: React.ReactNode }) {
 function Td({ children, className }: { children: React.ReactNode; className?: string }) {
   return <td className={cn('px-3 py-2.5 align-middle', className)}>{children}</td>
 }
-
-// ─── Empty state ─────────────────────────────────────────────────────────────
 
 function Empty({ onAdd }: { onAdd: () => void }) {
   return (
