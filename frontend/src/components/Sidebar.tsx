@@ -114,12 +114,15 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
       </nav>
 
       <ul className="shrink-0 px-2 pb-2 space-y-1">
-        <Row
-          icon={Settings}
-          label="Settings"
-          active={view === "settings"}
-          onClick={onOpenSettings}
-        />
+        <li>
+          <button
+            onClick={onOpenSettings}
+            className="no-drag w-full h-[34px] px-3 rounded-md flex items-center gap-3 text-[13px] text-[var(--orbit-text)]/90 hover:text-[var(--orbit-text)] transition"
+          >
+            <Settings className="h-[17px] w-[17px] shrink-0 text-[var(--orbit-muted)]" />
+            <span className="truncate flex-1 text-left">Settings</span>
+          </button>
+        </li>
       </ul>
     </div>
   );

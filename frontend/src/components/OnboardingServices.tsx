@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { ServiceInfo } from "../types";
+import { Switch } from "./ui/switch";
 
 const DONE_KEY = "orbit.onboarding.services";
 
@@ -42,19 +43,18 @@ export function OnboardingServices({ onDone }: { onDone: () => void }) {
         </p>
         <div className="flex flex-col gap-2 mb-5">
           {items.map((svc) => (
-            <label
+            <div
               key={svc.engine}
               className="flex items-center justify-between rounded-lg border border-white/10 px-3 py-2"
             >
               <span className="text-sm">{svc.displayName}</span>
-              <input
-                type="checkbox"
+              <Switch
                 checked={!!picked[svc.engine]}
-                onChange={(e) =>
-                  setPicked((p) => ({ ...p, [svc.engine]: e.target.checked }))
+                onCheckedChange={(checked) =>
+                  setPicked((p) => ({ ...p, [svc.engine]: checked }))
                 }
               />
-            </label>
+            </div>
           ))}
         </div>
         <div className="flex justify-end gap-2">
