@@ -30,6 +30,7 @@ type Manager struct {
 	starter   func(bin string, args, env []string) (*svcProcess, error)
 	ensure    func(ctx context.Context, e Engine) (string, error)
 	dialAddr  func(e Engine) string
+	owned     func(e Engine) bool
 	reap      func(engine string)
 	reapForce func(engine string)
 	initHook  func(e Engine, binDir, dataDir string) error
@@ -50,20 +51,23 @@ func NewManager(acq *Acquirer, resolver *Resolver, cfg *ConfigStore, dataDir str
 	m.dialAddr = func(e Engine) string {
 		return fmt.Sprintf("%s:%d", e.Bind, e.Port)
 	}
+	m.owned = func(e Engine) bool {
+		return len(portOwnedPIDs(e.Bind, e.Port, acq.baseDir)) > 0
+	}
 	m.reap = func(engine string) {
 		if e, ok := ResolveEngine(engine); ok {
-			reapByPort(e.Bind, e.Port)
-			reapByPort(e.Bind, e.WebPort)
-			reapByPort(e.Bind, e.SMTPPort)
-			reapByPort(e.Bind, e.APIPort)
+			reapByPort(e.Bind, e.Port, acq.baseDir)
+			reapByPort(e.Bind, e.WebPort, acq.baseDir)
+			reapByPort(e.Bind, e.SMTPPort, acq.baseDir)
+			reapByPort(e.Bind, e.APIPort, acq.baseDir)
 		}
 	}
 	m.reapForce = func(engine string) {
 		if e, ok := ResolveEngine(engine); ok {
-			killByPort(e.Bind, e.Port)
-			killByPort(e.Bind, e.WebPort)
-			killByPort(e.Bind, e.SMTPPort)
-			killByPort(e.Bind, e.APIPort)
+			killByPort(e.Bind, e.Port, acq.baseDir)
+			killByPort(e.Bind, e.WebPort, acq.baseDir)
+			killByPort(e.Bind, e.SMTPPort, acq.baseDir)
+			killByPort(e.Bind, e.APIPort, acq.baseDir)
 		}
 	}
 	m.initHook = func(e Engine, binDir, dataDir string) error {
@@ -93,6 +97,9 @@ func (m *Manager) Acquire(ctx context.Context, engine, projectID string) error {
 	m.mu.Unlock()
 
 	if m.reachable(e) {
+		if !m.owned(e) {
+			return fmt.Errorf("services: %s port %s:%d is in use by an external process", engine, e.Bind, e.Port)
+		}
 		m.mu.Lock()
 		m.instances[engine] = &instance{
 			engine:    engine,
@@ -325,7 +332,10 @@ func (m *Manager) Status(engine string) Snapshot {
 	m.mu.Unlock()
 
 	if e, found := ResolveEngine(engine); found && m.reachable(e) {
-		return Snapshot{Engine: engine, Status: "running"}
+		if m.owned(e) {
+			return Snapshot{Engine: engine, Status: "running"}
+		}
+		return Snapshot{Engine: engine, Status: "external"}
 	}
 	return Snapshot{Engine: engine, Status: "stopped"}
 }
@@ -334,6 +344,10 @@ func (m *Manager) List(ctx context.Context) []ServiceInfo {
 	out := make([]ServiceInfo, 0)
 	for _, e := range Catalog() {
 		snap := m.Status(e.ID)
+		webURL := ""
+		if e.WebDomain != "" {
+			webURL = e.WebDomain + ".orbit.test"
+		}
 		out = append(out, ServiceInfo{
 			Engine:      e.ID,
 			DisplayName: e.DisplayName,
@@ -341,7 +355,7 @@ func (m *Manager) List(ctx context.Context) []ServiceInfo {
 			Family:      e.Family,
 			Version:     e.Version,
 			Status:      snap.Status,
-			WebURL:      e.WebDomain + ".orbit.test",
+			WebURL:      webURL,
 			Installed:   m.acq.IsInstalled(ctx, e),
 			Refs:        snap.Refs,
 		})

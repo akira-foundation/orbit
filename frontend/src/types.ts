@@ -121,7 +121,7 @@ export interface ServiceInfo {
   description: string
   family: string
   version: string
-  status: "stopped" | "starting" | "running" | "error"
+  status: "stopped" | "starting" | "running" | "error" | "external"
   webUrl: string
   installed: boolean
   refs: number

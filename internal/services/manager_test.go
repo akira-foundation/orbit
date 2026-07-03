@@ -85,6 +85,7 @@ func newManagerForTest(t *testing.T, webPort int) (*Manager, *fakeRunner) {
 	fr := &fakeRunner{addr: fmt.Sprintf("127.0.0.1:%d", webPort)}
 	m.starter = fr.run
 	m.dialAddr = func(_ Engine) string { return fr.addr }
+	m.owned = func(_ Engine) bool { return true }
 	m.ensure = func(_ context.Context, _ Engine) (string, error) { return "fake-bin", nil }
 	m.reap = func(string) {}
 	m.reapForce = func(string) {}

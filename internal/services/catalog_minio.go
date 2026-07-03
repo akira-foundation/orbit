@@ -52,9 +52,9 @@ func minioEngine() Engine {
 		Version:     minioRelease,
 		DisplayName: "MinIO",
 		Description: "S3-compatible object storage. One bucket per project, created automatically.",
-		Port:        9000,
-		APIPort:     9000,
-		WebPort:     9001,
+		Port:        40340,
+		APIPort:     40340,
+		WebPort:     40341,
 		Bind:        "127.0.0.2",
 		WebDomain:   "s3",
 		RawBinary:   true,
@@ -71,8 +71,8 @@ func minioEngine() Engine {
 	e.argsTemplate = func(p Platform, dataDir string) []string {
 		return []string{
 			"server", dataDir,
-			"--address", fmt.Sprintf("%s:9000", e.Bind),
-			"--console-address", fmt.Sprintf("%s:9001", e.Bind),
+			"--address", fmt.Sprintf("%s:40340", e.Bind),
+			"--console-address", fmt.Sprintf("%s:40341", e.Bind),
 		}
 	}
 	e.Provision = func(ctx context.Context, port int, slug string) (map[string]string, error) {
@@ -83,7 +83,7 @@ func minioEngine() Engine {
 	}
 	e.Setup = SetupInfo{
 		Fields: []SetupField{
-			{Label: "Endpoint", Value: "http://127.0.0.2:9000"},
+			{Label: "Endpoint", Value: "http://127.0.0.2:40340"},
 			{Label: "Access key", Value: miniostore.RootUser},
 			{Label: "Secret key", Value: miniostore.RootPassword},
 			{Label: "Region", Value: "us-east-1"},
@@ -94,13 +94,13 @@ func minioEngine() Engine {
 			{Label: ".env", Language: "ini",
 				Code: "AWS_ACCESS_KEY_ID=orbit\nAWS_SECRET_ACCESS_KEY=orbitsecret\n" +
 					"AWS_DEFAULT_REGION=us-east-1\nAWS_BUCKET=<project-slug>\n" +
-					"AWS_ENDPOINT=http://127.0.0.2:9000\nAWS_USE_PATH_STYLE_ENDPOINT=true"},
+					"AWS_ENDPOINT=http://127.0.0.2:40340\nAWS_USE_PATH_STYLE_ENDPOINT=true"},
 			{Label: "Laravel filesystems", Language: "ini",
 				Code: "FILESYSTEM_DISK=s3\nAWS_ACCESS_KEY_ID=orbit\nAWS_SECRET_ACCESS_KEY=orbitsecret\n" +
 					"AWS_DEFAULT_REGION=us-east-1\nAWS_BUCKET=<project-slug>\n" +
-					"AWS_ENDPOINT=http://127.0.0.2:9000\nAWS_USE_PATH_STYLE_ENDPOINT=true"},
+					"AWS_ENDPOINT=http://127.0.0.2:40340\nAWS_USE_PATH_STYLE_ENDPOINT=true"},
 			{Label: "Node / aws-sdk", Language: "javascript",
-				Code: "const s3 = new S3Client({\n  endpoint: \"http://127.0.0.2:9000\",\n" +
+				Code: "const s3 = new S3Client({\n  endpoint: \"http://127.0.0.2:40340\",\n" +
 					"  region: \"us-east-1\",\n  forcePathStyle: true,\n" +
 					"  credentials: { accessKeyId: \"orbit\", secretAccessKey: \"orbitsecret\" },\n});"},
 		},

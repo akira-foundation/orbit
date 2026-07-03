@@ -80,9 +80,9 @@ func Catalog() []Engine {
 		Version:     mpVer,
 		DisplayName: "Mailpit",
 		Description: "Captures outgoing mail from your apps in a local inbox.",
-		Port:        8025,
-		SMTPPort:    1025,
-		WebPort:     8025,
+		Port:        40321,
+		SMTPPort:    40322,
+		WebPort:     40321,
 		Bind:        "127.0.0.2",
 		WebDomain:   "mail",
 		ReadyMarkers: []string{
@@ -115,8 +115,8 @@ func Catalog() []Engine {
 	mp.argsTemplate = func(p Platform, dataDir string) []string {
 		return []string{
 			"--database", dataDir + "/mailpit.db",
-			"--smtp", mp.Bind + ":1025",
-			"--listen", mp.Bind + ":8025",
+			"--smtp", mp.Bind + ":40322",
+			"--listen", mp.Bind + ":40321",
 		}
 	}
 	mp.Setup = SetupInfo{

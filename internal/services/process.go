@@ -80,14 +80,32 @@ func portListenerPIDs(host string, port int) []int {
 	return pids
 }
 
-func reapByPort(host string, port int) {
+func processExecutable(pid int) string {
+	out, err := exec.Command("ps", "-o", "comm=", "-p", strconv.Itoa(pid)).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func portOwnedPIDs(host string, port int, ownedPrefix string) []int {
+	var owned []int
 	for _, pid := range portListenerPIDs(host, port) {
+		if exe := processExecutable(pid); exe != "" && strings.HasPrefix(exe, ownedPrefix) {
+			owned = append(owned, pid)
+		}
+	}
+	return owned
+}
+
+func reapByPort(host string, port int, ownedPrefix string) {
+	for _, pid := range portOwnedPIDs(host, port, ownedPrefix) {
 		_ = syscall.Kill(pid, syscall.SIGTERM)
 	}
 }
 
-func killByPort(host string, port int) {
-	for _, pid := range portListenerPIDs(host, port) {
+func killByPort(host string, port int, ownedPrefix string) {
+	for _, pid := range portOwnedPIDs(host, port, ownedPrefix) {
 		_ = syscall.Kill(pid, syscall.SIGKILL)
 	}
 }

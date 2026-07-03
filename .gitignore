@@ -27,3 +27,6 @@ frontend/wailsjs
 
 # Marketing assets (local only)
 /marketing
+
+# Superpowers planning docs (local only, not part of the shipped project)
+/docs/superpowers/

@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { Play, Square, Trash2, SlidersHorizontal, ExternalLink } from "lucide-react";
+import {
+  Play,
+  Square,
+  Trash2,
+  SlidersHorizontal,
+  ExternalLink,
+  AlertTriangle,
+} from "lucide-react";
 import { api } from "../api";
 import type { ServiceInfo } from "../types";
 import { cn } from "../lib/cn";
@@ -11,6 +18,7 @@ const STATUS_DOT: Record<ServiceInfo["status"], string> = {
   running: "bg-emerald-400 shadow-[0_0_8px_#34d399]",
   starting: "bg-amber-400 shadow-[0_0_8px_#fbbf24]",
   error: "bg-rose-400 shadow-[0_0_8px_#fb7185]",
+  external: "bg-amber-400 shadow-[0_0_8px_#fbbf24]",
   stopped: "bg-white/20",
 };
 
@@ -55,9 +63,15 @@ function ServiceRow({
           ) : null}
           <p className="text-[11px] text-[var(--orbit-subtle)]">
             {svc.version} · {svc.installed ? "installed" : "not downloaded"} ·{" "}
-            {svc.status}
+            {svc.status === "external" ? "port in use externally" : svc.status}
             {svc.refs > 0 ? ` · ${svc.refs} project(s)` : ""}
           </p>
+          {svc.status === "external" ? (
+            <p className="text-[10.5px] text-amber-300/90 leading-relaxed">
+              Another process on this machine is already using this port.
+              Orbit will not touch it.
+            </p>
+          ) : null}
           {svc.webUrl ? (
             <button
               className="inline-flex items-center gap-1 text-[11px] text-[var(--orbit-accent-2)] hover:underline"
@@ -78,15 +92,22 @@ function ServiceRow({
         <Button
           variant="outline"
           size="sm"
-          disabled={actions.busy === svc.engine}
+          disabled={actions.busy === svc.engine || svc.status === "external"}
+          title={
+            svc.status === "external"
+              ? "Port in use by another process — Orbit cannot manage it"
+              : undefined
+          }
           onClick={() => actions.onToggle(svc)}
         >
-          {svc.status === "running" ? (
+          {svc.status === "external" ? (
+            <AlertTriangle className="size-3.5 mr-1.5" />
+          ) : svc.status === "running" ? (
             <Square className="size-3.5 mr-1.5" />
           ) : (
             <Play className="size-3.5 mr-1.5" />
           )}
-          {svc.status === "running" ? "Stop" : "Start"}
+          {svc.status === "external" ? "In use" : svc.status === "running" ? "Stop" : "Start"}
         </Button>
         {svc.installed ? (
           <Button
