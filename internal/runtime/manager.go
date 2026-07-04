@@ -56,6 +56,7 @@ type Manager interface {
 	SetServices(c ServiceCoordinator)
 	SetNodeAcquirer(a *services.Acquirer)
 	SetPHPAcquirer(a *services.Acquirer)
+	SetRuntimesConfig(c *services.RuntimesConfigStore)
 }
 
 func New(projects ProjectLookup, db *sql.DB, cfg *config.Config) Manager {
@@ -81,16 +82,17 @@ func New(projects ProjectLookup, db *sql.DB, cfg *config.Config) Manager {
 }
 
 type manager struct {
-	ctx          context.Context
-	cancel       context.CancelFunc
-	mu           sync.RWMutex
-	projects     ProjectLookup
-	emitter      Emitter
-	services     ServiceCoordinator
-	nodeAcquirer *services.Acquirer
-	phpAcquirer  *services.Acquirer
-	dataDir      string
-	sessions     map[string]*Session
+	ctx            context.Context
+	cancel         context.CancelFunc
+	mu             sync.RWMutex
+	projects       ProjectLookup
+	emitter        Emitter
+	services       ServiceCoordinator
+	nodeAcquirer   *services.Acquirer
+	phpAcquirer    *services.Acquirer
+	runtimesConfig *services.RuntimesConfigStore
+	dataDir        string
+	sessions       map[string]*Session
 
 	stopGrace time.Duration
 	logCap    int

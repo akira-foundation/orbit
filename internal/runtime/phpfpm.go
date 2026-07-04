@@ -81,22 +81,38 @@ func (m *manager) startPHP(ctx context.Context, sess *Session, proj *projects.Pr
 	return nil
 }
 
-func (m *manager) spawnPHPFPM(ctx context.Context, proj *projects.Project) (*processHandle, string, error) {
+// system php-fpm wins when preferred and detected, else the bundled PHPVersion build
+func (m *manager) resolvePHPFPMBin(ctx context.Context, proj *projects.Project) (string, error) {
 	m.mu.RLock()
+	rtCfg := m.runtimesConfig
 	acq := m.phpAcquirer
 	m.mu.RUnlock()
+
+	if rtCfg != nil && rtCfg.PreferSystemPHP() {
+		if sys, ok := services.DetectSystemPHP(); ok {
+			return sys.PHPFPMPath, nil
+		}
+	}
+
 	if acq == nil {
-		return nil, "", errors.New("php-fpm: no acquirer configured")
+		return "", errors.New("php-fpm: no acquirer configured")
 	}
 	engine, ok := services.PHPEngineForVersion(proj.PHPVersion)
 	if !ok {
-		return nil, "", fmt.Errorf("no bundled php engine for version %s", proj.PHPVersion)
+		return "", fmt.Errorf("no bundled php engine for version %s", proj.PHPVersion)
 	}
 	binPath, err := acq.Ensure(ctx, engine)
 	if err != nil {
-		return nil, "", fmt.Errorf("acquire php %s: %w", proj.PHPVersion, err)
+		return "", fmt.Errorf("acquire php %s: %w", proj.PHPVersion, err)
 	}
-	binDir := filepath.Dir(binPath)
+	return binPath, nil
+}
+
+func (m *manager) spawnPHPFPM(ctx context.Context, proj *projects.Project) (*processHandle, string, error) {
+	fpmBin, err := m.resolvePHPFPMBin(ctx, proj)
+	if err != nil {
+		return nil, "", err
+	}
 
 	runDir := m.phpRunDir(proj.ID)
 	if err := os.MkdirAll(runDir, 0o755); err != nil {
@@ -109,7 +125,7 @@ func (m *manager) spawnPHPFPM(ctx context.Context, proj *projects.Project) (*pro
 		return nil, "", err
 	}
 
-	cmd := exec.Command(filepath.Join(binDir, "php-fpm"), "-n", "-y", confPath, "-F", "-O")
+	cmd := exec.Command(fpmBin, "-n", "-y", confPath, "-F", "-O")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

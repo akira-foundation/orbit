@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react";
 import { Download, FolderOpen, Loader2, Trash2 } from "lucide-react";
 import { api } from "../api";
-import type { NodeVersionInfo, PHPVersionInfo } from "../types";
+import type {
+  NodeVersionInfo,
+  PHPVersionInfo,
+  RuntimesConfig,
+  SystemRuntimeStatus,
+} from "../types";
 import { cn } from "../lib/cn";
 import { Button } from "./ui/button";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { ToggleRow } from "./SettingsSections";
 
 type VersionInfo = NodeVersionInfo | PHPVersionInfo;
 
@@ -88,7 +94,39 @@ function RuntimeVersionRow<T extends VersionInfo>({
   );
 }
 
-function NodeRuntimeGroup() {
+function SystemPreferenceToggle({
+  label,
+  system,
+  checked,
+  onChange,
+}: {
+  label: string;
+  system: SystemRuntimeStatus | null;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  if (!system?.available) return null;
+  return (
+    <div className="px-4 py-3 border-b border-white/[0.06]">
+      <ToggleRow
+        label={`Use system ${label} when available`}
+        description={`Detected ${label} ${system.version} on this machine. Skips the bundled download and runs projects with it instead.`}
+        checked={checked}
+        onChange={onChange}
+      />
+    </div>
+  );
+}
+
+function NodeRuntimeGroup({
+  cfg,
+  onSaveCfg,
+  systemNode,
+}: {
+  cfg: RuntimesConfig | null;
+  onSaveCfg: (next: RuntimesConfig) => void;
+  systemNode: SystemRuntimeStatus | null;
+}) {
   const [versions, setVersions] = useState<NodeVersionInfo[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [removeFor, setRemoveFor] = useState<NodeVersionInfo | null>(null);
@@ -120,6 +158,14 @@ function NodeRuntimeGroup() {
           project from .nvmrc, .node-version, or package.json engines.node.
         </p>
       </div>
+      {cfg && (
+        <SystemPreferenceToggle
+          label="Node.js"
+          system={systemNode}
+          checked={cfg.preferSystemNode}
+          onChange={(v) => onSaveCfg({ ...cfg, preferSystemNode: v })}
+        />
+      )}
       <div className="divide-y divide-white/[0.04]">
         {versions.map((v) => (
           <RuntimeVersionRow
@@ -151,7 +197,15 @@ function NodeRuntimeGroup() {
   );
 }
 
-function PHPRuntimeGroup() {
+function PHPRuntimeGroup({
+  cfg,
+  onSaveCfg,
+  systemPHP,
+}: {
+  cfg: RuntimesConfig | null;
+  onSaveCfg: (next: RuntimesConfig) => void;
+  systemPHP: SystemRuntimeStatus | null;
+}) {
   const [versions, setVersions] = useState<PHPVersionInfo[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [removeFor, setRemoveFor] = useState<PHPVersionInfo | null>(null);
@@ -183,6 +237,14 @@ function PHPRuntimeGroup() {
           Resolved per project from composer.json require.php.
         </p>
       </div>
+      {cfg && (
+        <SystemPreferenceToggle
+          label="PHP"
+          system={systemPHP}
+          checked={cfg.preferSystemPhp}
+          onChange={(v) => onSaveCfg({ ...cfg, preferSystemPhp: v })}
+        />
+      )}
       <div className="divide-y divide-white/[0.04]">
         {versions.map((v) => (
           <RuntimeVersionRow
@@ -215,10 +277,25 @@ function PHPRuntimeGroup() {
 }
 
 export function RuntimesList() {
+  const [cfg, setCfg] = useState<RuntimesConfig | null>(null);
+  const [systemNode, setSystemNode] = useState<SystemRuntimeStatus | null>(null);
+  const [systemPHP, setSystemPHP] = useState<SystemRuntimeStatus | null>(null);
+
+  useEffect(() => {
+    api.runtimesConfig().then(setCfg);
+    api.detectSystemNode().then(setSystemNode);
+    api.detectSystemPHP().then(setSystemPHP);
+  }, []);
+
+  async function saveCfg(next: RuntimesConfig) {
+    setCfg(next);
+    await api.saveRuntimesConfig(next);
+  }
+
   return (
     <div className="space-y-2.5">
-      <NodeRuntimeGroup />
-      <PHPRuntimeGroup />
+      <NodeRuntimeGroup cfg={cfg} onSaveCfg={saveCfg} systemNode={systemNode} />
+      <PHPRuntimeGroup cfg={cfg} onSaveCfg={saveCfg} systemPHP={systemPHP} />
     </div>
   );
 }

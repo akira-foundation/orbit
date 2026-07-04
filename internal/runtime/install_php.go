@@ -16,6 +16,46 @@ import (
 	"orbit-app/internal/services"
 )
 
+// prefers a global `composer`, then system php + bundled composer.phar, then fully bundled
+func (m *manager) resolveComposerCommand(ctx context.Context, proj *projects.Project) ([]string, error) {
+	m.mu.RLock()
+	rtCfg := m.runtimesConfig
+	phpAcq := m.phpAcquirer
+	m.mu.RUnlock()
+
+	preferSystem := rtCfg != nil && rtCfg.PreferSystemPHP()
+	sys, sysOK := services.DetectSystemPHP()
+
+	if preferSystem && sysOK {
+		if composerPath, err := exec.LookPath("composer"); err == nil {
+			return []string{composerPath}, nil
+		}
+	}
+
+	if phpAcq == nil {
+		return nil, errors.New("composer install: no php acquirer configured")
+	}
+	composerPhar, err := phpAcq.Ensure(ctx, services.ComposerEngine())
+	if err != nil {
+		return nil, fmt.Errorf("acquire composer: %w", err)
+	}
+
+	if preferSystem && sysOK {
+		return []string{sys.PHPPath, composerPhar}, nil
+	}
+
+	phpEngine, ok := services.PHPEngineForVersion(proj.PHPVersion)
+	if !ok {
+		return nil, fmt.Errorf("no bundled php engine for version %s", proj.PHPVersion)
+	}
+	phpFPMBin, err := phpAcq.Ensure(ctx, phpEngine)
+	if err != nil {
+		return nil, fmt.Errorf("acquire php %s: %w", proj.PHPVersion, err)
+	}
+	phpBin := filepath.Join(filepath.Dir(phpFPMBin), "php")
+	return []string{phpBin, composerPhar}, nil
+}
+
 func composerLockHash(dir string) (string, error) {
 	b, err := os.ReadFile(filepath.Join(dir, "composer.lock"))
 	if err != nil {
@@ -49,31 +89,16 @@ func (m *manager) ensureComposerInstalled(ctx context.Context, sess *Session, pr
 		return nil
 	}
 
-	m.mu.RLock()
-	phpAcq := m.phpAcquirer
-	m.mu.RUnlock()
-	if phpAcq == nil {
-		return errors.New("composer install: no php acquirer configured")
-	}
-	phpEngine, ok := services.PHPEngineForVersion(proj.PHPVersion)
-	if !ok {
-		return fmt.Errorf("no bundled php engine for version %s", proj.PHPVersion)
-	}
-	phpFPMBin, err := phpAcq.Ensure(ctx, phpEngine)
+	argv, err := m.resolveComposerCommand(ctx, proj)
 	if err != nil {
-		return fmt.Errorf("acquire php %s: %w", proj.PHPVersion, err)
-	}
-	phpBin := filepath.Join(filepath.Dir(phpFPMBin), "php")
-	composerPhar, err := phpAcq.Ensure(ctx, services.ComposerEngine())
-	if err != nil {
-		return fmt.Errorf("acquire composer: %w", err)
+		return err
 	}
 
 	sess.setPhase("install")
 	m.recordSystem(proj.ID, LevelInfo, SourceSystem, "installing composer dependencies")
 	m.emit(EvtStarting, StatusEvent{ProjectID: proj.ID, Snapshot: m.snap(sess)})
 
-	cmd := exec.Command(phpBin, composerPhar, "install", "--no-interaction", "--no-progress")
+	cmd := exec.Command(argv[0], append(argv[1:], "install", "--no-interaction", "--no-progress")...)
 	cmd.Dir = proj.Path
 	cmd.Env = append(os.Environ(), "FORCE_COLOR=1", "CI=false")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

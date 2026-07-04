@@ -47,6 +47,10 @@ import {
   ListPHPVersions,
   InstallPHPVersion,
   RemovePHPVersion,
+  RuntimesConfig,
+  SaveRuntimesConfig,
+  DetectSystemNode,
+  DetectSystemPHP,
   TerminalStart,
   TerminalWrite,
   TerminalResize,
@@ -66,6 +70,8 @@ import type {
   ServicesConfig as ServicesConfigType,
   NodeVersionInfo,
   PHPVersionInfo,
+  RuntimesConfig as RuntimesConfigType,
+  SystemRuntimeStatus,
 } from "./types";
 
 function cast<T>(p: Promise<unknown>): Promise<T> {
@@ -155,6 +161,12 @@ export const api = {
     InstallPHPVersion(version),
   removePHPVersion: (version: string): Promise<void> =>
     RemovePHPVersion(version),
+  runtimesConfig: (): Promise<RuntimesConfigType> => cast(RuntimesConfig()),
+  saveRuntimesConfig: (cfg: RuntimesConfigType): Promise<void> =>
+    SaveRuntimesConfig(cfg as never),
+  detectSystemNode: (): Promise<SystemRuntimeStatus> =>
+    cast(DetectSystemNode()),
+  detectSystemPHP: (): Promise<SystemRuntimeStatus> => cast(DetectSystemPHP()),
   terminalStart: (projectId: string): Promise<void> =>
     TerminalStart(projectId),
   terminalWrite: (projectId: string, data: string): Promise<void> =>

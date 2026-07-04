@@ -17,6 +17,12 @@ func (m *manager) SetNodeAcquirer(a *services.Acquirer) {
 	m.nodeAcquirer = a
 }
 
+func (m *manager) SetRuntimesConfig(c *services.RuntimesConfigStore) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.runtimesConfig = c
+}
+
 func (m *manager) nodeBinDir(ctx context.Context, proj *projects.Project) (string, error) {
 	// "", nil below means non-Node project, not a failure
 	if proj.NodeVersion == "" {
@@ -24,7 +30,15 @@ func (m *manager) nodeBinDir(ctx context.Context, proj *projects.Project) (strin
 	}
 	m.mu.RLock()
 	acq := m.nodeAcquirer
+	rtCfg := m.runtimesConfig
 	m.mu.RUnlock()
+
+	if rtCfg != nil && rtCfg.PreferSystemNode() {
+		if sys, ok := services.DetectSystemNode(); ok {
+			return sys.BinDir, nil
+		}
+	}
+
 	if acq == nil {
 		return "", nil
 	}

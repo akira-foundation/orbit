@@ -37,6 +37,7 @@ type App struct {
 	svcConfig   *services.ConfigStore
 	nodeAcq     *services.Acquirer
 	phpAcq      *services.Acquirer
+	runtimesCfg *services.RuntimesConfigStore
 	terminals   *terminal.Manager
 }
 
@@ -79,6 +80,8 @@ func (a *App) startup(ctx context.Context) {
 	a.runtime.SetNodeAcquirer(acq)
 	a.phpAcq = acq
 	a.runtime.SetPHPAcquirer(acq)
+	a.runtimesCfg = services.LoadRuntimesConfig(cfg.DataDir)
+	a.runtime.SetRuntimesConfig(a.runtimesCfg)
 
 	router := proxy.NewRouter(a.registry, a.runtime)
 	recovery := proxy.NewRecoveryHandler(a.registry, a.runtime)
@@ -360,6 +363,29 @@ func (a *App) InstallPHPVersion(version string) error {
 
 func (a *App) RemovePHPVersion(version string) error {
 	return services.RemovePHPVersion(a.ctx, a.phpAcq, version)
+}
+
+type SystemRuntimeStatus struct {
+	Available bool   `json:"available"`
+	Version   string `json:"version"`
+}
+
+func (a *App) DetectSystemNode() SystemRuntimeStatus {
+	sys, ok := services.DetectSystemNode()
+	return SystemRuntimeStatus{Available: ok, Version: sys.Version}
+}
+
+func (a *App) DetectSystemPHP() SystemRuntimeStatus {
+	sys, ok := services.DetectSystemPHP()
+	return SystemRuntimeStatus{Available: ok, Version: sys.Version}
+}
+
+func (a *App) RuntimesConfig() services.RuntimesConfig {
+	return a.runtimesCfg.Get()
+}
+
+func (a *App) SaveRuntimesConfig(cfg services.RuntimesConfig) error {
+	return a.runtimesCfg.Save(cfg)
 }
 
 func (a *App) ServiceSetup(engine string) (services.SetupInfo, error) {

@@ -173,3 +173,13 @@ export interface ServicesConfig {
   idleStopMinutes: number
   defaults: Record<string, boolean>
 }
+
+export interface RuntimesConfig {
+  preferSystemNode: boolean
+  preferSystemPhp: boolean
+}
+
+export interface SystemRuntimeStatus {
+  available: boolean
+  version: string
+}
