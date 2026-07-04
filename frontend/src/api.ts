@@ -44,6 +44,9 @@ import {
   ListNodeVersions,
   InstallNodeVersion,
   RemoveNodeVersion,
+  ListPHPVersions,
+  InstallPHPVersion,
+  RemovePHPVersion,
   TerminalStart,
   TerminalWrite,
   TerminalResize,
@@ -62,6 +65,7 @@ import type {
   ServiceSetup as ServiceSetupType,
   ServicesConfig as ServicesConfigType,
   NodeVersionInfo,
+  PHPVersionInfo,
 } from "./types";
 
 function cast<T>(p: Promise<unknown>): Promise<T> {
@@ -145,6 +149,12 @@ export const api = {
     InstallNodeVersion(version),
   removeNodeVersion: (version: string): Promise<void> =>
     RemoveNodeVersion(version),
+  listPHPVersions: async (): Promise<PHPVersionInfo[]> =>
+    (await cast<PHPVersionInfo[] | null>(ListPHPVersions())) ?? [],
+  installPHPVersion: (version: string): Promise<void> =>
+    InstallPHPVersion(version),
+  removePHPVersion: (version: string): Promise<void> =>
+    RemovePHPVersion(version),
   terminalStart: (projectId: string): Promise<void> =>
     TerminalStart(projectId),
   terminalWrite: (projectId: string, data: string): Promise<void> =>

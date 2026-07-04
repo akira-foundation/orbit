@@ -16,6 +16,8 @@ type Analysis struct {
 	DevCommand     string            `json:"devCommand"`
 	DevPort        int               `json:"devPort"`
 	NodeVersion    string            `json:"nodeVersion"`
+	RuntimeKind    string            `json:"runtimeKind"`
+	PHPVersion     string            `json:"phpVersion"`
 	Scripts        map[string]string `json:"scripts"`
 }
 
@@ -57,8 +59,9 @@ func (a *defaultAnalyzer) Analyze(path string) (*Analysis, error) {
 	}
 
 	analysis := &Analysis{
-		Path:    abs,
-		Scripts: make(map[string]string),
+		Path:        abs,
+		RuntimeKind: "command",
+		Scripts:     make(map[string]string),
 	}
 
 	// 1. Check for composer.json (PHP/Laravel)
@@ -74,8 +77,8 @@ func (a *defaultAnalyzer) Analyze(path string) (*Analysis, error) {
 				}
 				analysis.Framework = "laravel"
 				analysis.PackageManager = "composer"
-				analysis.DevCommand = "php artisan serve"
-				analysis.DevPort = 8000
+				analysis.RuntimeKind = "php-fpm"
+				analysis.PHPVersion = resolvePHPVersion(comp.Require["php"])
 				return analysis, nil
 			}
 		}

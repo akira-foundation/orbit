@@ -36,6 +36,7 @@ type App struct {
 	svcStore    *services.Store
 	svcConfig   *services.ConfigStore
 	nodeAcq     *services.Acquirer
+	phpAcq      *services.Acquirer
 	terminals   *terminal.Manager
 }
 
@@ -76,6 +77,8 @@ func (a *App) startup(ctx context.Context) {
 	a.runtime.SetServices(a.services)
 	a.nodeAcq = acq
 	a.runtime.SetNodeAcquirer(acq)
+	a.phpAcq = acq
+	a.runtime.SetPHPAcquirer(acq)
 
 	router := proxy.NewRouter(a.registry, a.runtime)
 	recovery := proxy.NewRecoveryHandler(a.registry, a.runtime)
@@ -345,6 +348,18 @@ func (a *App) InstallNodeVersion(version string) error {
 
 func (a *App) RemoveNodeVersion(version string) error {
 	return services.RemoveNodeVersion(a.ctx, a.nodeAcq, version)
+}
+
+func (a *App) ListPHPVersions() []services.PHPVersionInfo {
+	return services.PHPVersionsInfo(a.ctx, a.phpAcq)
+}
+
+func (a *App) InstallPHPVersion(version string) error {
+	return services.InstallPHPVersion(a.ctx, a.phpAcq, version)
+}
+
+func (a *App) RemovePHPVersion(version string) error {
+	return services.RemovePHPVersion(a.ctx, a.phpAcq, version)
 }
 
 func (a *App) ServiceSetup(engine string) (services.SetupInfo, error) {

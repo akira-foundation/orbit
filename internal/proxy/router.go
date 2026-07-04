@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"time"
 
 	"orbit-app/internal/projects"
@@ -16,6 +17,7 @@ var ErrNoPort = errors.New("proxy: project has no known port")
 type RuntimeProvider interface {
 	Start(ctx context.Context, projectID string) error
 	Port(projectID string) int
+	SocketPath(projectID string) string
 	IsRunning(projectID string) bool
 	Status(projectID string) runtime.Snapshot
 	ConnOpen(projectID string)
@@ -23,9 +25,19 @@ type RuntimeProvider interface {
 	RecordRequest(projectID string, statusCode int, durationMs float64, bytesIn, bytesOut int64, isWS bool)
 }
 
+type TargetKind string
+
+const (
+	TargetHTTP    TargetKind = "http"
+	TargetFastCGI TargetKind = "fastcgi"
+)
+
 type Target struct {
-	Project *projects.Project
-	URL     *url.URL
+	Project  *projects.Project
+	Kind     TargetKind
+	URL      *url.URL
+	SockPath string
+	DocRoot  string
 }
 
 type Router struct {
@@ -50,6 +62,19 @@ func (r *Router) Route(ctx context.Context, host string) (*Target, error) {
 		}
 	}
 
+	if proj.RuntimeKind == projects.RuntimeKindPHPFPM {
+		sockPath, err := r.waitForSocket(ctx, proj)
+		if err != nil {
+			return nil, err
+		}
+		return &Target{
+			Project:  proj,
+			Kind:     TargetFastCGI,
+			SockPath: sockPath,
+			DocRoot:  filepath.Join(proj.Path, "public"),
+		}, nil
+	}
+
 	port, err := r.waitForPort(ctx, proj)
 	if err != nil {
 		return nil, err
@@ -64,7 +89,24 @@ func (r *Router) Route(ctx context.Context, host string) (*Target, error) {
 	if perr != nil {
 		return nil, perr
 	}
-	return &Target{Project: proj, URL: u}, nil
+	return &Target{Project: proj, Kind: TargetHTTP, URL: u}, nil
+}
+
+func (r *Router) waitForSocket(ctx context.Context, proj *projects.Project) (string, error) {
+	deadline := time.Now().Add(r.health.Timeout)
+	for {
+		if s := r.runtime.SocketPath(proj.ID); s != "" {
+			return s, nil
+		}
+		if time.Now().After(deadline) {
+			return "", ErrNoPort
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(r.health.PollInterval):
+		}
+	}
 }
 
 func (r *Router) waitForPort(ctx context.Context, proj *projects.Project) (int, error) {

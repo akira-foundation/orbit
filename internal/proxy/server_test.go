@@ -88,6 +88,47 @@ func TestServer_ProxiesWebSocket(t *testing.T) {
 	}
 }
 
+func TestServer_ProxiesFastCGI(t *testing.T) {
+	bin := lookupPHPFPM(t)
+	sockPath, docRoot := startTestFPM(t, bin)
+
+	lk := &fakeLookup{items: []projects.Project{
+		{
+			ID: "1", Slug: "phpapp", LocalDomain: "phpapp.orbit.test",
+			Path: strings.TrimSuffix(docRoot, "/public"), RuntimeKind: projects.RuntimeKindPHPFPM,
+		},
+	}}
+	reg := New(lk, "orbit.test")
+	rt := &fakeRuntime{sockPath: sockPath, running: map[string]bool{"1": true}}
+	router := NewRouter(reg, rt)
+	router.health = HealthOptions{
+		Timeout:      2 * time.Second,
+		PollInterval: 50 * time.Millisecond,
+		DialTimeout:  200 * time.Millisecond,
+	}
+
+	rec := NewRecoveryHandler(reg, rt)
+	proxy := NewServer("", router, rec)
+	ts := httptest.NewServer(proxy)
+	defer ts.Close()
+	defer proxy.Shutdown(context.Background())
+
+	req, _ := http.NewRequest("GET", ts.URL+"/index.php?name=fastcgi", nil)
+	req.Host = "phpapp.orbit.test"
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+	body := readAll(t, resp.Body)
+	if !strings.Contains(body, "hello fastcgi") {
+		t.Fatalf("body = %q", body)
+	}
+}
+
 func TestServer_NotRegistered(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("ok"))

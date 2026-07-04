@@ -55,6 +55,8 @@ type Project struct {
 	InstalledHash     string `json:"installed_hash"`
 	Secure            int64  `json:"secure"`
 	NodeVersion       string `json:"node_version"`
+	RuntimeKind       string `json:"runtime_kind"`
+	PhpVersion        string `json:"php_version"`
 }
 
 type ProjectDomain struct {

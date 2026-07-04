@@ -46,6 +46,8 @@ func (s *Service) Create(ctx context.Context, path string) (*Project, error) {
 		DevCommand:        a.DevCommand,
 		DevPort:           a.DevPort,
 		NodeVersion:       a.NodeVersion,
+		RuntimeKind:       RuntimeKind(a.RuntimeKind),
+		PHPVersion:        a.PHPVersion,
 		Status:            StatusStopped,
 	}
 	for name, cmd := range a.Scripts {

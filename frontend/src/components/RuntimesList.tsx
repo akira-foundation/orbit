@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Download, FolderOpen, Loader2, Trash2 } from "lucide-react";
 import { api } from "../api";
-import type { NodeVersionInfo } from "../types";
+import type { NodeVersionInfo, PHPVersionInfo } from "../types";
 import { cn } from "../lib/cn";
 import { Button } from "./ui/button";
 import { ConfirmDialog } from "./ConfirmDialog";
+
+type VersionInfo = NodeVersionInfo | PHPVersionInfo;
 
 function formatBytes(n: number): string {
   if (n <= 0) return "0 B";
@@ -13,16 +15,18 @@ function formatBytes(n: number): string {
   return `${(n / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-function NodeRow({
+function RuntimeVersionRow<T extends VersionInfo>({
+  label,
   v,
   busy,
   onInstall,
   onRemove,
 }: {
-  v: NodeVersionInfo;
+  label: string;
+  v: T;
   busy: boolean;
-  onInstall: (v: NodeVersionInfo) => void;
-  onRemove: (v: NodeVersionInfo) => void;
+  onInstall: (v: T) => void;
+  onRemove: (v: T) => void;
 }) {
   return (
     <div className="flex items-center justify-between gap-4 px-4 py-3">
@@ -34,7 +38,7 @@ function NodeRow({
           )}
         />
         <div className="min-w-0 space-y-0.5">
-          <p className="text-[13px] font-medium">Node.js {v.version}</p>
+          <p className="text-[13px] font-medium">{label} {v.version}</p>
           <p className="text-[11px] text-[var(--orbit-subtle)]">
             {v.version} ·{" "}
             {v.installed ? formatBytes(v.diskBytes) : "not downloaded"}
@@ -84,13 +88,13 @@ function NodeRow({
   );
 }
 
-export function RuntimesList() {
-  const [nodeVersions, setNodeVersions] = useState<NodeVersionInfo[]>([]);
+function NodeRuntimeGroup() {
+  const [versions, setVersions] = useState<NodeVersionInfo[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [removeFor, setRemoveFor] = useState<NodeVersionInfo | null>(null);
 
   async function refresh() {
-    setNodeVersions(await api.listNodeVersions());
+    setVersions(await api.listNodeVersions());
   }
 
   useEffect(() => {
@@ -108,26 +112,25 @@ export function RuntimesList() {
   }
 
   return (
-    <div className="space-y-2.5">
-      <div className="rounded-lg border border-white/10 bg-white/[0.03] overflow-hidden">
-        <div className="px-4 pt-3 pb-2 border-b border-white/[0.06] space-y-0.5">
-          <p className="text-[13px] font-medium">Node.js</p>
-          <p className="text-[11px] text-[var(--orbit-muted)] leading-relaxed">
-            Bundled versions used to run project dev commands. Resolved per
-            project from .nvmrc, .node-version, or package.json engines.node.
-          </p>
-        </div>
-        <div className="divide-y divide-white/[0.04]">
-          {nodeVersions.map((v) => (
-            <NodeRow
-              key={v.id}
-              v={v}
-              busy={busy === v.version}
-              onInstall={install}
-              onRemove={setRemoveFor}
-            />
-          ))}
-        </div>
+    <div className="rounded-lg border border-white/10 bg-white/[0.03] overflow-hidden">
+      <div className="px-4 pt-3 pb-2 border-b border-white/[0.06] space-y-0.5">
+        <p className="text-[13px] font-medium">Node.js</p>
+        <p className="text-[11px] text-[var(--orbit-muted)] leading-relaxed">
+          Bundled versions used to run project dev commands. Resolved per
+          project from .nvmrc, .node-version, or package.json engines.node.
+        </p>
+      </div>
+      <div className="divide-y divide-white/[0.04]">
+        {versions.map((v) => (
+          <RuntimeVersionRow
+            key={v.id}
+            label="Node.js"
+            v={v}
+            busy={busy === v.version}
+            onInstall={install}
+            onRemove={setRemoveFor}
+          />
+        ))}
       </div>
 
       <ConfirmDialog
@@ -144,6 +147,78 @@ export function RuntimesList() {
           }
         }}
       />
+    </div>
+  );
+}
+
+function PHPRuntimeGroup() {
+  const [versions, setVersions] = useState<PHPVersionInfo[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [removeFor, setRemoveFor] = useState<PHPVersionInfo | null>(null);
+
+  async function refresh() {
+    setVersions(await api.listPHPVersions());
+  }
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  async function install(v: PHPVersionInfo) {
+    setBusy(v.version);
+    try {
+      await api.installPHPVersion(v.version);
+      await refresh();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.03] overflow-hidden">
+      <div className="px-4 pt-3 pb-2 border-b border-white/[0.06] space-y-0.5">
+        <p className="text-[13px] font-medium">PHP</p>
+        <p className="text-[11px] text-[var(--orbit-muted)] leading-relaxed">
+          Bundled versions with php-fpm, used to run Laravel projects.
+          Resolved per project from composer.json require.php.
+        </p>
+      </div>
+      <div className="divide-y divide-white/[0.04]">
+        {versions.map((v) => (
+          <RuntimeVersionRow
+            key={v.id}
+            label="PHP"
+            v={v}
+            busy={busy === v.version}
+            onInstall={install}
+            onRemove={setRemoveFor}
+          />
+        ))}
+      </div>
+
+      <ConfirmDialog
+        open={!!removeFor}
+        onOpenChange={(o) => !o && setRemoveFor(null)}
+        title={`Remove PHP ${removeFor?.version ?? ""}?`}
+        description="Deletes the downloaded binary. Projects pinned to this version will re-download it automatically on next start."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={async () => {
+          if (removeFor) {
+            await api.removePHPVersion(removeFor.version);
+            await refresh();
+          }
+        }}
+      />
+    </div>
+  );
+}
+
+export function RuntimesList() {
+  return (
+    <div className="space-y-2.5">
+      <NodeRuntimeGroup />
+      <PHPRuntimeGroup />
     </div>
   );
 }

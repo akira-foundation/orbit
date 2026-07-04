@@ -40,6 +40,7 @@ type Session struct {
 	phase        string
 	pid          int
 	port         int
+	sockPath     string
 	startedAt    time.Time
 	readyAt      time.Time
 	lastActivity time.Time
@@ -120,6 +121,19 @@ func (s *Session) setPort(p int) {
 	s.port = p
 	s.lastActivity = time.Now().UTC()
 	s.mu.Unlock()
+}
+
+func (s *Session) setSockPath(p string) {
+	s.mu.Lock()
+	s.sockPath = p
+	s.lastActivity = time.Now().UTC()
+	s.mu.Unlock()
+}
+
+func (s *Session) SockPath() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.sockPath
 }
 
 func (s *Session) setError(err string) {

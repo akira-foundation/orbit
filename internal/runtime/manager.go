@@ -40,6 +40,7 @@ type Manager interface {
 	Logs(projectID string) []LogLine
 	GetStatus(ctx context.Context, projectID string) (projects.Status, error)
 	Port(projectID string) int
+	SocketPath(projectID string) string
 	IsRunning(projectID string) bool
 	ConnOpen(projectID string)
 	ConnClose(projectID string)
@@ -54,6 +55,7 @@ type Manager interface {
 	SetEmitter(e Emitter)
 	SetServices(c ServiceCoordinator)
 	SetNodeAcquirer(a *services.Acquirer)
+	SetPHPAcquirer(a *services.Acquirer)
 }
 
 func New(projects ProjectLookup, db *sql.DB, cfg *config.Config) Manager {
@@ -71,6 +73,7 @@ func New(projects ProjectLookup, db *sql.DB, cfg *config.Config) Manager {
 		idleSince:  make(map[string]time.Time),
 		metrics:    newMetrics(db, cfg),
 		logs:       newLogStore(db),
+		dataDir:    cfg.DataDir,
 	}
 	go m.idleSweeper()
 	go m.metricsSampler()
@@ -85,6 +88,8 @@ type manager struct {
 	emitter      Emitter
 	services     ServiceCoordinator
 	nodeAcquirer *services.Acquirer
+	phpAcquirer  *services.Acquirer
+	dataDir      string
 	sessions     map[string]*Session
 
 	stopGrace time.Duration
@@ -339,6 +344,11 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 		m.markStartFailed(sess, err)
 		return fmt.Errorf("runtime: load project: %w", err)
 	}
+
+	if proj.RuntimeKind == projects.RuntimeKindPHPFPM {
+		return m.startPHP(ctx, sess, proj)
+	}
+
 	if proj.DevCommand == "" {
 		err := errors.New("runtime: project has no dev command")
 		m.markStartFailed(sess, err)

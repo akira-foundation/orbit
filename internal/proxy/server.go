@@ -199,17 +199,24 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		)
 	}()
 
+	targetDesc := target.SockPath
+	if target.URL != nil {
+		targetDesc = target.URL.String()
+	}
+
 	rp := &httputil.ReverseProxy{
 		Transport:     s.transport,
 		FlushInterval: -1, // flush after every write -> SSE / streamed responses
 		Director: func(req *http.Request) {
-			req.URL.Scheme = target.URL.Scheme
-			req.URL.Host = target.URL.Host
-			_, port, _ := net.SplitHostPort(target.URL.Host)
-			if port == "" {
-				req.Host = "localhost"
-			} else {
-				req.Host = "localhost:" + port
+			if target.URL != nil {
+				req.URL.Scheme = target.URL.Scheme
+				req.URL.Host = target.URL.Host
+				_, port, _ := net.SplitHostPort(target.URL.Host)
+				if port == "" {
+					req.Host = "localhost"
+				} else {
+					req.Host = "localhost:" + port
+				}
 			}
 			if _, ok := req.Header["User-Agent"]; !ok {
 				req.Header.Set("User-Agent", "")
@@ -224,9 +231,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if isClientGone(perr) || isWebSocket(req) {
 				return
 			}
-			log.Printf("[proxy] upstream error host=%s target=%s err=%v", r.Host, target.URL, perr)
+			log.Printf("[proxy] upstream error host=%s target=%s err=%v", r.Host, targetDesc, perr)
 			s.renderRecovery(rw, r)
 		},
+	}
+	if target.Kind == TargetFastCGI {
+		rp.Transport = &fcgiTransport{SockPath: target.SockPath, DocRoot: target.DocRoot}
 	}
 
 	rp.ServeHTTP(rec, r)

@@ -2,10 +2,12 @@
 INSERT INTO projects (
     id, name, path, slug, local_domain,
     detected_framework, package_manager, dev_command, dev_port, node_version,
+    runtime_kind, php_version,
     status, created_at, updated_at
 ) VALUES (
     ?, ?, ?, ?, ?,
     ?, ?, ?, ?, ?,
+    ?, ?,
     ?, ?, ?
 )
 RETURNING *;

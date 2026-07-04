@@ -137,6 +137,14 @@ export interface NodeVersionInfo {
   path: string
 }
 
+export interface PHPVersionInfo {
+  id: string
+  version: string
+  installed: boolean
+  diskBytes: number
+  path: string
+}
+
 export interface ServiceSnapshot {
   engine: string
   status: string
