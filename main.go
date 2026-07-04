@@ -40,19 +40,19 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:             "Orbit",
-		Menu:              buildMenu(app),
-		Width:             1280,
-		Height:            820,
-		MinWidth:          960,
-		MinHeight:         640,
-		Frameless:         false,
-		BackgroundColour:  &options.RGBA{R: 0, G: 0, B: 0, A: 0},
-		WindowStartState:  options.Normal,
-		AssetServer:       &assetserver.Options{Assets: assets},
-		OnStartup:         app.startup,
-		OnShutdown:        app.shutdown,
-		Bind:              []interface{}{app},
+		Title:            "Orbit",
+		Menu:             buildMenu(app),
+		Width:            1280,
+		Height:           820,
+		MinWidth:         960,
+		MinHeight:        640,
+		Frameless:        false,
+		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 0},
+		WindowStartState: options.Normal,
+		AssetServer:      &assetserver.Options{Assets: assets},
+		OnStartup:        app.startup,
+		OnShutdown:       app.shutdown,
+		Bind:             []interface{}{app},
 		// Closing the window must NOT terminate the runtime daemon. The
 		// proxy, runtime manager and *.orbit.test routing keep running in
 		// the background; only the UI hides. Dock icon click reopens it.

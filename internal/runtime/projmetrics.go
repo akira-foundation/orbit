@@ -76,16 +76,16 @@ func (p *projMetrics) SetWakeMs(ms int) {
 // are computed from the live window without clearing it so a slow trickle of
 // requests keeps producing meaningful P95/P99 numbers between samples.
 type drained struct {
-	ReqCount   int
-	ErrCount   int
-	BytesIn    int64
-	BytesOut   int64
-	HTTPReqs   int
-	WSReqs     int
+	ReqCount      int
+	ErrCount      int
+	BytesIn       int64
+	BytesOut      int64
+	HTTPReqs      int
+	WSReqs        int
 	P50, P95, P99 int
-	Crashes    int
-	Autostops  int
-	WakeMs     int
+	Crashes       int
+	Autostops     int
+	WakeMs        int
 }
 
 func (p *projMetrics) Drain() drained {

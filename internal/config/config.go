@@ -7,13 +7,13 @@ import (
 )
 
 type Config struct {
-	DataDir              string `json:"-"`
-	DBPath               string `json:"-"`
-	DomainSuffix    string `json:"domainSuffix"`
-	ProxyAddr       string `json:"proxyAddr"`
-	ProxyTLSAddr    string `json:"proxyTlsAddr"`
-	PublicPort      string `json:"publicPort"`
-	PublicTLSPort   string `json:"publicTlsPort"`
+	DataDir       string `json:"-"`
+	DBPath        string `json:"-"`
+	DomainSuffix  string `json:"domainSuffix"`
+	ProxyAddr     string `json:"proxyAddr"`
+	ProxyTLSAddr  string `json:"proxyTlsAddr"`
+	PublicPort    string `json:"publicPort"`
+	PublicTLSPort string `json:"publicTlsPort"`
 }
 
 func Load() (*Config, error) {
@@ -26,8 +26,8 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	c := &Config{
-		DataDir:      dir,
-		DBPath:       filepath.Join(dir, "orbit.db"),
+		DataDir:       dir,
+		DBPath:        filepath.Join(dir, "orbit.db"),
 		DomainSuffix:  "orbit.test",
 		ProxyAddr:     "127.0.0.1:2080",
 		ProxyTLSAddr:  "127.0.0.1:2443",

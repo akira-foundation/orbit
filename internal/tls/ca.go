@@ -23,11 +23,11 @@ const (
 )
 
 type Material struct {
-	Dir         string
-	CACertPath  string
-	CAKeyPath   string
-	LeafCert    string
-	LeafKey     string
+	Dir        string
+	CACertPath string
+	CAKeyPath  string
+	LeafCert   string
+	LeafKey    string
 }
 
 func DefaultDir() (string, error) {
