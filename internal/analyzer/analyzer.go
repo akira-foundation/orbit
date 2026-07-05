@@ -24,7 +24,6 @@ type Analysis struct {
 	AmbiguousReason string            `json:"ambiguousReason,omitempty"`
 }
 
-// Analyzer inspects a directory and returns an Analysis.
 type Analyzer interface {
 	Analyze(path string) (*Analysis, error)
 }
@@ -34,9 +33,8 @@ type packageJSON struct {
 	Scripts         map[string]string `json:"scripts"`
 	Dependencies    map[string]string `json:"dependencies"`
 	DevDependencies map[string]string `json:"devDependencies"`
-	// declared package manager, e.g. "pnpm@8.0.0"
-	PackageManager string            `json:"packageManager"`
-	Engines        map[string]string `json:"engines"`
+	PackageManager  string            `json:"packageManager"`
+	Engines         map[string]string `json:"engines"`
 }
 
 type defaultAnalyzer struct{}
@@ -67,7 +65,6 @@ func (a *defaultAnalyzer) Analyze(path string) (*Analysis, error) {
 		Scripts:     make(map[string]string),
 	}
 
-	// 1. Check for composer.json (PHP/Laravel)
 	compPath := filepath.Join(abs, "composer.json")
 	compRaw, compErr := os.ReadFile(compPath)
 	if compErr == nil {
@@ -91,7 +88,6 @@ func (a *defaultAnalyzer) Analyze(path string) (*Analysis, error) {
 		}
 	}
 
-	// 2. Check for go.mod (Go)
 	goModPath := filepath.Join(abs, "go.mod")
 	_, goModErr := os.Stat(goModPath)
 	if goModErr == nil {
@@ -103,7 +99,6 @@ func (a *defaultAnalyzer) Analyze(path string) (*Analysis, error) {
 		return analysis, nil
 	}
 
-	// 3. Fallback to package.json (Node.js)
 	pkgPath := filepath.Join(abs, "package.json")
 	_, pkgStatErr := os.Stat(pkgPath)
 	if compErr != nil && goModErr != nil && pkgStatErr != nil {
@@ -139,17 +134,13 @@ func (a *defaultAnalyzer) Analyze(path string) (*Analysis, error) {
 	return analysis, nil
 }
 
-// ─── package manager detection ───────────────────────────────────────────────
-
 func detectPackageManager(dir, declared string) string {
 	if declared != "" {
-		// "pnpm@8.0.0" → "pnpm", but be careful with "@org/pnpm@8.0.0"
 		if i := strings.LastIndex(declared, "@"); i > 0 {
 			return declared[:i]
 		}
 		return strings.TrimSpace(declared)
 	}
-	// lock-file heuristic (order matters — bun before npm)
 	checks := []struct {
 		file string
 		name string
@@ -168,16 +159,12 @@ func detectPackageManager(dir, declared string) string {
 	return "npm"
 }
 
-// ─── framework detection ─────────────────────────────────────────────────────
-
 type frameworkDef struct {
 	id   string
-	pkgs []string // first match wins
+	pkgs []string
 }
 
-// Ordered from most-specific to least-specific so that e.g. sveltekit beats svelte.
 var frameworks = []frameworkDef{
-	// Meta-frameworks / full-stack
 	{id: "nextjs", pkgs: []string{"next"}},
 	{id: "nuxt", pkgs: []string{"nuxt", "nuxt3"}},
 	{id: "remix", pkgs: []string{"@remix-run/react", "@remix-run/node", "@remix-run/serve"}},
@@ -186,14 +173,12 @@ var frameworks = []frameworkDef{
 	{id: "astro", pkgs: []string{"astro"}},
 	{id: "gatsby", pkgs: []string{"gatsby"}},
 	{id: "expo", pkgs: []string{"expo"}},
-	// UI frameworks / bundlers
 	{id: "angular", pkgs: []string{"@angular/core"}},
 	{id: "svelte", pkgs: []string{"svelte"}},
 	{id: "solid", pkgs: []string{"solid-js"}},
 	{id: "react-native", pkgs: []string{"react-native"}},
 	{id: "cra", pkgs: []string{"react-scripts"}},
 	{id: "vite", pkgs: []string{"vite", "@vitejs/plugin-react", "@vitejs/plugin-vue"}},
-	// Node frameworks
 	{id: "nestjs", pkgs: []string{"@nestjs/core"}},
 	{id: "fastify", pkgs: []string{"fastify", "@fastify/core"}},
 	{id: "express", pkgs: []string{"express"}},
@@ -201,7 +186,6 @@ var frameworks = []frameworkDef{
 	{id: "hapi", pkgs: []string{"@hapi/hapi"}},
 	{id: "strapi", pkgs: []string{"@strapi/strapi", "strapi"}},
 	{id: "payload", pkgs: []string{"payload"}},
-	// Electron / desktop
 	{id: "electron", pkgs: []string{"electron"}},
 }
 

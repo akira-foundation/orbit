@@ -46,11 +46,6 @@ type Session struct {
 	lastActivity time.Time
 	errMsg       string
 
-	// Self-healing accounting. attempts counts consecutive failures since
-	// the last successful run; reaches 0 again as soon as the session
-	// becomes Running. wasRunning flips true once a session reached
-	// Running so we can tell premature startup failures apart from real
-	// runtime crashes.
 	attempts   int
 	wasRunning bool
 
@@ -79,8 +74,6 @@ func newSession(projectID string, logCap int) *Session {
 	}
 }
 
-// newSessionID returns a short random hex token used as session_id in
-// runtime_logs. 8 bytes of entropy is plenty to disambiguate concurrent runs.
 func newSessionID() string {
 	var b [8]byte
 	_, _ = rand.Read(b[:])

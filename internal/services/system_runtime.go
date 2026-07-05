@@ -37,9 +37,6 @@ type SystemPHP struct {
 
 var phpVersionRe = regexp.MustCompile(`PHP (\d+\.\d+\.\d+)`)
 
-// a bare PATH lookup of "php-fpm" can resolve to an unrelated install (e.g.
-// Herd's versioned "php" has no unversioned "php-fpm" sibling, so a stray
-// Homebrew build wins instead), so resolve relative to php's own dir first.
 func DetectSystemPHP() (SystemPHP, bool) {
 	phpPath, err := exec.LookPath("php")
 	if err != nil {

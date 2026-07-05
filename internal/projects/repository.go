@@ -13,8 +13,6 @@ import (
 
 var ErrNotFound = errors.New("project not found")
 
-// Repository wraps the SQLC-generated *db.Queries with domain-level logic:
-// transaction handling, model mapping, and error translation.
 type Repository struct {
 	q   *db.Queries
 	raw *sql.DB // needed for transactions
@@ -23,8 +21,6 @@ type Repository struct {
 func NewRepository(sqlDB *sql.DB, q *db.Queries) *Repository {
 	return &Repository{q: q, raw: sqlDB}
 }
-
-// ─── writes ──────────────────────────────────────────────────────────────────
 
 func (r *Repository) Create(ctx context.Context, p *Project) error {
 	if p.ID == "" {
@@ -164,8 +160,6 @@ func (r *Repository) SetInstalledHash(ctx context.Context, id, hash string) erro
 	return err
 }
 
-// ─── reads ────────────────────────────────────────────────────────────────────
-
 func (r *Repository) List(ctx context.Context) ([]Project, error) {
 	rows, err := r.q.ListProjects(ctx)
 	if err != nil {
@@ -237,8 +231,6 @@ func (r *Repository) Get(ctx context.Context, id string) (*Project, error) {
 	}
 	return &p, nil
 }
-
-// ─── helpers ─────────────────────────────────────────────────────────────────
 
 func projectFromDB(row db.Project) Project {
 	return Project{

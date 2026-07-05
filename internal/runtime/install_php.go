@@ -16,7 +16,6 @@ import (
 	"orbit-app/internal/services"
 )
 
-// prefers a global `composer`, then system php + bundled composer.phar, then fully bundled
 func (m *manager) resolveComposerCommand(ctx context.Context, proj *projects.Project) ([]string, error) {
 	m.mu.RLock()
 	rtCfg := m.runtimesConfig

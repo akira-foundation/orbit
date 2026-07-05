@@ -2,8 +2,6 @@ package tls
 
 import "testing"
 
-// DefaultDir derives its path from $HOME, so pointing HOME at a fresh
-// tempdir per test gives Ensure an isolated, disposable TLS material dir.
 func withTestTLSDir(t *testing.T) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())

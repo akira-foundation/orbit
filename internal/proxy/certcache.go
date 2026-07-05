@@ -6,8 +6,6 @@ import (
 	"sync"
 )
 
-// certCache reloads cert/key from disk on change instead of once at startup,
-// since the leaf can be regenerated later for a new project domain.
 type certCache struct {
 	certPath string
 	keyPath  string

@@ -2,7 +2,6 @@ package analyzer
 
 import "strings"
 
-// runCmd returns the correct "run script" invocation for the given PM.
 func runCmd(pm, script string) string {
 	switch pm {
 	case "yarn":

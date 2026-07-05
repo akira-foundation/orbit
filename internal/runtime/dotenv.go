@@ -53,8 +53,6 @@ func applyDotEnvFile(path string, dst map[string]string) {
 	}
 }
 
-// some CI-detection checks test whether the var is defined at all, not
-// whether it's truthy: key must be fully absent, not just empty.
 func stripEnvVar(env []string, key string) []string {
 	prefix := key + "="
 	out := make([]string, 0, len(env))

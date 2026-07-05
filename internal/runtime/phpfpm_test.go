@@ -58,8 +58,6 @@ func TestRemoveStaleSocketAllowsRebind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// simulate a SIGKILL'd php-fpm: the socket file survives on disk even
-	// though nothing is listening anymore.
 	first.(*net.UnixListener).SetUnlinkOnClose(false)
 	if err := first.Close(); err != nil {
 		t.Fatal(err)

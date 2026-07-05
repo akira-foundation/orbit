@@ -38,9 +38,6 @@ func DefaultDir() (string, error) {
 	return filepath.Join(home, "Library", "Application Support", "Orbit", "tls"), nil
 }
 
-// regenerates the leaf when extraDomains includes one not already covered:
-// the wildcard only matches one label, so a dotted domain like
-// "nosferry.com.orbit.test" needs its own explicit SAN entry.
 func Ensure(domainSuffix string, extraDomains []string) (*Material, error) {
 	dir, err := DefaultDir()
 	if err != nil {
@@ -84,7 +81,6 @@ func loadOrCreateCA(m *Material) (*x509.Certificate, *rsa.PrivateKey, error) {
 				return cert, key, nil
 			}
 		}
-		// Old ECDSA CA on disk — wipe and regen as RSA so macOS/Chrome accept it.
 		_ = os.Remove(m.CACertPath)
 		_ = os.Remove(m.CAKeyPath)
 		_ = os.Remove(m.LeafCert)

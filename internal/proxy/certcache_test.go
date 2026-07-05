@@ -70,7 +70,6 @@ func TestCertCacheReloadsWhenFileChanges(t *testing.T) {
 		t.Fatalf("CN = %q, want first.test", first.Subject.CommonName)
 	}
 
-	// simulates a leaf rotation while the proxy is already running
 	time.Sleep(10 * time.Millisecond)
 	writeSelfSignedCert(t, dir, "leaf", "second.test")
 

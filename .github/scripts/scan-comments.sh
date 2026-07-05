@@ -84,6 +84,10 @@ while IFS= read -r f; do
     *.config.php|*.config.js|*.config.ts|*.config.mjs|*.config.cjs) continue ;;
   esac
 
+  if head -n1 "$f" | grep -qE '^// Code generated .* DO NOT EDIT\.$'; then
+    continue
+  fi
+
   is_php=0
   case "$f" in *.php) is_php=1 ;; esac
 

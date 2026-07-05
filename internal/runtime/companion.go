@@ -24,8 +24,6 @@ func frontendProcessSpec(proj *projects.Project) *projects.ProcessSpec {
 
 const hotFileTimeout = 30 * time.Second
 
-// blocks on public/hot so PHP doesn't render before Vite's ready and hit
-// Laravel's production-manifest fallback.
 func (m *manager) startCompanionAndWait(ctx context.Context, sess *Session, proj *projects.Project) {
 	spec := frontendProcessSpec(proj)
 	if spec == nil {
@@ -55,8 +53,6 @@ func waitHotFile(ctx context.Context, docRoot string, timeout time.Duration) err
 	return fmt.Errorf("vite dev server never wrote %s within %s", hotPath, timeout)
 }
 
-// never forces a port: Vite self-selects and writes its own URL to
-// public/hot, which the browser reads directly, not through the proxy.
 func (m *manager) startCompanion(ctx context.Context, sess *Session, proj *projects.Project) {
 	spec := frontendProcessSpec(proj)
 	if spec == nil {
@@ -80,7 +76,6 @@ func (m *manager) startCompanion(ctx context.Context, sess *Session, proj *proje
 
 	env := append(stripEnvVar(os.Environ(), "CI"), "FORCE_COLOR=1", "ORBIT_MANAGED=1")
 	env = mergeDotEnv(env, dir)
-	// overrides .env's APP_URL (Herd's *.test) with the domain Orbit serves.
 	if proj.LocalDomain != "" {
 		env = append(env, "APP_URL=https://"+proj.LocalDomain)
 	}

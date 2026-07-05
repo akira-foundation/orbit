@@ -33,7 +33,6 @@ func (m *manager) SocketPath(projectID string) string {
 	return sess.SockPath()
 }
 
-// fixed-length hash, not the raw slug: sockaddr_un caps socket paths around 104 bytes
 func phpRunID(projectID string) string {
 	sum := sha256.Sum256([]byte(projectID))
 	return hex.EncodeToString(sum[:])[:12]
@@ -82,8 +81,6 @@ func (m *manager) startPHP(ctx context.Context, sess *Session, proj *projects.Pr
 	return nil
 }
 
-// isSystem tells spawnPHPFPM whether to let php-fpm load the system's own
-// php.ini/conf.d (e.g. redis.so) instead of running fully isolated.
 func (m *manager) resolvePHPFPMBin(ctx context.Context, proj *projects.Project) (binPath string, isSystem bool, err error) {
 	m.mu.RLock()
 	rtCfg := m.runtimesConfig
@@ -128,8 +125,6 @@ func (m *manager) spawnPHPFPM(ctx context.Context, proj *projects.Project) (*pro
 		return nil, "", err
 	}
 
-	// -n (skip php.ini) only for bundled: system php-fpm needs its own
-	// php.ini/conf.d to load installed extensions.
 	args := []string{"-y", confPath, "-F", "-O"}
 	if !isSystem {
 		args = append([]string{"-n"}, args...)
@@ -175,9 +170,6 @@ func writePoolConfig(runDir, sockPath, docRoot string) (string, error) {
 	return conf, nil
 }
 
-// removeStaleSocket clears a leftover unix socket file from a prior
-// SIGKILL'd php-fpm instance, which never got a chance to unlink it. Safe
-// because this path is Orbit-owned and deterministic per project.
 func removeStaleSocket(sockPath string) {
 	_ = os.Remove(sockPath)
 }

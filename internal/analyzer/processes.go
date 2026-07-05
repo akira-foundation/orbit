@@ -12,8 +12,6 @@ const (
 	ProcessRoleFrontend ProcessRole = "frontend"
 )
 
-// ProcessSpec mirrors projects.ProcessSpec without importing the projects
-// package (which already imports analyzer), keeping the dependency one-way.
 type ProcessSpec struct {
 	Role       ProcessRole `json:"role"`
 	Kind       string      `json:"kind"`
