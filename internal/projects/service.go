@@ -53,6 +53,16 @@ func (s *Service) Create(ctx context.Context, path string) (*Project, error) {
 	for name, cmd := range a.Scripts {
 		p.Scripts = append(p.Scripts, Script{Name: name, Command: cmd})
 	}
+	for _, ps := range a.Processes {
+		p.Processes = append(p.Processes, ProcessSpec{
+			Role:       ProcessRole(ps.Role),
+			Kind:       RuntimeKind(ps.Kind),
+			WorkDir:    ps.WorkDir,
+			Command:    ps.Command,
+			Port:       ps.Port,
+			PHPVersion: ps.PHPVersion,
+		})
+	}
 	if err := s.repo.Create(ctx, p); err != nil {
 		return nil, err
 	}
@@ -99,14 +109,14 @@ func (s *Service) UpdateDomainPort(ctx context.Context, id string, port int) err
 	return s.repo.UpdateDomainPort(ctx, id, port)
 }
 
-var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
+var slugRe = regexp.MustCompile(`[^a-z0-9.]+`)
 
 func Slugify(in string) string {
 	in = strings.ToLower(strings.TrimSpace(in))
 	in = strings.TrimPrefix(in, "@")
 	in = strings.ReplaceAll(in, "/", "-")
 	in = slugRe.ReplaceAllString(in, "-")
-	in = strings.Trim(in, "-")
+	in = strings.Trim(in, "-.")
 	if in == "" {
 		in = "project"
 	}

@@ -43,9 +43,6 @@ func lockfileHash(dir string) (string, error) {
 	return hex.EncodeToString(h[:]), nil
 }
 
-// NeedsInstall reports whether dependencies need to be (re)installed for a
-// project. Returns true if node_modules is missing, or if the lockfile hash
-// differs from the last successful install.
 func NeedsInstall(proj *projects.Project, knownHash string) bool {
 	if proj.Path == "" {
 		return false
@@ -61,7 +58,6 @@ func NeedsInstall(proj *projects.Project, knownHash string) bool {
 	return cur != knownHash
 }
 
-// installCommand returns the package-manager-specific install command.
 func installCommand(pm string) []string {
 	switch pm {
 	case "yarn":
@@ -75,8 +71,6 @@ func installCommand(pm string) []string {
 	}
 }
 
-// installHandle runs the install command in the project directory. Returns a
-// processHandle so the caller can stream stdout/stderr and wait/kill.
 func installHandle(proj *projects.Project, nodeBinDir string) (*processHandle, error) {
 	cmd := installCommand(proj.PackageManager)
 	if len(cmd) == 0 {
@@ -84,9 +78,8 @@ func installHandle(proj *projects.Project, nodeBinDir string) (*processHandle, e
 	}
 	c := exec.Command(cmd[0], cmd[1:]...)
 	c.Dir = proj.Path
-	env := append(os.Environ(),
+	env := append(stripEnvVar(os.Environ(), "CI"),
 		"FORCE_COLOR=1",
-		"CI=false",
 	)
 	c.Env = prependNodeBinDir(env, nodeBinDir)
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

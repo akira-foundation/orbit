@@ -335,6 +335,9 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 		if existing.pgid > 0 {
 			_ = killPGID(existing.pgid)
 		}
+		if existing.companionPgid > 0 {
+			_ = killPGID(existing.companionPgid)
+		}
 	}
 	sess := newSession(projectID, m.logCap)
 	sess.setStatus(projects.StatusStarting)
@@ -378,9 +381,8 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 		proj.ID, proj.DevPort, port, proj.DevCommand)
 	m.recordSystem(proj.ID, LevelInfo, SourceSystem,
 		fmt.Sprintf("starting runtime (cmd=%q port=%d)", proj.DevCommand, port))
-	env := append(os.Environ(),
+	env := append(stripEnvVar(os.Environ(), "CI"),
 		"FORCE_COLOR=1",
-		"CI=false",
 		fmt.Sprintf("PORT=%d", port),
 	)
 	env = mergeServiceEnv(env, svcEnv)
@@ -403,6 +405,7 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 	go m.readPipe(sess, handle.stderr, "stderr")
 	go m.supervise(sess, handle, proj)
 	go m.watchdog(sess, handle, 60*time.Second)
+	go m.startCompanion(context.Background(), sess, proj)
 
 	return nil
 }
@@ -500,6 +503,7 @@ func (m *manager) runInstall(ctx context.Context, sess *Session, proj *projects.
 
 func (m *manager) markStartFailed(sess *Session, err error) {
 	sess.setError(err.Error())
+	m.recordSystem(sess.projectID, LevelError, SourceSystem, err.Error())
 	m.emit(EvtError, StatusEvent{ProjectID: sess.projectID, Snapshot: m.snap(sess)})
 }
 
@@ -514,6 +518,9 @@ func (m *manager) Stop(ctx context.Context, projectID string) error {
 
 	if sess.killFn != nil {
 		sess.killFn()
+	}
+	if sess.companionKillFn != nil {
+		sess.companionKillFn()
 	}
 	close(sess.stopCh)
 
@@ -656,6 +663,9 @@ func (m *manager) StopAll() {
 		}
 		if s.pgid > 0 {
 			pgids = append(pgids, s.pgid)
+		}
+		if s.companionPgid > 0 {
+			pgids = append(pgids, s.companionPgid)
 		}
 	}
 	m.mu.RUnlock()

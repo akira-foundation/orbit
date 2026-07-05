@@ -38,10 +38,7 @@ func DefaultDir() (string, error) {
 	return filepath.Join(home, "Library", "Application Support", "Orbit", "tls"), nil
 }
 
-// Ensure makes sure a CA + wildcard leaf cert exist on disk. Returns the
-// resolved paths. Creates files when missing; regenerates the leaf when it's
-// within 30 days of expiry so live dev never breaks on cert rotation.
-func Ensure(domainSuffix string) (*Material, error) {
+func Ensure(domainSuffix string, extraDomains []string) (*Material, error) {
 	dir, err := DefaultDir()
 	if err != nil {
 		return nil, err
@@ -64,9 +61,10 @@ func Ensure(domainSuffix string) (*Material, error) {
 	}
 
 	needLeaf := !exists(m.LeafCert) || !exists(m.LeafKey) ||
-		leafExpiringSoon(m.LeafCert) || !leafHasChain(m.LeafCert)
+		leafExpiringSoon(m.LeafCert) || !leafHasChain(m.LeafCert) ||
+		!leafCoversDomains(m.LeafCert, extraDomains)
 	if needLeaf {
-		if err := createLeaf(m, caCert, caKey, domainSuffix); err != nil {
+		if err := createLeaf(m, caCert, caKey, domainSuffix, extraDomains); err != nil {
 			return nil, err
 		}
 	}
@@ -83,7 +81,6 @@ func loadOrCreateCA(m *Material) (*x509.Certificate, *rsa.PrivateKey, error) {
 				return cert, key, nil
 			}
 		}
-		// Old ECDSA CA on disk — wipe and regen as RSA so macOS/Chrome accept it.
 		_ = os.Remove(m.CACertPath)
 		_ = os.Remove(m.CAKeyPath)
 		_ = os.Remove(m.LeafCert)
@@ -132,7 +129,7 @@ func loadOrCreateCA(m *Material) (*x509.Certificate, *rsa.PrivateKey, error) {
 	return cert, key, nil
 }
 
-func createLeaf(m *Material, caCert *x509.Certificate, caKey *rsa.PrivateKey, domainSuffix string) error {
+func createLeaf(m *Material, caCert *x509.Certificate, caKey *rsa.PrivateKey, domainSuffix string, extraDomains []string) error {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return err
@@ -147,6 +144,7 @@ func createLeaf(m *Material, caCert *x509.Certificate, caKey *rsa.PrivateKey, do
 	}
 	ski := sha1.Sum(pubBytes)
 	wildcard := "*." + domainSuffix
+	names := dedupeDomains(append([]string{wildcard, domainSuffix, "localhost"}, extraDomains...))
 	tmpl := &x509.Certificate{
 		SerialNumber:       serial,
 		Subject:            pkix.Name{CommonName: leafCommonName, Organization: []string{"Orbit"}},
@@ -154,7 +152,7 @@ func createLeaf(m *Material, caCert *x509.Certificate, caKey *rsa.PrivateKey, do
 		NotAfter:           time.Now().AddDate(leafValidYears, 0, 0),
 		KeyUsage:           x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:        []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		DNSNames:           []string{wildcard, domainSuffix, "localhost"},
+		DNSNames:           names,
 		SubjectKeyId:       ski[:],
 		AuthorityKeyId:     caCert.SubjectKeyId,
 		SignatureAlgorithm: x509.SHA256WithRSA,
@@ -199,6 +197,35 @@ func leafHasChain(path string) bool {
 		b = rest
 	}
 	return count >= 2
+}
+
+func leafCoversDomains(path string, domains []string) bool {
+	if len(domains) == 0 {
+		return true
+	}
+	cert, err := readCert(path)
+	if err != nil {
+		return false
+	}
+	for _, d := range domains {
+		if cert.VerifyHostname(d) != nil {
+			return false
+		}
+	}
+	return true
+}
+
+func dedupeDomains(names []string) []string {
+	seen := make(map[string]bool, len(names))
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		if n == "" || seen[n] {
+			continue
+		}
+		seen[n] = true
+		out = append(out, n)
+	}
+	return out
 }
 
 func leafExpiringSoon(path string) bool {

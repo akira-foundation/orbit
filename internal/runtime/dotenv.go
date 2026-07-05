@@ -53,6 +53,17 @@ func applyDotEnvFile(path string, dst map[string]string) {
 	}
 }
 
+func stripEnvVar(env []string, key string) []string {
+	prefix := key + "="
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		if !strings.HasPrefix(kv, prefix) {
+			out = append(out, kv)
+		}
+	}
+	return out
+}
+
 func mergeDotEnv(base []string, projectDir string) []string {
 	loaded := loadDotEnv(projectDir)
 	if len(loaded) == 0 {

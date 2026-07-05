@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { api } from "../api"
 import type { AnalyzeResult, Project } from "../types"
-import { FolderSearch, PackageOpen } from "lucide-react"
+import { FolderSearch, PackageOpen, TriangleAlert } from "lucide-react"
 import { Switch } from "./ui/switch"
 import {
   Dialog,
@@ -146,6 +146,18 @@ export function AddProjectDialog({
             </div>
           )}
 
+          {analysis?.ambiguousLayout && (
+            <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/[0.06] p-3.5">
+              <TriangleAlert className="size-4 mt-0.5 text-destructive shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium text-destructive">Ambiguous layout</p>
+                <p className="text-[11px] text-destructive/80 mt-0.5">
+                  {analysis.ambiguousReason || "Could not determine a single backend to run. Point Orbit at a specific subfolder instead."}
+                </p>
+              </div>
+            </div>
+          )}
+
           {analysis && needsInstall && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.04] p-3.5">
               <PackageOpen className="size-4 mt-0.5 text-amber-300 shrink-0" />
@@ -173,7 +185,7 @@ export function AddProjectDialog({
 
         <DialogFooter>
           <Button variant="ghost" onClick={close}>Cancel</Button>
-          <Button onClick={create} disabled={!analysis || busy}>Add to Orbit</Button>
+          <Button onClick={create} disabled={!analysis || busy || analysis.ambiguousLayout}>Add to Orbit</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

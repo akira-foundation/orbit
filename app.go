@@ -104,7 +104,13 @@ func (a *App) startup(ctx context.Context) {
 		Services:       proxy.NewServiceTable(cfg.DomainSuffix, svcEntries),
 		ServiceStarter: a.services,
 	}
-	if mat, err := orbittls.Ensure(cfg.DomainSuffix); err == nil {
+	extraDomains := []string{}
+	if domains, err := a.service.ListDomains(ctx); err == nil {
+		for _, d := range domains {
+			extraDomains = append(extraDomains, d.Domain)
+		}
+	}
+	if mat, err := orbittls.Ensure(cfg.DomainSuffix, extraDomains); err == nil {
 		opts.TLSAddr = cfg.ProxyTLSAddr
 		opts.TLSCert = mat.LeafCert
 		opts.TLSKey = mat.LeafKey

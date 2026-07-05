@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,6 +48,32 @@ func TestWritePoolConfigContainsRequiredDirectives(t *testing.T) {
 			t.Fatalf("pool config missing %q:\n%s", want, body)
 		}
 	}
+}
+
+func TestRemoveStaleSocketAllowsRebind(t *testing.T) {
+	dir := t.TempDir()
+	sockPath := filepath.Join(dir, "f.sock")
+
+	first, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.(*net.UnixListener).SetUnlinkOnClose(false)
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := net.Listen("unix", sockPath); err == nil {
+		t.Fatal("expected bind to fail on a stale socket file left behind")
+	}
+
+	removeStaleSocket(sockPath)
+
+	second, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("expected rebind to succeed after removeStaleSocket, got: %v", err)
+	}
+	_ = second.Close()
 }
 
 func TestWaitUnixSocketTimesOutWhenNeverCreated(t *testing.T) {

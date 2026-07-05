@@ -1,6 +1,7 @@
 package services
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -37,21 +38,54 @@ type SystemPHP struct {
 var phpVersionRe = regexp.MustCompile(`PHP (\d+\.\d+\.\d+)`)
 
 func DetectSystemPHP() (SystemPHP, bool) {
-	fpmPath, err := exec.LookPath("php-fpm")
-	if err != nil {
-		return SystemPHP{}, false
-	}
 	phpPath, err := exec.LookPath("php")
 	if err != nil {
 		return SystemPHP{}, false
 	}
-	out, err := exec.Command(fpmPath, "-v").Output()
-	if err != nil {
+	version, ok := phpVersionOf(phpPath)
+	if !ok {
 		return SystemPHP{}, false
+	}
+	fpmPath, ok := findMatchingPHPFPM(phpPath, version)
+	if !ok {
+		return SystemPHP{}, false
+	}
+	return SystemPHP{Version: version, PHPPath: phpPath, PHPFPMPath: fpmPath}, true
+}
+
+func phpVersionOf(binPath string) (string, bool) {
+	out, err := exec.Command(binPath, "-v").Output()
+	if err != nil {
+		return "", false
 	}
 	m := phpVersionRe.FindStringSubmatch(string(out))
 	if m == nil {
-		return SystemPHP{}, false
+		return "", false
 	}
-	return SystemPHP{Version: m[1], PHPPath: phpPath, PHPFPMPath: fpmPath}, true
+	return m[1], true
+}
+
+func findMatchingPHPFPM(phpPath, version string) (string, bool) {
+	real, err := filepath.EvalSymlinks(phpPath)
+	if err != nil {
+		real = phpPath
+	}
+	dir := filepath.Dir(real)
+
+	candidates := []string{filepath.Join(dir, "php-fpm")}
+	if parts := strings.SplitN(version, ".", 3); len(parts) >= 2 {
+		candidates = append(candidates, filepath.Join(dir, "php"+parts[0]+parts[1]+"-fpm"))
+	}
+	for _, c := range candidates {
+		if st, err := os.Stat(c); err == nil && !st.IsDir() {
+			return c, true
+		}
+	}
+
+	if p, err := exec.LookPath("php-fpm"); err == nil {
+		if v, ok := phpVersionOf(p); ok && v == version {
+			return p, true
+		}
+	}
+	return "", false
 }

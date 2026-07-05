@@ -69,6 +69,19 @@ type ProjectDomain struct {
 	UpdatedAt  string `json:"updated_at"`
 }
 
+type ProjectProcess struct {
+	ID         string `json:"id"`
+	ProjectID  string `json:"project_id"`
+	Role       string `json:"role"`
+	Kind       string `json:"kind"`
+	WorkDir    string `json:"work_dir"`
+	Command    string `json:"command"`
+	Port       int64  `json:"port"`
+	PhpVersion string `json:"php_version"`
+	SortOrder  int64  `json:"sort_order"`
+	CreatedAt  string `json:"created_at"`
+}
+
 type ProjectScript struct {
 	ID        string `json:"id"`
 	ProjectID string `json:"project_id"`

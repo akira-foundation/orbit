@@ -57,11 +57,27 @@ func TestResolvePHPFPMBinUsesSystemWhenPreferredAndAvailable(t *testing.T) {
 	m := &manager{runtimesConfig: cfgStore}
 	proj := &projects.Project{PHPVersion: "8.3.32"}
 
-	got, err := m.resolvePHPFPMBin(context.Background(), proj)
+	got, isSystem, err := m.resolvePHPFPMBin(context.Background(), proj)
 	if err != nil {
 		t.Fatalf("resolvePHPFPMBin: %v", err)
 	}
 	if got != sys.PHPFPMPath {
 		t.Fatalf("resolvePHPFPMBin = %q, want system php-fpm %q", got, sys.PHPFPMPath)
+	}
+	if !isSystem {
+		t.Fatal("expected isSystem = true when using the detected system php-fpm")
+	}
+}
+
+func TestResolvePHPFPMBinNotSystemWhenNotPreferred(t *testing.T) {
+	m := &manager{}
+	proj := &projects.Project{PHPVersion: "8.3.32"}
+
+	_, isSystem, err := m.resolvePHPFPMBin(context.Background(), proj)
+	if err == nil {
+		t.Fatal("expected an error with no acquirer configured")
+	}
+	if isSystem {
+		t.Fatal("expected isSystem = false when system PHP is not preferred")
 	}
 }
