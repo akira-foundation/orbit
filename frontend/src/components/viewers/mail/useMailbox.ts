@@ -58,7 +58,7 @@ export function useMailbox() {
   }, [refresh]);
 
   useWailsEvent<Summary>("mail:new", (m) => {
-    setMessages((prev) => [m, ...prev]);
+    setMessages((prev) => (prev.some((x) => x.ID === m.ID) ? prev : [m, ...prev]));
     setUnread((u) => u + 1);
   });
   useWailsEvent("mail:delete", () => {

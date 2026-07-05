@@ -30,6 +30,9 @@ func (e Event) Summary() (MessageSummary, bool) {
 }
 
 func Watch(ctx context.Context, wsURL string, onEvent func(Event)) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	conn, _, err := websocket.DefaultDialer.DialContext(ctx, wsURL, nil)
 	if err != nil {
 		return err
