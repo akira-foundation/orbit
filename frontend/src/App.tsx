@@ -16,6 +16,7 @@ import {
 import { ProjectDetail } from "./pages/ProjectDetail";
 import { ProjectMetricsPage } from "./pages/ProjectMetrics";
 import { ProjectLogsPage } from "./pages/ProjectLogs";
+import { MailView } from "./components/viewers/mail/MailView";
 import { useProjects } from "./store";
 import { useWailsEvent } from "./hooks/useWailsEvent";
 import { SetupBanner } from "./components/SetupBanner";
@@ -115,6 +116,8 @@ export function App() {
               <Services />
             ) : view === "runtimes" ? (
               <Runtimes />
+            ) : view === "mail" ? (
+              <MailView />
             ) : view === "settings" ? (
               <SettingsPage
                 autoAction={autoAction}
