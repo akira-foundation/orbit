@@ -84,9 +84,8 @@ func installHandle(proj *projects.Project, nodeBinDir string) (*processHandle, e
 	}
 	c := exec.Command(cmd[0], cmd[1:]...)
 	c.Dir = proj.Path
-	env := append(os.Environ(),
+	env := append(stripEnvVar(os.Environ(), "CI"),
 		"FORCE_COLOR=1",
-		"CI=false",
 	)
 	c.Env = prependNodeBinDir(env, nodeBinDir)
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

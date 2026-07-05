@@ -23,24 +23,25 @@ const (
 // Timestamps are ISO-8601 strings so the Wails binding generator emits `string`
 // instead of `any` (which happens with time.Time).
 type Project struct {
-	ID                string      `json:"id"`
-	Name              string      `json:"name"`
-	Path              string      `json:"path"`
-	Slug              string      `json:"slug"`
-	LocalDomain       string      `json:"localDomain"`
-	DetectedFramework string      `json:"detectedFramework"`
-	PackageManager    string      `json:"packageManager"`
-	DevCommand        string      `json:"devCommand"`
-	DevPort           int         `json:"devPort"`
-	NodeVersion       string      `json:"nodeVersion"`
-	RuntimeKind       RuntimeKind `json:"runtimeKind"`
-	PHPVersion        string      `json:"phpVersion"`
-	Status            Status      `json:"status"`
-	Secure            bool        `json:"secure"`
-	InstalledHash     string      `json:"installedHash"`
-	CreatedAt         string      `json:"createdAt"`
-	UpdatedAt         string      `json:"updatedAt"`
-	Scripts           []Script    `json:"scripts,omitempty"`
+	ID                string        `json:"id"`
+	Name              string        `json:"name"`
+	Path              string        `json:"path"`
+	Slug              string        `json:"slug"`
+	LocalDomain       string        `json:"localDomain"`
+	DetectedFramework string        `json:"detectedFramework"`
+	PackageManager    string        `json:"packageManager"`
+	DevCommand        string        `json:"devCommand"`
+	DevPort           int           `json:"devPort"`
+	NodeVersion       string        `json:"nodeVersion"`
+	RuntimeKind       RuntimeKind   `json:"runtimeKind"`
+	PHPVersion        string        `json:"phpVersion"`
+	Status            Status        `json:"status"`
+	Secure            bool          `json:"secure"`
+	InstalledHash     string        `json:"installedHash"`
+	CreatedAt         string        `json:"createdAt"`
+	UpdatedAt         string        `json:"updatedAt"`
+	Scripts           []Script      `json:"scripts,omitempty"`
+	Processes         []ProcessSpec `json:"processes,omitempty"`
 }
 
 // Script is a named npm/yarn/pnpm/bun script detected in package.json.
@@ -50,6 +51,28 @@ type Script struct {
 	Name      string `json:"name"`
 	Command   string `json:"command"`
 	CreatedAt string `json:"createdAt"`
+}
+
+type ProcessRole string
+
+const (
+	ProcessRoleBackend  ProcessRole = "backend"
+	ProcessRoleFrontend ProcessRole = "frontend"
+)
+
+// ProcessSpec is one runnable process belonging to a project (e.g. the
+// php-fpm backend and a companion Vite dev server for Inertia/monorepo apps).
+type ProcessSpec struct {
+	ID         string      `json:"id"`
+	ProjectID  string      `json:"projectId"`
+	Role       ProcessRole `json:"role"`
+	Kind       RuntimeKind `json:"kind"`
+	WorkDir    string      `json:"workDir"`
+	Command    string      `json:"command"`
+	Port       int         `json:"port"`
+	PHPVersion string      `json:"phpVersion"`
+	Order      int         `json:"order"`
+	CreatedAt  string      `json:"createdAt"`
 }
 
 type Domain struct {

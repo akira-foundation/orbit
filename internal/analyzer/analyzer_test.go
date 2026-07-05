@@ -31,6 +31,45 @@ func TestAnalyzeLaravelProject(t *testing.T) {
 	}
 }
 
+func TestAnalyzeLaravelUsesFolderNameNotComposerName(t *testing.T) {
+	dir := t.TempDir()
+	appDir := filepath.Join(dir, "nosferry.com")
+	if err := os.MkdirAll(appDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	composerJSON := `{"name":"nosferry/nosferry.com","require":{"php":"^8.5","laravel/framework":"^11.0"}}`
+	if err := os.WriteFile(filepath.Join(appDir, "composer.json"), []byte(composerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	a, err := New().Analyze(appDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Name != "nosferry.com" {
+		t.Fatalf("name = %q, want folder name nosferry.com", a.Name)
+	}
+}
+
+func TestAnalyzeNodeUsesFolderNameNotPackageName(t *testing.T) {
+	dir := t.TempDir()
+	appDir := filepath.Join(dir, "my-app")
+	if err := os.MkdirAll(appDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(appDir, "package.json"), []byte(`{"name":"@acme/totally-different"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	a, err := New().Analyze(appDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Name != "my-app" {
+		t.Fatalf("name = %q, want folder name my-app", a.Name)
+	}
+}
+
 func TestAnalyzeNodeProjectDefaultsToCommandRuntime(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"app"}`), 0o644); err != nil {

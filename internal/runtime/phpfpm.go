@@ -74,6 +74,7 @@ func (m *manager) startPHP(ctx context.Context, sess *Session, proj *projects.Pr
 		m.markStartFailed(sess, err)
 		return fmt.Errorf("runtime: php-fpm: %w", err)
 	}
+	m.startCompanionAndWait(ctx, sess, proj)
 	sess.setStatus(projects.StatusRunning)
 	m.projMetricsFor(proj.ID).SetWakeMs(sinceMs(sess.startedAt))
 	_ = m.projects.UpdateStatus(ctx, proj.ID, projects.StatusRunning)
@@ -81,8 +82,9 @@ func (m *manager) startPHP(ctx context.Context, sess *Session, proj *projects.Pr
 	return nil
 }
 
-// system php-fpm wins when preferred and detected, else the bundled PHPVersion build
-func (m *manager) resolvePHPFPMBin(ctx context.Context, proj *projects.Project) (string, error) {
+// isSystem tells spawnPHPFPM whether to let php-fpm load the system's own
+// php.ini/conf.d (e.g. redis.so) instead of running fully isolated.
+func (m *manager) resolvePHPFPMBin(ctx context.Context, proj *projects.Project) (binPath string, isSystem bool, err error) {
 	m.mu.RLock()
 	rtCfg := m.runtimesConfig
 	acq := m.phpAcquirer
@@ -90,26 +92,26 @@ func (m *manager) resolvePHPFPMBin(ctx context.Context, proj *projects.Project) 
 
 	if rtCfg != nil && rtCfg.PreferSystemPHP() {
 		if sys, ok := services.DetectSystemPHP(); ok {
-			return sys.PHPFPMPath, nil
+			return sys.PHPFPMPath, true, nil
 		}
 	}
 
 	if acq == nil {
-		return "", errors.New("php-fpm: no acquirer configured")
+		return "", false, errors.New("php-fpm: no acquirer configured")
 	}
 	engine, ok := services.PHPEngineForVersion(proj.PHPVersion)
 	if !ok {
-		return "", fmt.Errorf("no bundled php engine for version %s", proj.PHPVersion)
+		return "", false, fmt.Errorf("no bundled php engine for version %s", proj.PHPVersion)
 	}
-	binPath, err := acq.Ensure(ctx, engine)
+	binPath, err = acq.Ensure(ctx, engine)
 	if err != nil {
-		return "", fmt.Errorf("acquire php %s: %w", proj.PHPVersion, err)
+		return "", false, fmt.Errorf("acquire php %s: %w", proj.PHPVersion, err)
 	}
-	return binPath, nil
+	return binPath, false, nil
 }
 
 func (m *manager) spawnPHPFPM(ctx context.Context, proj *projects.Project) (*processHandle, string, error) {
-	fpmBin, err := m.resolvePHPFPMBin(ctx, proj)
+	fpmBin, isSystem, err := m.resolvePHPFPMBin(ctx, proj)
 	if err != nil {
 		return nil, "", err
 	}
@@ -119,13 +121,20 @@ func (m *manager) spawnPHPFPM(ctx context.Context, proj *projects.Project) (*pro
 		return nil, "", err
 	}
 	sockPath := filepath.Join(runDir, "f.sock")
+	removeStaleSocket(sockPath)
 	docRoot := filepath.Join(proj.Path, "public")
 	confPath, err := writePoolConfig(runDir, sockPath, docRoot)
 	if err != nil {
 		return nil, "", err
 	}
 
-	cmd := exec.Command(fpmBin, "-n", "-y", confPath, "-F", "-O")
+	// -n (skip php.ini) only for bundled: system php-fpm needs its own
+	// php.ini/conf.d to load installed extensions.
+	args := []string{"-y", confPath, "-F", "-O"}
+	if !isSystem {
+		args = append([]string{"-n"}, args...)
+	}
+	cmd := exec.Command(fpmBin, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -164,6 +173,13 @@ func writePoolConfig(runDir, sockPath, docRoot string) (string, error) {
 		return "", err
 	}
 	return conf, nil
+}
+
+// removeStaleSocket clears a leftover unix socket file from a prior
+// SIGKILL'd php-fpm instance, which never got a chance to unlink it. Safe
+// because this path is Orbit-owned and deterministic per project.
+func removeStaleSocket(sockPath string) {
+	_ = os.Remove(sockPath)
 }
 
 func waitUnixSocket(ctx context.Context, sockPath string, timeout time.Duration) error {

@@ -22,6 +22,21 @@ func TestDetectSystemPHPShapeWhenPresent(t *testing.T) {
 	}
 }
 
+func TestDetectSystemPHPFPMVersionMatchesPHPVersion(t *testing.T) {
+	got, ok := DetectSystemPHP()
+	if !ok {
+		t.Skip("no system php+php-fpm pair on PATH for this test runner")
+	}
+	fpmVersion, ok := phpVersionOf(got.PHPFPMPath)
+	if !ok {
+		t.Fatalf("could not determine version of resolved php-fpm %q", got.PHPFPMPath)
+	}
+	if fpmVersion != got.Version {
+		t.Fatalf("resolved php-fpm %q is version %q, want it to match php's version %q",
+			got.PHPFPMPath, fpmVersion, got.Version)
+	}
+}
+
 func TestRuntimesConfigDefaultsToNotPreferringSystem(t *testing.T) {
 	store := LoadRuntimesConfig(t.TempDir())
 	if store.PreferSystemNode() || store.PreferSystemPHP() {

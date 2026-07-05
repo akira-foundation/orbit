@@ -3,6 +3,7 @@ package proxy
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -80,10 +81,12 @@ func NewServerWithOptions(opts Options) *Server {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	if opts.TLSAddr != "" && opts.TLSCert != "" && opts.TLSKey != "" {
+		cache := newCertCache(opts.TLSCert, opts.TLSKey)
 		s.https = &http.Server{
 			Addr:              opts.TLSAddr,
 			Handler:           s,
 			ReadHeaderTimeout: 10 * time.Second,
+			TLSConfig:         &tls.Config{GetCertificate: cache.GetCertificate},
 		}
 	}
 	return s
@@ -93,7 +96,7 @@ func (s *Server) ListenAndServe() error {
 	if s.https != nil {
 		go func() {
 			log.Printf("[proxy] tls listening on %s", s.tlsAddr)
-			if err := s.https.ListenAndServeTLS(s.tlsCert, s.tlsKey); err != nil &&
+			if err := s.https.ListenAndServeTLS("", ""); err != nil &&
 				!errors.Is(err, http.ErrServerClosed) {
 				log.Printf("[proxy] tls server error: %v", err)
 			}

@@ -100,7 +100,7 @@ func (m *manager) ensureComposerInstalled(ctx context.Context, sess *Session, pr
 
 	cmd := exec.Command(argv[0], append(argv[1:], "install", "--no-interaction", "--no-progress")...)
 	cmd.Dir = proj.Path
-	cmd.Env = append(os.Environ(), "FORCE_COLOR=1", "CI=false")
+	cmd.Env = append(stripEnvVar(os.Environ(), "CI"), "FORCE_COLOR=1")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	stdout, err := cmd.StdoutPipe()

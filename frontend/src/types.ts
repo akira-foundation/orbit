@@ -14,6 +14,19 @@ export interface ProjectScript {
   createdAt: string
 }
 
+export interface ProjectProcess {
+  id: string
+  projectId: string
+  role: 'backend' | 'frontend'
+  kind: 'command' | 'php-fpm'
+  workDir: string
+  command: string
+  port: number
+  phpVersion: string
+  order: number
+  createdAt: string
+}
+
 import type { config } from "../wailsjs/go/models";
 export type Config = config.Config;
 
@@ -33,6 +46,7 @@ export interface Project {
   createdAt: string
   updatedAt: string
   scripts?: ProjectScript[]
+  processes?: ProjectProcess[]
 }
 
 export interface RuntimeLogLine {
@@ -115,6 +129,9 @@ export interface AnalyzeResult {
   scripts: Record<string, string>
   suggestedSlug: string
   suggestedDomain: string
+  processes?: ProjectProcess[]
+  ambiguousLayout?: boolean
+  ambiguousReason?: string
 }
 
 export interface ServiceInfo {

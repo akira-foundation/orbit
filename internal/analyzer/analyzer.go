@@ -9,16 +9,19 @@ import (
 )
 
 type Analysis struct {
-	Name           string            `json:"name"`
-	Path           string            `json:"path"`
-	PackageManager string            `json:"packageManager"`
-	Framework      string            `json:"framework"`
-	DevCommand     string            `json:"devCommand"`
-	DevPort        int               `json:"devPort"`
-	NodeVersion    string            `json:"nodeVersion"`
-	RuntimeKind    string            `json:"runtimeKind"`
-	PHPVersion     string            `json:"phpVersion"`
-	Scripts        map[string]string `json:"scripts"`
+	Name            string            `json:"name"`
+	Path            string            `json:"path"`
+	PackageManager  string            `json:"packageManager"`
+	Framework       string            `json:"framework"`
+	DevCommand      string            `json:"devCommand"`
+	DevPort         int               `json:"devPort"`
+	NodeVersion     string            `json:"nodeVersion"`
+	RuntimeKind     string            `json:"runtimeKind"`
+	PHPVersion      string            `json:"phpVersion"`
+	Scripts         map[string]string `json:"scripts"`
+	Processes       []ProcessSpec     `json:"processes,omitempty"`
+	AmbiguousLayout bool              `json:"ambiguousLayout,omitempty"`
+	AmbiguousReason string            `json:"ambiguousReason,omitempty"`
 }
 
 // Analyzer inspects a directory and returns an Analysis.
@@ -71,14 +74,18 @@ func (a *defaultAnalyzer) Analyze(path string) (*Analysis, error) {
 		var comp composerJSON
 		if err := json.Unmarshal(compRaw, &comp); err == nil {
 			if _, hasLaravel := comp.Require["laravel/framework"]; hasLaravel {
-				analysis.Name = comp.Name
-				if analysis.Name == "" {
-					analysis.Name = filepath.Base(abs)
-				}
+				analysis.Name = filepath.Base(abs)
 				analysis.Framework = "laravel"
 				analysis.PackageManager = "composer"
 				analysis.RuntimeKind = "php-fpm"
 				analysis.PHPVersion = resolvePHPVersion(comp.Require["php"])
+				backend := ProcessSpec{Role: ProcessRoleBackend, Kind: "php-fpm", PHPVersion: analysis.PHPVersion}
+				analysis.Processes = []ProcessSpec{backend}
+				if frontend, nodeVersion, ok := detectInertiaFrontend(abs); ok {
+					analysis.Framework = "laravel-inertia"
+					analysis.NodeVersion = nodeVersion
+					analysis.Processes = append(analysis.Processes, *frontend)
+				}
 				return analysis, nil
 			}
 		}
@@ -86,7 +93,8 @@ func (a *defaultAnalyzer) Analyze(path string) (*Analysis, error) {
 
 	// 2. Check for go.mod (Go)
 	goModPath := filepath.Join(abs, "go.mod")
-	if _, err := os.Stat(goModPath); err == nil {
+	_, goModErr := os.Stat(goModPath)
+	if goModErr == nil {
 		analysis.Name = filepath.Base(abs)
 		analysis.Framework = "go"
 		analysis.PackageManager = "go modules"
@@ -97,6 +105,12 @@ func (a *defaultAnalyzer) Analyze(path string) (*Analysis, error) {
 
 	// 3. Fallback to package.json (Node.js)
 	pkgPath := filepath.Join(abs, "package.json")
+	_, pkgStatErr := os.Stat(pkgPath)
+	if compErr != nil && goModErr != nil && pkgStatErr != nil {
+		if a, ok := analyzeMonorepo(abs); ok {
+			return a, nil
+		}
+	}
 	raw, err := os.ReadFile(pkgPath)
 	if err != nil {
 		return nil, errors.New("no supported project config found at " + abs)
@@ -107,14 +121,7 @@ func (a *defaultAnalyzer) Analyze(path string) (*Analysis, error) {
 		return nil, errors.New("invalid package.json: " + err.Error())
 	}
 
-	name := pkg.Name
-	if name == "" {
-		name = filepath.Base(abs)
-	}
-	// strip scope prefix (@org/name → name)
-	if i := strings.LastIndex(name, "/"); i >= 0 {
-		name = name[i+1:]
-	}
+	name := filepath.Base(abs)
 
 	pm := detectPackageManager(abs, pkg.PackageManager)
 	framework := detectFramework(pkg)
@@ -219,95 +226,4 @@ func mergeDeps(a, b map[string]string) map[string]string {
 		out[k] = v
 	}
 	return out
-}
-
-// ─── dev command suggestion ───────────────────────────────────────────────────
-
-// runCmd returns the correct "run script" invocation for the given PM.
-func runCmd(pm, script string) string {
-	switch pm {
-	case "yarn":
-		return "yarn " + script
-	case "bun":
-		return "bun run " + script
-	default:
-		return pm + " run " + script
-	}
-}
-
-func suggestDevCommand(scripts map[string]string, pm string) string {
-	preferred := []string{"dev", "start:dev", "develop", "serve", "start"}
-	for _, name := range preferred {
-		if _, ok := scripts[name]; ok {
-			return runCmd(pm, name)
-		}
-	}
-	return runCmd(pm, "dev")
-}
-
-// ─── port suggestion ─────────────────────────────────────────────────────────
-
-var defaultPorts = map[string]int{
-	"nextjs":       3000,
-	"nuxt":         3000,
-	"remix":        3000,
-	"sveltekit":    5173,
-	"solid-start":  3000,
-	"astro":        4321,
-	"gatsby":       8000,
-	"expo":         8081,
-	"angular":      4200,
-	"svelte":       5173,
-	"solid":        3000,
-	"react-native": 8081,
-	"cra":          3000,
-	"vite":         5173,
-	"nestjs":       3000,
-	"fastify":      3000,
-	"express":      3000,
-	"koa":          3000,
-	"hapi":         3000,
-	"strapi":       1337,
-	"payload":      3000,
-	"electron":     0,
-}
-
-func suggestPort(framework string, scripts map[string]string, devCmd string) int {
-	// Try to extract --port from the actual dev script command
-	if port := extractPortFromScripts(scripts); port > 0 {
-		return port
-	}
-	if p, ok := defaultPorts[framework]; ok {
-		return p
-	}
-	return 0
-}
-
-func extractPortFromScripts(scripts map[string]string) int {
-	preferred := []string{"dev", "start:dev", "develop", "serve", "start"}
-	for _, name := range preferred {
-		cmd, ok := scripts[name]
-		if !ok {
-			continue
-		}
-		// look for --port NNNN or --port=NNNN
-		for _, flag := range []string{"--port ", "--port="} {
-			if i := strings.Index(cmd, flag); i >= 0 {
-				rest := cmd[i+len(flag):]
-				rest = strings.TrimSpace(rest)
-				var port int
-				for _, ch := range rest {
-					if ch >= '0' && ch <= '9' {
-						port = port*10 + int(ch-'0')
-					} else {
-						break
-					}
-				}
-				if port > 0 {
-					return port
-				}
-			}
-		}
-	}
-	return 0
 }

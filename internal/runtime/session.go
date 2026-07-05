@@ -61,6 +61,10 @@ type Session struct {
 	stopCh chan struct{}
 	killFn func()
 	pgid   int
+
+	companionPID    int
+	companionPgid   int
+	companionKillFn func()
 }
 
 func newSession(projectID string, logCap int) *Session {
@@ -134,6 +138,19 @@ func (s *Session) SockPath() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.sockPath
+}
+
+func (s *Session) setCompanionPID(pid, pgid int) {
+	s.mu.Lock()
+	s.companionPID = pid
+	s.companionPgid = pgid
+	s.mu.Unlock()
+}
+
+func (s *Session) CompanionPID() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.companionPID
 }
 
 func (s *Session) setError(err string) {
