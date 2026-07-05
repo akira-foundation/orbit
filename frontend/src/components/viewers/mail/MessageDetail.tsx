@@ -1,6 +1,12 @@
+import { Paperclip } from "lucide-react";
 import type { mailpit } from "../../../../wailsjs/go/models";
+import { api } from "../../../api";
 
 type Message = mailpit.Message;
+
+function partURL(messageId: string, partId: string): string {
+  return `http://mail.orbit.test/api/v1/message/${encodeURIComponent(messageId)}/part/${encodeURIComponent(partId)}`;
+}
 
 export function MessageDetail({ message }: { message: Message | null }) {
   if (!message) {
@@ -36,12 +42,15 @@ export function MessageDetail({ message }: { message: Message | null }) {
       {(message.Attachments ?? []).length > 0 && (
         <div className="px-5 py-3 border-t border-white/10 flex flex-wrap gap-2">
           {message.Attachments.map((a) => (
-            <span
+            <button
               key={a.PartID}
-              className="text-[11px] px-2 py-1 rounded bg-white/[0.05]"
+              className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded bg-white/[0.05] hover:bg-white/[0.09] text-[var(--orbit-accent-2)]"
+              title={`Open ${a.FileName}`}
+              onClick={() => api.openURL(partURL(message.ID, a.PartID))}
             >
+              <Paperclip className="size-3" />
               {a.FileName}
-            </span>
+            </button>
           ))}
         </div>
       )}
