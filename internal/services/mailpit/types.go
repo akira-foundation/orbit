@@ -7,6 +7,11 @@ type Address struct {
 	Address string `json:"Address"`
 }
 
+type PartData struct {
+	ContentType string `json:"contentType"`
+	Data        []byte `json:"data"`
+}
+
 type MessageSummary struct {
 	ID          string    `json:"ID"`
 	MessageID   string    `json:"MessageID"`

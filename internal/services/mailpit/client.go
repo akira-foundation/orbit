@@ -46,6 +46,27 @@ func (c *Client) Delete(ctx context.Context, ids []string) error {
 	return c.do(ctx, http.MethodDelete, "/api/v1/messages", map[string]any{"IDs": ids}, nil)
 }
 
+func (c *Client) Part(ctx context.Context, id, partID string) ([]byte, string, error) {
+	path := "/api/v1/message/" + url.PathEscape(id) + "/part/" + url.PathEscape(partID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+path, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return nil, "", fmt.Errorf("mailpit: part %s: %s", partID, resp.Status)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", err
+	}
+	return data, resp.Header.Get("Content-Type"), nil
+}
+
 func (c *Client) do(ctx context.Context, method, path string, body, out any) error {
 	var reader io.Reader
 	if body != nil {

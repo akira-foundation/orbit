@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Paperclip } from "lucide-react";
 import type { mailpit } from "../../../../wailsjs/go/models";
 import { AttachmentPreview } from "./AttachmentPreview";
@@ -10,9 +10,15 @@ function partURL(messageId: string, partId: string): string {
 }
 
 export function MessageDetail({ message }: { message: Message | null }) {
-  const [preview, setPreview] = useState<{ url: string; name: string } | null>(
-    null,
-  );
+  const [preview, setPreview] = useState<{
+    partId: string;
+    name: string;
+  } | null>(null);
+
+  const messageId = message?.ID;
+  useEffect(() => {
+    setPreview(null);
+  }, [messageId]);
 
   if (!message) {
     return (
@@ -52,10 +58,7 @@ export function MessageDetail({ message }: { message: Message | null }) {
               className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded bg-white/[0.05] hover:bg-white/[0.09] text-[var(--orbit-accent-2)]"
               title={`Preview ${a.FileName}`}
               onClick={() =>
-                setPreview({
-                  url: partURL(message.ID, a.PartID),
-                  name: a.FileName,
-                })
+                setPreview({ partId: a.PartID, name: a.FileName })
               }
             >
               <Paperclip className="size-3" />
@@ -66,8 +69,10 @@ export function MessageDetail({ message }: { message: Message | null }) {
       )}
       {preview && (
         <AttachmentPreview
-          url={preview.url}
+          messageId={message.ID}
+          partId={preview.partId}
           name={preview.name}
+          externalUrl={partURL(message.ID, preview.partId)}
           onClose={() => setPreview(null)}
         />
       )}

@@ -60,6 +60,7 @@ import {
   MailSetRead,
   MailDelete,
   MailDeleteAll,
+  MailPart,
 } from "../wailsjs/go/main/App";
 import type { mailpit } from "../wailsjs/go/models";
 import type {
@@ -191,6 +192,8 @@ export const api = {
     MailSetRead(ids, read),
   mailDelete: (ids: string[]): Promise<void> => MailDelete(ids),
   mailDeleteAll: (): Promise<void> => MailDeleteAll(),
+  mailPart: (id: string, partId: string): Promise<mailpit.PartData> =>
+    MailPart(id, partId),
 };
 
 export type { Project, AnalyzeResult, Config };

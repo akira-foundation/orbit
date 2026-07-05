@@ -96,3 +96,26 @@ func TestDeleteSendsIDs(t *testing.T) {
 		t.Fatalf("IDs = %v", body["IDs"])
 	}
 }
+
+func TestPartReturnsBytesAndContentType(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/message/m1/part/2" {
+			w.Header().Set("Content-Type", "application/pdf")
+			_, _ = w.Write([]byte("%PDF-1.7 body"))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	data, ct, err := NewClient(srv.URL).Part(context.Background(), "m1", "2")
+	if err != nil {
+		t.Fatalf("Part: %v", err)
+	}
+	if ct != "application/pdf" {
+		t.Fatalf("content type = %q", ct)
+	}
+	if string(data) != "%PDF-1.7 body" {
+		t.Fatalf("data = %q", data)
+	}
+}

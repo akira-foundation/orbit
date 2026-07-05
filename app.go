@@ -399,6 +399,18 @@ func (a *App) MailDeleteAll() error {
 	return c.Delete(a.ctx, nil)
 }
 
+func (a *App) MailPart(id, partID string) (mailpit.PartData, error) {
+	c, err := a.mailClient()
+	if err != nil {
+		return mailpit.PartData{}, err
+	}
+	data, contentType, err := c.Part(a.ctx, id, partID)
+	if err != nil {
+		return mailpit.PartData{}, err
+	}
+	return mailpit.PartData{ContentType: contentType, Data: data}, nil
+}
+
 func (a *App) watchMail(ctx context.Context) {
 	for {
 		if ctx.Err() != nil {
