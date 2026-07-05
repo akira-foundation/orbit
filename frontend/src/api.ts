@@ -55,7 +55,12 @@ import {
   TerminalWrite,
   TerminalResize,
   TerminalBuffer,
+  MailList,
+  MailGet,
+  MailSetRead,
+  MailDelete,
 } from "../wailsjs/go/main/App";
+import type { mailpit } from "../wailsjs/go/models";
 import type {
   AnalyzeResult,
   MetricSample,
@@ -178,6 +183,12 @@ export const api = {
   ): Promise<void> => TerminalResize(projectId, cols, rows),
   terminalBuffer: (projectId: string): Promise<string> =>
     TerminalBuffer(projectId),
+  mailList: (start: number, limit: number): Promise<mailpit.ListResult> =>
+    MailList(start, limit),
+  mailGet: (id: string): Promise<mailpit.Message> => MailGet(id),
+  mailSetRead: (ids: string[], read: boolean): Promise<void> =>
+    MailSetRead(ids, read),
+  mailDelete: (ids: string[]): Promise<void> => MailDelete(ids),
 };
 
 export type { Project, AnalyzeResult, Config };

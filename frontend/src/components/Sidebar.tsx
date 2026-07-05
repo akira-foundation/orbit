@@ -14,6 +14,7 @@ import {
   BarChart3,
   Server,
   Cpu,
+  Mail,
   Settings,
 } from "lucide-react";
 
@@ -42,11 +43,16 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
     useProjects();
   const recent = projects.slice(0, 8);
   const [runningServices, setRunningServices] = useState(0);
+  const [mailInstalled, setMailInstalled] = useState(false);
+  const [unread] = useState(0);
 
   useEffect(() => {
     const tick = async () => {
       const list = await api.listServices();
       setRunningServices(list.filter((s) => s.status === "running").length);
+      setMailInstalled(
+        list.some((s) => s.engine === "mailpit" && s.installed),
+      );
     };
     tick();
     const t = setInterval(tick, 2500);
@@ -77,6 +83,15 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
             active={view === "runtimes"}
             onClick={() => setView("runtimes")}
           />
+          {mailInstalled && (
+            <Row
+              icon={Mail}
+              label="Mail"
+              active={view === "mail"}
+              badge={unread > 0 ? unread : undefined}
+              onClick={() => setView("mail")}
+            />
+          )}
         </Section>
 
         <Section title="Projects">
