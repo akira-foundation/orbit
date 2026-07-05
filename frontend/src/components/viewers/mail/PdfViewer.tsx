@@ -18,14 +18,18 @@ export function PdfViewer({ data }: { data: Uint8Array }) {
         const pdf = await pdfjs.getDocument({ data }).promise;
         if (cancelled) return;
         container.replaceChildren();
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
         for (let n = 1; n <= pdf.numPages; n++) {
           const page = await pdf.getPage(n);
           if (cancelled) return;
-          const viewport = page.getViewport({ scale: 2 });
+          const base = page.getViewport({ scale: 1 });
+          const viewport = page.getViewport({ scale: dpr });
           const canvas = document.createElement("canvas");
           canvas.width = viewport.width;
           canvas.height = viewport.height;
-          canvas.className = "w-full h-auto shadow-lg";
+          canvas.style.width = `${base.width}px`;
+          canvas.style.height = `${base.height}px`;
+          canvas.className = "shadow-lg shrink-0";
           const ctx = canvas.getContext("2d");
           if (!ctx) continue;
           container.appendChild(canvas);
