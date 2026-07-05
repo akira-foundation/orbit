@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Inbox } from "lucide-react";
 import { useMailbox } from "./useMailbox";
 import { MessageList } from "./MessageList";
 import { MessageDetail } from "./MessageDetail";
@@ -26,6 +26,23 @@ export function MailView() {
           <Button variant="outline" size="sm" onClick={() => setView("services")}>
             Open Services
           </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!loading && messages.length === 0) {
+    return (
+      <div className="h-full grid place-items-center text-center px-6">
+        <div className="max-w-xs space-y-3">
+          <div className="mx-auto size-12 rounded-full bg-white/[0.04] border border-white/10 grid place-items-center">
+            <Inbox className="size-5 text-[var(--orbit-muted)]" />
+          </div>
+          <p className="text-[14px] font-medium">Your inbox is empty</p>
+          <p className="text-[12px] text-[var(--orbit-muted)] leading-relaxed">
+            Mailpit captures every email your apps send. Point your app's SMTP
+            to Mailpit and messages will show up here instantly.
+          </p>
         </div>
       </div>
     );
