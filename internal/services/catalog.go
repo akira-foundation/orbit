@@ -115,35 +115,35 @@ func Catalog() []Engine {
 	mp.argsTemplate = func(p Platform, dataDir string) []string {
 		return []string{
 			"--database", dataDir + "/mailpit.db",
-			"--smtp", mp.Bind + ":40322",
-			"--listen", mp.Bind + ":40321",
+			"--smtp", fmt.Sprintf("%s:%d", mp.Bind, mp.SMTPPort),
+			"--listen", fmt.Sprintf("%s:%d", mp.Bind, mp.WebPort),
 		}
 	}
 	mp.Setup = SetupInfo{
 		Fields: []SetupField{
-			{Label: "SMTP host", Value: "127.0.0.2"},
-			{Label: "SMTP port", Value: "1025"},
+			{Label: "SMTP host", Value: mp.Bind},
+			{Label: "SMTP port", Value: fmt.Sprintf("%d", mp.SMTPPort)},
 			{Label: "Auth", Value: "none"},
 			{Label: "Encryption", Value: "none"},
-			{Label: "Web inbox", Value: "mail.orbit.test"},
+			{Label: "Web inbox", Value: mp.WebDomain + ".orbit.test"},
 		},
 		Snippets: []SetupSnippet{
 			{
 				Label:    ".env",
 				Language: "ini",
-				Code:     "MAIL_HOST=127.0.0.2\nMAIL_PORT=1025",
+				Code:     fmt.Sprintf("MAIL_HOST=%s\nMAIL_PORT=%d", mp.Bind, mp.SMTPPort),
 			},
 			{
 				Label:    "Laravel .env",
 				Language: "ini",
-				Code: "MAIL_MAILER=smtp\nMAIL_HOST=127.0.0.2\nMAIL_PORT=1025\n" +
+				Code: fmt.Sprintf("MAIL_MAILER=smtp\nMAIL_HOST=%s\nMAIL_PORT=%d\n", mp.Bind, mp.SMTPPort) +
 					"MAIL_USERNAME=null\nMAIL_PASSWORD=null\nMAIL_ENCRYPTION=null",
 			},
 			{
 				Label:    "Node / Nodemailer",
 				Language: "javascript",
 				Code: "const transport = nodemailer.createTransport({\n" +
-					"  host: \"127.0.0.2\",\n  port: 1025,\n  secure: false,\n});",
+					fmt.Sprintf("  host: %q,\n  port: %d,\n  secure: false,\n});", mp.Bind, mp.SMTPPort),
 			},
 		},
 	}
