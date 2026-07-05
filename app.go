@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"orbit-app/internal/analyzer"
@@ -17,6 +18,7 @@ import (
 	"orbit-app/internal/proxy"
 	"orbit-app/internal/runtime"
 	"orbit-app/internal/services"
+	"orbit-app/internal/services/mailpit"
 	"orbit-app/internal/system"
 	"orbit-app/internal/terminal"
 	orbittls "orbit-app/internal/tls"
@@ -123,6 +125,8 @@ func (a *App) startup(ctx context.Context) {
 			log.Printf("[proxy] server error: %v", err)
 		}
 	}()
+
+	go a.watchMail(ctx)
 }
 
 func (a *App) shutdown(_ context.Context) {
@@ -345,6 +349,81 @@ func (a *App) ServicesDiskUsage() int64 {
 
 func (a *App) ClearServicesData() error {
 	return a.services.ClearData()
+}
+
+func (a *App) mailClient() (*mailpit.Client, error) {
+	base, ok := a.services.APIBase("mailpit")
+	if !ok {
+		return nil, fmt.Errorf("mailpit is not running")
+	}
+	return mailpit.NewClient(base), nil
+}
+
+func (a *App) MailList(start, limit int) (mailpit.ListResult, error) {
+	c, err := a.mailClient()
+	if err != nil {
+		return mailpit.ListResult{}, err
+	}
+	return c.List(a.ctx, start, limit)
+}
+
+func (a *App) MailGet(id string) (mailpit.Message, error) {
+	c, err := a.mailClient()
+	if err != nil {
+		return mailpit.Message{}, err
+	}
+	return c.Get(a.ctx, id)
+}
+
+func (a *App) MailSetRead(ids []string, read bool) error {
+	c, err := a.mailClient()
+	if err != nil {
+		return err
+	}
+	return c.SetRead(a.ctx, ids, read)
+}
+
+func (a *App) MailDelete(ids []string) error {
+	c, err := a.mailClient()
+	if err != nil {
+		return err
+	}
+	return c.Delete(a.ctx, ids)
+}
+
+func (a *App) watchMail(ctx context.Context) {
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		base, ok := a.services.APIBase("mailpit")
+		if !ok {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(3 * time.Second):
+			}
+			continue
+		}
+		wsURL := "ws" + strings.TrimPrefix(base, "http") + "/api/events"
+		_ = mailpit.Watch(ctx, wsURL, func(ev mailpit.Event) {
+			switch ev.Type {
+			case "new":
+				wailsruntime.EventsEmit(ctx, "mail:new", ev.Data)
+			case "update":
+				wailsruntime.EventsEmit(ctx, "mail:update", ev.Data)
+			case "delete":
+				wailsruntime.EventsEmit(ctx, "mail:delete", ev.Data)
+			case "truncate":
+				wailsruntime.EventsEmit(ctx, "mail:truncate")
+			}
+		})
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(2 * time.Second):
+		}
+	}
 }
 
 func (a *App) ListNodeVersions() []services.NodeVersionInfo {

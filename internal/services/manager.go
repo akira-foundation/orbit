@@ -340,6 +340,17 @@ func (m *Manager) Status(engine string) Snapshot {
 	return Snapshot{Engine: engine, Status: "stopped"}
 }
 
+func (m *Manager) APIBase(engine string) (string, bool) {
+	e, ok := ResolveEngine(engine)
+	if !ok {
+		return "", false
+	}
+	if m.Status(engine).Status != "running" {
+		return "", false
+	}
+	return fmt.Sprintf("http://%s:%d", e.Bind, e.WebPort), true
+}
+
 func (m *Manager) List(ctx context.Context) []ServiceInfo {
 	out := make([]ServiceInfo, 0)
 	for _, e := range Catalog() {
