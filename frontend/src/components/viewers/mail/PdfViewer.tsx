@@ -27,9 +27,8 @@ export function PdfViewer({ data }: { data: Uint8Array }) {
           const canvas = document.createElement("canvas");
           canvas.width = viewport.width;
           canvas.height = viewport.height;
-          canvas.style.width = `${base.width}px`;
-          canvas.style.height = `${base.height}px`;
-          canvas.className = "shadow-lg shrink-0";
+          canvas.style.maxWidth = `${base.width}px`;
+          canvas.className = "w-full h-auto shadow-lg";
           const ctx = canvas.getContext("2d");
           if (!ctx) continue;
           container.appendChild(canvas);
