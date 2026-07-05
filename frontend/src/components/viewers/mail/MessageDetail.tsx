@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { Paperclip } from "lucide-react";
 import type { mailpit } from "../../../../wailsjs/go/models";
-import { api } from "../../../api";
+import { AttachmentPreview } from "./AttachmentPreview";
 
 type Message = mailpit.Message;
 
@@ -9,6 +10,10 @@ function partURL(messageId: string, partId: string): string {
 }
 
 export function MessageDetail({ message }: { message: Message | null }) {
+  const [preview, setPreview] = useState<{ url: string; name: string } | null>(
+    null,
+  );
+
   if (!message) {
     return (
       <div className="h-full grid place-items-center text-[12px] text-[var(--orbit-muted)]">
@@ -17,7 +22,7 @@ export function MessageDetail({ message }: { message: Message | null }) {
     );
   }
   return (
-    <div className="h-full flex flex-col">
+    <div className="relative h-full flex flex-col">
       <div className="px-5 py-4 border-b border-white/10 space-y-1">
         <h2 className="text-[14px] font-semibold">
           {message.Subject || "(no subject)"}
@@ -45,14 +50,26 @@ export function MessageDetail({ message }: { message: Message | null }) {
             <button
               key={a.PartID}
               className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded bg-white/[0.05] hover:bg-white/[0.09] text-[var(--orbit-accent-2)]"
-              title={`Open ${a.FileName}`}
-              onClick={() => api.openURL(partURL(message.ID, a.PartID))}
+              title={`Preview ${a.FileName}`}
+              onClick={() =>
+                setPreview({
+                  url: partURL(message.ID, a.PartID),
+                  name: a.FileName,
+                })
+              }
             >
               <Paperclip className="size-3" />
               {a.FileName}
             </button>
           ))}
         </div>
+      )}
+      {preview && (
+        <AttachmentPreview
+          url={preview.url}
+          name={preview.name}
+          onClose={() => setPreview(null)}
+        />
       )}
     </div>
   );
