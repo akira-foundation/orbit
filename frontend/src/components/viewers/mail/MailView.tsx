@@ -2,19 +2,25 @@ import { useState } from "react";
 import { useMailbox } from "./useMailbox";
 import { MessageList } from "./MessageList";
 import { MessageDetail } from "./MessageDetail";
+import { useProjects } from "../../../store";
+import { Button } from "../../ui/button";
 
 export function MailView() {
   const { messages, selected, loading, error, select, remove } = useMailbox();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const setView = useProjects((s) => s.setView);
 
   if (error) {
     return (
       <div className="h-full grid place-items-center text-center px-6">
-        <div className="space-y-1">
-          <p className="text-[13px] font-medium">Mailpit is not available</p>
+        <div className="space-y-2">
+          <p className="text-[13px] font-medium">Mailpit is not running</p>
           <p className="text-[12px] text-[var(--orbit-muted)]">
-            Start the Mailpit service to view captured mail.
+            Install and start Mailpit to capture and view outgoing mail.
           </p>
+          <Button variant="outline" size="sm" onClick={() => setView("services")}>
+            Open Services
+          </Button>
         </div>
       </div>
     );
