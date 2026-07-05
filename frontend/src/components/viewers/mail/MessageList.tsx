@@ -1,3 +1,4 @@
+import { Trash2 } from "lucide-react";
 import type { mailpit } from "../../../../wailsjs/go/models";
 import { cn } from "../../../lib/cn";
 
@@ -7,10 +8,12 @@ export function MessageList({
   messages,
   selectedId,
   onSelect,
+  onDelete,
 }: {
   messages: Summary[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
 }) {
   if (messages.length === 0) {
     return (
@@ -22,12 +25,15 @@ export function MessageList({
   return (
     <ul className="divide-y divide-white/5">
       {messages.map((m) => (
-        <li key={m.ID}>
+        <li
+          key={m.ID}
+          className={cn(
+            "group relative flex items-start hover:bg-white/[0.03]",
+            selectedId === m.ID && "bg-white/[0.05]",
+          )}
+        >
           <button
-            className={cn(
-              "w-full text-left px-4 py-3 hover:bg-white/[0.03]",
-              selectedId === m.ID && "bg-white/[0.05]",
-            )}
+            className="min-w-0 flex-1 text-left px-4 py-3"
             onClick={() => onSelect(m.ID)}
           >
             <div className="flex items-center gap-2">
@@ -42,6 +48,13 @@ export function MessageList({
             <p className="text-[11px] text-[var(--orbit-subtle)] truncate">
               {m.Snippet}
             </p>
+          </button>
+          <button
+            className="absolute right-2 top-2 hidden rounded p-1.5 text-rose-300 hover:bg-rose-500/10 hover:text-rose-200 group-hover:block"
+            title="Delete message"
+            onClick={() => onDelete(m.ID)}
+          >
+            <Trash2 className="size-3.5" />
           </button>
         </li>
       ))}

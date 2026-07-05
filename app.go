@@ -391,6 +391,14 @@ func (a *App) MailDelete(ids []string) error {
 	return c.Delete(a.ctx, ids)
 }
 
+func (a *App) MailDeleteAll() error {
+	c, err := a.mailClient()
+	if err != nil {
+		return err
+	}
+	return c.Delete(a.ctx, nil)
+}
+
 func (a *App) watchMail(ctx context.Context) {
 	for {
 		if ctx.Err() != nil {

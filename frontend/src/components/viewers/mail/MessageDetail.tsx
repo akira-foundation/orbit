@@ -1,16 +1,8 @@
-import { Trash2 } from "lucide-react";
 import type { mailpit } from "../../../../wailsjs/go/models";
-import { Button } from "../../ui/button";
 
 type Message = mailpit.Message;
 
-export function MessageDetail({
-  message,
-  onDelete,
-}: {
-  message: Message | null;
-  onDelete: (id: string) => void;
-}) {
+export function MessageDetail({ message }: { message: Message | null }) {
   if (!message) {
     return (
       <div className="h-full grid place-items-center text-[12px] text-[var(--orbit-muted)]">
@@ -21,19 +13,9 @@ export function MessageDetail({
   return (
     <div className="h-full flex flex-col">
       <div className="px-5 py-4 border-b border-white/10 space-y-1">
-        <div className="flex items-start justify-between gap-4">
-          <h2 className="text-[14px] font-semibold">
-            {message.Subject || "(no subject)"}
-          </h2>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-rose-300 hover:bg-rose-500/10 hover:text-rose-200"
-            onClick={() => onDelete(message.ID)}
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        </div>
+        <h2 className="text-[14px] font-semibold">
+          {message.Subject || "(no subject)"}
+        </h2>
         <p className="text-[11px] text-[var(--orbit-muted)]">
           {message.From?.Address} to{" "}
           {(message.To ?? []).map((t) => t.Address).join(", ")}

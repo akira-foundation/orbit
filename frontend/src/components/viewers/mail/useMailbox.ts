@@ -51,6 +51,12 @@ export function useMailbox() {
     [refresh],
   );
 
+  const removeAll = useCallback(async () => {
+    await api.mailDeleteAll();
+    setSelected(null);
+    await refresh();
+  }, [refresh]);
+
   useWailsEvent<Summary>("mail:new", (m) => {
     setMessages((prev) => [m, ...prev]);
     setUnread((u) => u + 1);
@@ -64,5 +70,5 @@ export function useMailbox() {
     setUnread(0);
   });
 
-  return { messages, selected, unread, loading, error, select, remove, refresh };
+  return { messages, selected, unread, loading, error, select, remove, removeAll, refresh };
 }

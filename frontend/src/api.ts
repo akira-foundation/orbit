@@ -59,6 +59,7 @@ import {
   MailGet,
   MailSetRead,
   MailDelete,
+  MailDeleteAll,
 } from "../wailsjs/go/main/App";
 import type { mailpit } from "../wailsjs/go/models";
 import type {
@@ -189,6 +190,7 @@ export const api = {
   mailSetRead: (ids: string[], read: boolean): Promise<void> =>
     MailSetRead(ids, read),
   mailDelete: (ids: string[]): Promise<void> => MailDelete(ids),
+  mailDeleteAll: (): Promise<void> => MailDeleteAll(),
 };
 
 export type { Project, AnalyzeResult, Config };
