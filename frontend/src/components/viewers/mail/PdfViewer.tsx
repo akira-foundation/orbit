@@ -15,7 +15,7 @@ export function PdfViewer({ data }: { data: Uint8Array }) {
 
     const render = async () => {
       try {
-        const pdf = await pdfjs.getDocument({ data }).promise;
+        const pdf = await pdfjs.getDocument({ data: data.slice() }).promise;
         if (cancelled) return;
         container.replaceChildren();
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
