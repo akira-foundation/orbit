@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useProjects } from '../store'
-import { BarChart3, ExternalLink, FileText, Loader2, Orbit, Play, Plus, Square } from 'lucide-react'
+import { BarChart3, ExternalLink, FileText, GitBranch, Loader2, Orbit, Play, Plus, Square } from 'lucide-react'
 import { Button } from '../components/ui/button'
-import type { Project } from '../types'
+import type { GitInfo, Project } from '../types'
 import { cn } from '../lib/cn'
 import { RuntimeStatusBadge } from '../components/RuntimeStatusBadge'
 import { api } from '../api'
@@ -72,6 +72,7 @@ function ListView({
             <Th>Status</Th>
             <Th>Framework</Th>
             <Th>Manager</Th>
+            <Th>Branch</Th>
             <Th>Domain</Th>
             <Th>{''}</Th>
           </tr>
@@ -91,6 +92,7 @@ function ListView({
               <Td><RuntimeStatusBadge status={p.status} /></Td>
               <Td>{p.detectedFramework}</Td>
               <Td>{p.packageManager}</Td>
+              <Td><GitChip projectId={p.id} /></Td>
               <Td>
                 <div className="flex items-center gap-1.5">
                   <span className="font-mono text-xs text-[var(--orbit-muted)] truncate">{p.localDomain}</span>
@@ -118,6 +120,47 @@ function ListView({
         </tbody>
       </table>
     </div>
+  )
+}
+
+function GitChip({ projectId }: { projectId: string }) {
+  const [info, setInfo] = useState<GitInfo | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    const load = () => {
+      api.gitStatus(projectId)
+        .then((g) => { if (alive) setInfo(g) })
+        .catch(() => { if (alive) setInfo(null) })
+    }
+    load()
+    const onFocus = () => load()
+    window.addEventListener('focus', onFocus)
+    const t = setInterval(load, 10000)
+    return () => {
+      alive = false
+      window.removeEventListener('focus', onFocus)
+      clearInterval(t)
+    }
+  }, [projectId])
+
+  if (!info || !info.repo) {
+    return <span className="text-xs text-[var(--orbit-subtle)]">—</span>
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs" title={
+      `${info.branch}${info.dirty > 0 ? ` · ${info.dirty} uncommitted` : ' · clean'}` +
+      `${info.ahead > 0 ? ` · ${info.ahead} ahead` : ''}${info.behind > 0 ? ` · ${info.behind} behind` : ''}`
+    }>
+      <GitBranch className="size-3 shrink-0 text-[var(--orbit-muted)]" />
+      <span className="font-mono text-[var(--orbit-muted)] truncate max-w-28">{info.branch}</span>
+      {info.dirty > 0 && (
+        <span className="inline-flex items-center gap-1 text-[var(--orbit-accent-2)]">
+          <span className="size-1.5 rounded-full bg-[var(--orbit-accent-2)]" />
+          {info.dirty}
+        </span>
+      )}
+    </span>
   )
 }
 
