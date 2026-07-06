@@ -9,6 +9,35 @@ function partURL(messageId: string, partId: string): string {
   return `http://mail.orbit.test/api/v1/message/${encodeURIComponent(messageId)}/part/${encodeURIComponent(partId)}`;
 }
 
+function MessageBody({ html, text }: { html: string; text: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!html) {
+      setUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(
+      new Blob([html], { type: "text/html" }),
+    );
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [html]);
+
+  if (!html) {
+    return <pre className="text-[12px] whitespace-pre-wrap">{text}</pre>;
+  }
+  if (!url) return null;
+  return (
+    <iframe
+      title="message"
+      sandbox="allow-same-origin"
+      src={url}
+      className="w-full h-full bg-white rounded"
+    />
+  );
+}
+
 export function MessageDetail({ message }: { message: Message | null }) {
   const [preview, setPreview] = useState<{
     partId: string;
@@ -39,16 +68,7 @@ export function MessageDetail({ message }: { message: Message | null }) {
         </p>
       </div>
       <div className="flex-1 min-h-0 overflow-auto scrollbar-thin p-5">
-        {message.HTML ? (
-          <iframe
-            title="message"
-            sandbox=""
-            srcDoc={message.HTML}
-            className="w-full h-full bg-white rounded"
-          />
-        ) : (
-          <pre className="text-[12px] whitespace-pre-wrap">{message.Text}</pre>
-        )}
+        <MessageBody html={message.HTML} text={message.Text} />
       </div>
       {(message.Attachments ?? []).length > 0 && (
         <div className="px-5 py-3 border-t border-white/10 flex flex-wrap gap-2">
