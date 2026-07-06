@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -39,5 +40,26 @@ func TestEngineArgsBindOnAliasIP(t *testing.T) {
 func TestResolveUnknownEngine(t *testing.T) {
 	if _, ok := ResolveEngine("nope"); ok {
 		t.Fatal("expected unknown engine to be absent")
+	}
+}
+
+func TestMailpitSetupAdvertisesActualSMTPPort(t *testing.T) {
+	e, _ := ResolveEngine("mailpit")
+	port := fmt.Sprintf("%d", e.SMTPPort)
+
+	var portField string
+	for _, f := range e.Setup.Fields {
+		if f.Label == "SMTP port" {
+			portField = f.Value
+		}
+	}
+	if portField != port {
+		t.Fatalf("setup SMTP port field = %q, want %q", portField, port)
+	}
+
+	for _, s := range e.Setup.Snippets {
+		if strings.Contains(s.Code, "1025") || !strings.Contains(s.Code, port) {
+			t.Fatalf("snippet %q does not advertise port %s: %s", s.Label, port, s.Code)
+		}
 	}
 }
