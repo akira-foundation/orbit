@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import DOMPurify from "dompurify";
 import { Paperclip } from "lucide-react";
 import type { mailpit } from "../../../../wailsjs/go/models";
+import { api } from "../../../api";
 import { AttachmentPreview } from "./AttachmentPreview";
 
 type Message = mailpit.Message;
@@ -10,30 +12,32 @@ function partURL(messageId: string, partId: string): string {
 }
 
 function MessageBody({ html, text }: { html: string; text: string }) {
-  const [url, setUrl] = useState<string | null>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!html) {
-      setUrl(null);
-      return;
-    }
-    const objectUrl = URL.createObjectURL(
-      new Blob([html], { type: "text/html" }),
-    );
-    setUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
+    const host = hostRef.current;
+    if (!html || !host) return;
+    const root = host.shadowRoot ?? host.attachShadow({ mode: "open" });
+    root.innerHTML = DOMPurify.sanitize(html);
+    const onClick = (ev: Event) => {
+      const anchor = (ev.target as HTMLElement | null)?.closest("a");
+      const href = anchor?.getAttribute("href") ?? "";
+      if (/^https?:\/\//i.test(href)) {
+        ev.preventDefault();
+        void api.openURL(href);
+      }
+    };
+    root.addEventListener("click", onClick);
+    return () => root.removeEventListener("click", onClick);
   }, [html]);
 
   if (!html) {
     return <pre className="text-[12px] whitespace-pre-wrap">{text}</pre>;
   }
-  if (!url) return null;
   return (
-    <iframe
-      title="message"
-      sandbox="allow-same-origin"
-      src={url}
-      className="w-full h-full bg-white rounded"
+    <div
+      ref={hostRef}
+      className="w-full min-h-full bg-white text-black rounded p-4"
     />
   );
 }
@@ -66,6 +70,11 @@ export function MessageDetail({ message }: { message: Message | null }) {
           {message.From?.Address} to{" "}
           {(message.To ?? []).map((t) => t.Address).join(", ")}
         </p>
+        {message.Date && (
+          <p className="text-[11px] text-[var(--orbit-subtle)]">
+            {new Date(message.Date).toLocaleString()}
+          </p>
+        )}
       </div>
       <div className="flex-1 min-h-0 overflow-auto scrollbar-thin p-5">
         <MessageBody html={message.HTML} text={message.Text} />

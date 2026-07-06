@@ -4,6 +4,16 @@ import { cn } from "../../../lib/cn";
 
 type Summary = mailpit.MessageSummary;
 
+function receivedAt(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) {
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  return date.toLocaleDateString([], { day: "2-digit", month: "short" });
+}
+
 export function MessageList({
   messages,
   selectedId,
@@ -42,6 +52,9 @@ export function MessageList({
               )}
               <span className="text-[13px] font-medium truncate">
                 {m.From?.Name || m.From?.Address || "unknown"}
+              </span>
+              <span className="ml-auto shrink-0 text-[10.5px] text-[var(--orbit-subtle)] group-hover:opacity-0">
+                {receivedAt(m.Created)}
               </span>
             </div>
             <p className="text-[12px] truncate">{m.Subject || "(no subject)"}</p>
