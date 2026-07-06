@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useProjects, type Filter } from "../store";
 import type { ProjectStatus } from "../types";
 import { api } from "../api";
+import { useWailsEvent } from "../hooks/useWailsEvent";
 import { cn } from "../lib/cn";
 import {
   Boxes,
@@ -14,6 +15,7 @@ import {
   BarChart3,
   Server,
   Cpu,
+  Mail,
   Settings,
 } from "lucide-react";
 
@@ -42,16 +44,26 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
     useProjects();
   const recent = projects.slice(0, 8);
   const [runningServices, setRunningServices] = useState(0);
+  const [unread, setUnread] = useState(0);
 
   useEffect(() => {
     const tick = async () => {
       const list = await api.listServices();
       setRunningServices(list.filter((s) => s.status === "running").length);
+      try {
+        const inbox = await api.mailList(0, 1);
+        setUnread(inbox.unread ?? 0);
+      } catch {
+        setUnread(0);
+      }
     };
     tick();
     const t = setInterval(tick, 2500);
     return () => clearInterval(t);
   }, []);
+
+  useWailsEvent("mail:new", () => setUnread((u) => u + 1));
+  useWailsEvent("mail:truncate", () => setUnread(0));
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
@@ -76,6 +88,13 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
             label="Runtimes"
             active={view === "runtimes"}
             onClick={() => setView("runtimes")}
+          />
+          <Row
+            icon={Mail}
+            label="Mail"
+            active={view === "mail"}
+            badge={unread > 0 ? unread : undefined}
+            onClick={() => setView("mail")}
           />
         </Section>
 
