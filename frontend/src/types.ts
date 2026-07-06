@@ -49,6 +49,14 @@ export interface Project {
   processes?: ProjectProcess[]
 }
 
+export interface GitInfo {
+  repo: boolean
+  branch: string
+  dirty: number
+  ahead: number
+  behind: number
+}
+
 export interface RuntimeLogLine {
   timestamp: string
   stream: 'stdout' | 'stderr' | 'system'

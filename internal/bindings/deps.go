@@ -1,0 +1,25 @@
+package bindings
+
+import (
+	"context"
+
+	"orbit-app/internal/config"
+	"orbit-app/internal/projects"
+	"orbit-app/internal/runtime"
+	"orbit-app/internal/services"
+	"orbit-app/internal/terminal"
+)
+
+type Deps struct {
+	Ctx         context.Context
+	Cfg         *config.Config
+	Service     *projects.Service
+	Runtime     runtime.Manager
+	Services    *services.Manager
+	SvcStore    *services.Store
+	SvcConfig   *services.ConfigStore
+	NodeAcq     *services.Acquirer
+	PHPAcq      *services.Acquirer
+	RuntimesCfg *services.RuntimesConfigStore
+	Terminals   *terminal.Manager
+}

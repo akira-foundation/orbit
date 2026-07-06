@@ -9,24 +9,18 @@ import {
   StartProject,
   StopProject,
   RestartProject,
+  SelectProjectFolder,
+  OpenProject,
+  SetProjectSecure,
+} from "../wailsjs/go/bindings/Projects";
+import {
   RuntimeStatus,
   RuntimeLogs,
   RuntimeLogsHistory,
   RuntimeMetrics,
   RuntimeMetricsAll,
-  SystemConfig,
-  SystemSaveConfig,
-  SelectProjectFolder,
-  OpenProject,
-  OpenURL,
-  RevealInFinder,
-  SystemStatus,
-  SystemSetup,
-  SystemUninstall,
-  TrustCA,
-  UntrustCA,
-  SetProjectSecure,
-  SetLaunchAtLogin,
+} from "../wailsjs/go/bindings/Runtime";
+import {
   ListServices,
   ServiceStatus,
   StartService,
@@ -41,6 +35,16 @@ import {
   SaveServicesConfig,
   ServicesDiskUsage,
   ClearServicesData,
+} from "../wailsjs/go/bindings/Services";
+import {
+  MailList,
+  MailGet,
+  MailSetRead,
+  MailDelete,
+  MailDeleteAll,
+  MailPart,
+} from "../wailsjs/go/bindings/Mail";
+import {
   ListNodeVersions,
   InstallNodeVersion,
   RemoveNodeVersion,
@@ -51,20 +55,30 @@ import {
   SaveRuntimesConfig,
   DetectSystemNode,
   DetectSystemPHP,
+} from "../wailsjs/go/bindings/Versions";
+import {
   TerminalStart,
   TerminalWrite,
   TerminalResize,
   TerminalBuffer,
-  MailList,
-  MailGet,
-  MailSetRead,
-  MailDelete,
-  MailDeleteAll,
-  MailPart,
-} from "../wailsjs/go/main/App";
+} from "../wailsjs/go/bindings/Terminal";
+import {
+  SystemConfig,
+  SystemSaveConfig,
+  OpenURL,
+  GitStatus,
+  RevealInFinder,
+  SystemStatus,
+  SystemSetup,
+  SystemUninstall,
+  TrustCA,
+  UntrustCA,
+  SetLaunchAtLogin,
+} from "../wailsjs/go/bindings/System";
 import type { mailpit } from "../wailsjs/go/models";
 import type {
   AnalyzeResult,
+  GitInfo,
   MetricSample,
   Project,
   RuntimeSnapshot,
@@ -122,6 +136,7 @@ export const api = {
   selectFolder: (): Promise<string> => SelectProjectFolder(),
   openProject: (id: string): Promise<void> => OpenProject(id),
   openURL: (url: string): Promise<void> => OpenURL(url),
+  gitStatus: (id: string): Promise<GitInfo> => cast(GitStatus(id)),
   revealInFinder: (path: string): Promise<void> => RevealInFinder(path),
   systemStatus: (): Promise<SystemStatusType> => cast(SystemStatus()),
   systemSetup: (): Promise<void> => SystemSetup(),
