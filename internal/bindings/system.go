@@ -44,6 +44,10 @@ func (s *System) OpenURL(url string) error {
 	return nil
 }
 
+func (s *System) Notify(title, body string) error {
+	return system.Notify(title, body)
+}
+
 func (s *System) GitStatus(id string) (*git.Info, error) {
 	p, err := s.service.Get(s.ctx, id)
 	if err != nil {
