@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -38,8 +39,22 @@ time.sleep(30)
 		t.Skipf("python3 not available: %v", err)
 	}
 	t.Cleanup(func() { _ = cmd.Process.Kill() })
-	time.Sleep(300 * time.Millisecond)
+	waitPortBound(t, port)
 	return cmd
+}
+
+func waitPortBound(t *testing.T, port int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		c, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 200*time.Millisecond)
+		if err == nil {
+			_ = c.Close()
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("listener never bound port %d", port)
 }
 
 func TestPortOwnedPIDsMatchesPrefix(t *testing.T) {
