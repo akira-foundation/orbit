@@ -36,8 +36,8 @@ export function Toaster() {
         <div
           key={n.id}
           className={cn(
-            "rounded-xl border bg-[rgba(20,21,28,0.96)] backdrop-blur px-3.5 py-3 shadow-lg",
-            n.kind === "crash" ? "border-rose-400/25" : "border-white/10",
+            "rounded-2xl px-3.5 py-3 border bg-[rgba(28,28,34,0.85)] backdrop-blur-2xl backdrop-saturate-150 shadow-[0_24px_64px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.08)]",
+            n.kind === "crash" ? "border-rose-400/30" : "border-white/10",
           )}
         >
           <div className="flex items-start gap-2.5">
