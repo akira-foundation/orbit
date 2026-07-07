@@ -77,10 +77,14 @@ import {
   ListPHPVersions,
   InstallPHPVersion,
   RemovePHPVersion,
+  ListPythonVersions,
+  InstallPythonVersion,
+  RemovePythonVersion,
   RuntimesConfig,
   SaveRuntimesConfig,
   DetectSystemNode,
   DetectSystemPHP,
+  DetectSystemPython,
 } from "../wailsjs/go/bindings/Versions";
 import {
   TerminalStart,
@@ -123,6 +127,7 @@ import type {
   ServicesConfig as ServicesConfigType,
   NodeVersionInfo,
   PHPVersionInfo,
+  PythonVersionInfo,
   RuntimesConfig as RuntimesConfigType,
   SystemRuntimeStatus,
 } from "./types";
@@ -249,12 +254,20 @@ export const api = {
     InstallPHPVersion(version),
   removePHPVersion: (version: string): Promise<void> =>
     RemovePHPVersion(version),
+  listPythonVersions: async (): Promise<PythonVersionInfo[]> =>
+    (await cast<PythonVersionInfo[] | null>(ListPythonVersions())) ?? [],
+  installPythonVersion: (version: string): Promise<void> =>
+    InstallPythonVersion(version),
+  removePythonVersion: (version: string): Promise<void> =>
+    RemovePythonVersion(version),
   runtimesConfig: (): Promise<RuntimesConfigType> => cast(RuntimesConfig()),
   saveRuntimesConfig: (cfg: RuntimesConfigType): Promise<void> =>
     SaveRuntimesConfig(cfg as never),
   detectSystemNode: (): Promise<SystemRuntimeStatus> =>
     cast(DetectSystemNode()),
   detectSystemPHP: (): Promise<SystemRuntimeStatus> => cast(DetectSystemPHP()),
+  detectSystemPython: (): Promise<SystemRuntimeStatus> =>
+    cast(DetectSystemPython()),
   terminalStart: (projectId: string): Promise<void> =>
     TerminalStart(projectId),
   terminalWrite: (projectId: string, data: string): Promise<void> =>
