@@ -83,6 +83,16 @@ function GeneralSection() {
   const [error, setError] = useState<string | null>(null);
   const notificationsEnabled = useNotificationStore((s) => s.enabled);
   const setNotificationsEnabled = useNotificationStore((s) => s.setEnabled);
+  const pushNotification = useNotificationStore((s) => s.push);
+
+  const sendTestNotification = () => {
+    pushNotification({
+      kind: "info",
+      title: "Test notification",
+      body: "Notifications are on. Crash and cert-expiry alerts look like this.",
+    });
+    api.notify("Test notification", "Notifications are on.").catch(() => {});
+  };
 
   const refresh = async () => {
     try {
@@ -120,12 +130,32 @@ function GeneralSection() {
           disabled={busy || !status}
           onChange={toggle}
         />
-        <ToggleRow
-          label="Notifications"
-          description="Show a toast and a system notification when a project crashes or the local TLS certificate is about to expire."
-          checked={notificationsEnabled}
-          onChange={setNotificationsEnabled}
-        />
+        <div className="flex items-start justify-between gap-4 rounded-lg border border-white/10 bg-white/[0.03] p-4">
+          <div className="min-w-0 space-y-1">
+            <p className="text-[13px] font-medium">Notifications</p>
+            <p className="text-[11px] text-[var(--orbit-muted)] leading-relaxed">
+              Show a toast and a system notification when a project crashes or the local TLS
+              certificate is about to expire.
+            </p>
+            <button
+              onClick={sendTestNotification}
+              disabled={!notificationsEnabled}
+              className={cn(
+                "mt-2 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11.5px] border transition-colors",
+                notificationsEnabled
+                  ? "border-white/10 text-[var(--orbit-muted)] hover:text-[var(--orbit-text)] hover:bg-white/[0.05]"
+                  : "border-white/[0.06] text-[var(--orbit-subtle)] cursor-default",
+              )}
+            >
+              Send a test notification
+            </button>
+          </div>
+          <Switch
+            checked={notificationsEnabled}
+            onCheckedChange={setNotificationsEnabled}
+            className="mt-0.5 shrink-0"
+          />
+        </div>
         {error && (
           <p className="text-[11px] text-rose-300 font-mono whitespace-pre-wrap">
             {error}
