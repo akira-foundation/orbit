@@ -12,6 +12,7 @@ import {
   Plug,
   RotateCcw,
   Server,
+  Share2,
   Terminal,
   Timer,
 } from "lucide-react";
@@ -28,7 +29,7 @@ import { ProjectDetailsTab } from "../components/ProjectDetailsTab";
 import { SharePanel } from "../components/SharePanel";
 import { cn } from "../lib/cn";
 
-type DetailTab = "details" | "services" | "env" | "logs" | "terminal";
+type DetailTab = "details" | "services" | "env" | "share" | "logs" | "terminal";
 
 const DETAIL_TABS: {
   id: DetailTab;
@@ -39,6 +40,7 @@ const DETAIL_TABS: {
   { id: "details", label: "Details", subtitle: "Resolved project metadata", icon: Info },
   { id: "services", label: "Services", subtitle: "Local services this project uses", icon: Server },
   { id: "env", label: "Env", subtitle: "Project .env variables", icon: KeyRound },
+  { id: "share", label: "Share", subtitle: "Serve this project on your local network", icon: Share2 },
   { id: "logs", label: "Logs", subtitle: "Live stdout / stderr from the runtime", icon: FileText },
   { id: "terminal", label: "Terminal", subtitle: "Interactive shell at the project root", icon: Terminal },
 ];
@@ -51,7 +53,6 @@ export function ProjectDetail({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
   const [tab, setTab] = useState<DetailTab>("details");
   const [, copyToClipboard] = useCopyToClipboard();
 
@@ -180,7 +181,6 @@ export function ProjectDetail({ id }: { id: string }) {
                   setProject({ ...project, secure: !next });
                 }
               }}
-              onShare={() => setShareOpen(true)}
               onLogs={() => showProjectLogs(project.id)}
               onMetrics={() => showProjectMetrics(project.id)}
               onRemove={() => setConfirmRemove(true)}
@@ -244,6 +244,8 @@ export function ProjectDetail({ id }: { id: string }) {
 
           {tab === "env" && <EnvEditorPanel projectId={id} />}
 
+          {tab === "share" && <SharePanel projectId={id} />}
+
           {tab === "logs" && (
             <>
               <LogsPanel logs={logs} onClear={clearLogs} />
@@ -258,12 +260,6 @@ export function ProjectDetail({ id }: { id: string }) {
           {tab === "terminal" && <ProjectTerminal projectId={id} />}
         </Card>
       </div>
-
-      <SharePanel
-        projectId={id}
-        open={shareOpen}
-        onClose={() => setShareOpen(false)}
-      />
 
       <ConfirmDialog
         open={confirmRemove}
