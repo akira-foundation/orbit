@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Eye, EyeOff, Plus, Save, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Plus, Save, Search, Trash2 } from "lucide-react";
 import { api } from "../api";
 import { Button } from "./ui/button";
 import { cn } from "../lib/cn";
@@ -24,6 +24,7 @@ export function EnvEditorPanel({ projectId }: { projectId: string }) {
   const [saved, setSaved] = useState(false);
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -93,6 +94,16 @@ export function EnvEditorPanel({ projectId }: { projectId: string }) {
     );
   }
 
+  const q = query.trim().toLowerCase();
+  const visible = rows
+    .map((r, i) => ({ r, i }))
+    .filter(
+      ({ r }) =>
+        !q ||
+        r.key.toLowerCase().includes(q) ||
+        r.value.toLowerCase().includes(q),
+    );
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -110,8 +121,20 @@ export function EnvEditorPanel({ projectId }: { projectId: string }) {
         <p className="text-[11px] text-rose-300">{error}</p>
       )}
 
+      {rows.length > 0 && (
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[var(--orbit-subtle)]" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Filter variables…"
+            className="h-8 w-full pl-8 pr-2.5 rounded-md bg-white/5 border border-white/10 text-[12px] outline-none focus:border-[var(--orbit-accent-2)]/50 placeholder:text-[var(--orbit-subtle)]"
+          />
+        </div>
+      )}
+
       <div className="space-y-1.5">
-        {rows.map((r, i) => {
+        {visible.map(({ r, i }) => {
           const secret = SECRET_RE.test(r.key);
           const hidden = secret && !revealed.has(i);
           return (
@@ -154,6 +177,11 @@ export function EnvEditorPanel({ projectId }: { projectId: string }) {
         {rows.length === 0 && (
           <p className="text-[12px] text-[var(--orbit-muted)] italic">
             No variables. Add one below.
+          </p>
+        )}
+        {rows.length > 0 && visible.length === 0 && (
+          <p className="text-[12px] text-[var(--orbit-muted)] italic">
+            No variables match &ldquo;{query}&rdquo;.
           </p>
         )}
       </div>
