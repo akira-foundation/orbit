@@ -16,6 +16,7 @@ import (
 	"orbit-app/internal/proxy"
 	"orbit-app/internal/runtime"
 	"orbit-app/internal/services"
+	"orbit-app/internal/share"
 	"orbit-app/internal/terminal"
 	orbittls "orbit-app/internal/tls"
 )
@@ -44,6 +45,8 @@ type App struct {
 	versionsAPI *bindings.Versions
 	terminalAPI *bindings.Terminal
 	systemAPI   *bindings.System
+	shareAPI    *bindings.Share
+	share       *share.State
 }
 
 func NewApp() *App {
@@ -56,6 +59,8 @@ func NewApp() *App {
 		versionsAPI: bindings.NewVersions(),
 		terminalAPI: bindings.NewTerminal(),
 		systemAPI:   bindings.NewSystem(),
+		shareAPI:    bindings.NewShare(),
+		share:       share.NewState(),
 	}
 }
 
@@ -69,6 +74,7 @@ func (a *App) boundAPIs() []interface{} {
 		a.versionsAPI,
 		a.terminalAPI,
 		a.systemAPI,
+		a.shareAPI,
 	}
 }
 
@@ -126,6 +132,7 @@ func (a *App) startup(ctx context.Context) {
 
 	opts := proxy.Options{
 		Addr:           cfg.ProxyAddr,
+		Suffix:         cfg.DomainSuffix,
 		Router:         router,
 		Recovery:       recovery,
 		Services:       proxy.NewServiceTable(cfg.DomainSuffix, svcEntries),
@@ -164,10 +171,12 @@ func (a *App) startup(ctx context.Context) {
 		PHPAcq:      a.phpAcq,
 		RuntimesCfg: a.runtimesCfg,
 		Terminals:   a.terminals,
+		ProxyServer: a.proxyServer,
+		Share:       a.share,
 	}
 	for _, api := range []interface{ Attach(bindings.Deps) }{
 		a.projectsAPI, a.groupsAPI, a.runtimeAPI, a.servicesAPI,
-		a.mailAPI, a.versionsAPI, a.terminalAPI, a.systemAPI,
+		a.mailAPI, a.versionsAPI, a.terminalAPI, a.systemAPI, a.shareAPI,
 	} {
 		api.Attach(deps)
 	}
