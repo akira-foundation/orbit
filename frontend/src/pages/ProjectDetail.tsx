@@ -12,6 +12,7 @@ import {
   Plug,
   RotateCcw,
   Server,
+  Share2,
   Terminal,
   Timer,
 } from "lucide-react";
@@ -25,9 +26,10 @@ import { EnvEditorPanel } from "../components/EnvEditorPanel";
 import { Card, Cell, SecureToggle } from "../components/ProjectDetailParts";
 import { ProjectActions } from "../components/ProjectActions";
 import { ProjectDetailsTab } from "../components/ProjectDetailsTab";
+import { SharePanel } from "../components/SharePanel";
 import { cn } from "../lib/cn";
 
-type DetailTab = "details" | "services" | "env" | "logs" | "terminal";
+type DetailTab = "details" | "services" | "env" | "share" | "logs" | "terminal";
 
 const DETAIL_TABS: {
   id: DetailTab;
@@ -36,10 +38,11 @@ const DETAIL_TABS: {
   icon: typeof Info;
 }[] = [
   { id: "details", label: "Details", subtitle: "Resolved project metadata", icon: Info },
-  { id: "services", label: "Services", subtitle: "Local services this project uses", icon: Server },
-  { id: "env", label: "Env", subtitle: "Project .env variables", icon: KeyRound },
   { id: "logs", label: "Logs", subtitle: "Live stdout / stderr from the runtime", icon: FileText },
   { id: "terminal", label: "Terminal", subtitle: "Interactive shell at the project root", icon: Terminal },
+  { id: "services", label: "Services", subtitle: "Local services this project uses", icon: Server },
+  { id: "env", label: "Env", subtitle: "Project .env variables", icon: KeyRound },
+  { id: "share", label: "Share", subtitle: "Serve this project on your local network", icon: Share2 },
 ];
 
 export function ProjectDetail({ id }: { id: string }) {
@@ -240,6 +243,8 @@ export function ProjectDetail({ id }: { id: string }) {
           )}
 
           {tab === "env" && <EnvEditorPanel projectId={id} />}
+
+          {tab === "share" && <SharePanel projectId={id} />}
 
           {tab === "logs" && (
             <>

@@ -79,6 +79,12 @@ export interface S3Object {
   lastModified: string
 }
 
+export interface ShareInfo {
+  enabled: boolean
+  url: string
+  qr: string
+}
+
 export interface GitInfo {
   repo: boolean
   branch: string

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net"
 	"os"
 	"path/filepath"
 	"time"
@@ -38,7 +39,7 @@ func DefaultDir() (string, error) {
 	return filepath.Join(home, "Library", "Application Support", "Orbit", "tls"), nil
 }
 
-func Ensure(domainSuffix string, extraDomains []string) (*Material, error) {
+func Ensure(domainSuffix string, extraDomains []string, extraIPs []net.IP) (*Material, error) {
 	dir, err := DefaultDir()
 	if err != nil {
 		return nil, err
@@ -62,9 +63,10 @@ func Ensure(domainSuffix string, extraDomains []string) (*Material, error) {
 
 	needLeaf := !exists(m.LeafCert) || !exists(m.LeafKey) ||
 		leafExpiringSoon(m.LeafCert) || !leafHasChain(m.LeafCert) ||
-		!leafCoversDomains(m.LeafCert, extraDomains)
+		!leafCoversDomains(m.LeafCert, extraDomains) ||
+		!leafCoversIPs(m.LeafCert, extraIPs)
 	if needLeaf {
-		if err := createLeaf(m, caCert, caKey, domainSuffix, extraDomains); err != nil {
+		if err := createLeaf(m, caCert, caKey, domainSuffix, extraDomains, extraIPs); err != nil {
 			return nil, err
 		}
 	}
@@ -129,7 +131,7 @@ func loadOrCreateCA(m *Material) (*x509.Certificate, *rsa.PrivateKey, error) {
 	return cert, key, nil
 }
 
-func createLeaf(m *Material, caCert *x509.Certificate, caKey *rsa.PrivateKey, domainSuffix string, extraDomains []string) error {
+func createLeaf(m *Material, caCert *x509.Certificate, caKey *rsa.PrivateKey, domainSuffix string, extraDomains []string, extraIPs []net.IP) error {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return err
@@ -153,6 +155,7 @@ func createLeaf(m *Material, caCert *x509.Certificate, caKey *rsa.PrivateKey, do
 		KeyUsage:           x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:        []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		DNSNames:           names,
+		IPAddresses:        append([]net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback}, extraIPs...),
 		SubjectKeyId:       ski[:],
 		AuthorityKeyId:     caCert.SubjectKeyId,
 		SignatureAlgorithm: x509.SHA256WithRSA,
@@ -209,6 +212,22 @@ func leafCoversDomains(path string, domains []string) bool {
 	}
 	for _, d := range domains {
 		if cert.VerifyHostname(d) != nil {
+			return false
+		}
+	}
+	return true
+}
+
+func leafCoversIPs(path string, ips []net.IP) bool {
+	if len(ips) == 0 {
+		return true
+	}
+	cert, err := readCert(path)
+	if err != nil {
+		return false
+	}
+	for _, ip := range ips {
+		if cert.VerifyHostname(ip.String()) != nil {
 			return false
 		}
 	}

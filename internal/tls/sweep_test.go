@@ -7,7 +7,7 @@ import (
 
 func TestLeafExpiry(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	mat, err := Ensure("orbit.test", nil)
+	mat, err := Ensure("orbit.test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
