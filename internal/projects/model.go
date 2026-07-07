@@ -16,6 +16,7 @@ type RuntimeKind string
 const (
 	RuntimeKindCommand RuntimeKind = "command"
 	RuntimeKindPHPFPM  RuntimeKind = "php-fpm"
+	RuntimeKindPython  RuntimeKind = "python"
 )
 
 type Project struct {
@@ -31,6 +32,7 @@ type Project struct {
 	NodeVersion       string        `json:"nodeVersion"`
 	RuntimeKind       RuntimeKind   `json:"runtimeKind"`
 	PHPVersion        string        `json:"phpVersion"`
+	PythonVersion     string        `json:"pythonVersion"`
 	Status            Status        `json:"status"`
 	Secure            bool          `json:"secure"`
 	InstalledHash     string        `json:"installedHash"`
