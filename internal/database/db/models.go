@@ -69,6 +69,18 @@ type ProjectDomain struct {
 	UpdatedAt  string `json:"updated_at"`
 }
 
+type ProjectGroup struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	SortOrder int64  `json:"sort_order"`
+	CreatedAt string `json:"created_at"`
+}
+
+type ProjectGroupMember struct {
+	GroupID   string `json:"group_id"`
+	ProjectID string `json:"project_id"`
+}
+
 type ProjectProcess struct {
 	ID         string `json:"id"`
 	ProjectID  string `json:"project_id"`

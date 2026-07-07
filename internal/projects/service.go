@@ -109,6 +109,30 @@ func (s *Service) UpdateDomainPort(ctx context.Context, id string, port int) err
 	return s.repo.UpdateDomainPort(ctx, id, port)
 }
 
+func (s *Service) CreateGroup(ctx context.Context, name string) (*Group, error) {
+	return s.repo.CreateGroup(ctx, name)
+}
+
+func (s *Service) ListGroups(ctx context.Context) ([]Group, error) {
+	return s.repo.ListGroups(ctx)
+}
+
+func (s *Service) DeleteGroup(ctx context.Context, id string) error {
+	return s.repo.DeleteGroup(ctx, id)
+}
+
+func (s *Service) AddToGroup(ctx context.Context, groupID, projectID string) error {
+	return s.repo.AddGroupMember(ctx, groupID, projectID)
+}
+
+func (s *Service) RemoveFromGroup(ctx context.Context, groupID, projectID string) error {
+	return s.repo.RemoveGroupMember(ctx, groupID, projectID)
+}
+
+func (s *Service) GroupMembers(ctx context.Context, groupID string) ([]string, error) {
+	return s.repo.GroupMembers(ctx, groupID)
+}
+
 var slugRe = regexp.MustCompile(`[^a-z0-9.]+`)
 
 func Slugify(in string) string {

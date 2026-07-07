@@ -68,6 +68,14 @@ type ProcessSpec struct {
 	CreatedAt  string      `json:"createdAt"`
 }
 
+type Group struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	Order      int      `json:"order"`
+	CreatedAt  string   `json:"createdAt"`
+	ProjectIDs []string `json:"projectIds"`
+}
+
 type Domain struct {
 	ID         string `json:"id"`
 	ProjectID  string `json:"projectId"`
