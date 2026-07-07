@@ -29,6 +29,8 @@ type Server struct {
 	serviceHandler *ServiceHandler
 	http           *http.Server
 	https          *http.Server
+	lan            *http.Server
+	suffix         string
 	transport      *http.Transport
 }
 
@@ -37,6 +39,7 @@ type Options struct {
 	TLSAddr        string
 	TLSCert        string
 	TLSKey         string
+	Suffix         string
 	Router         *Router
 	Recovery       *RecoveryHandler
 	Services       ServiceResolver
@@ -70,6 +73,7 @@ func NewServerWithOptions(opts Options) *Server {
 		router:    opts.Router,
 		recovery:  opts.Recovery,
 		services:  opts.Services,
+		suffix:    opts.Suffix,
 		transport: tr,
 	}
 	if opts.Services != nil && opts.ServiceStarter != nil {
@@ -111,6 +115,9 @@ func (s *Server) ListenAndServe() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.lan != nil {
+		_ = s.lan.Shutdown(ctx)
+	}
 	if s.https != nil {
 		_ = s.https.Shutdown(ctx)
 	}
@@ -121,6 +128,8 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	rewriteShareHost(r, s.suffix)
+
 	if s.serviceHandler != nil && strings.HasPrefix(r.URL.Path, servicePrefix+"/") {
 		s.serviceHandler.ServeHTTP(w, r)
 		return
