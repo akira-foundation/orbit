@@ -44,6 +44,7 @@ type App struct {
 	versionsAPI *bindings.Versions
 	terminalAPI *bindings.Terminal
 	systemAPI   *bindings.System
+	dataAPI     *bindings.Data
 }
 
 func NewApp() *App {
@@ -56,6 +57,7 @@ func NewApp() *App {
 		versionsAPI: bindings.NewVersions(),
 		terminalAPI: bindings.NewTerminal(),
 		systemAPI:   bindings.NewSystem(),
+		dataAPI:     bindings.NewData(),
 	}
 }
 
@@ -69,6 +71,7 @@ func (a *App) boundAPIs() []interface{} {
 		a.versionsAPI,
 		a.terminalAPI,
 		a.systemAPI,
+		a.dataAPI,
 	}
 }
 
@@ -167,7 +170,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 	for _, api := range []interface{ Attach(bindings.Deps) }{
 		a.projectsAPI, a.groupsAPI, a.runtimeAPI, a.servicesAPI,
-		a.mailAPI, a.versionsAPI, a.terminalAPI, a.systemAPI,
+		a.mailAPI, a.versionsAPI, a.terminalAPI, a.systemAPI, a.dataAPI,
 	} {
 		api.Attach(deps)
 	}

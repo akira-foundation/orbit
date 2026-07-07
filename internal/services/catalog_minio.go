@@ -52,6 +52,7 @@ func minioEngine() Engine {
 		Version:     minioRelease,
 		DisplayName: "MinIO",
 		Description: "S3-compatible object storage. One bucket per project, created automatically.",
+		Family:      "minio",
 		Port:        40340,
 		APIPort:     40340,
 		WebPort:     40341,
