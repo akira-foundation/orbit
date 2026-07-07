@@ -1,129 +1,15 @@
 import { useEffect, useState } from "react";
-import {
-  Play,
-  Square,
-  Trash2,
-  SlidersHorizontal,
-  ExternalLink,
-  AlertTriangle,
-} from "lucide-react";
 import { api } from "../api";
 import type { ServiceInfo } from "../types";
-import { cn } from "../lib/cn";
-import { Button } from "./ui/button";
+import {
+  ServiceRow,
+  ServiceVersionCard,
+  type RowActions,
+} from "./ServiceRows";
 import { ServiceSetupDialog } from "./ServiceSetupDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 
-const STATUS_DOT: Record<ServiceInfo["status"], string> = {
-  running: "bg-emerald-400 shadow-[0_0_8px_#34d399]",
-  starting: "bg-amber-400 shadow-[0_0_8px_#fbbf24]",
-  error: "bg-rose-400 shadow-[0_0_8px_#fb7185]",
-  external: "bg-amber-400 shadow-[0_0_8px_#fbbf24]",
-  stopped: "bg-white/20",
-};
-
 const FAMILY_LABELS: Record<string, string> = { postgres: "PostgreSQL" };
-
-interface RowActions {
-  busy: string | null;
-  onToggle: (svc: ServiceInfo) => void;
-  onSetup: (svc: ServiceInfo) => void;
-  onRemove: (svc: ServiceInfo) => void;
-}
-
-function ServiceRow({
-  svc,
-  compact,
-  actions,
-}: {
-  svc: ServiceInfo;
-  compact: boolean;
-  actions: RowActions;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex items-center justify-between gap-4 px-4 py-3",
-        !compact && "rounded-lg border border-white/10 bg-white/[0.03]",
-      )}
-    >
-      <div className="flex items-start gap-3 min-w-0">
-        <span
-          className={cn(
-            "mt-1.5 size-2 rounded-full shrink-0",
-            STATUS_DOT[svc.status],
-          )}
-        />
-        <div className="min-w-0 space-y-0.5">
-          <p className="text-[13px] font-medium">{svc.displayName}</p>
-          {!compact && svc.description ? (
-            <p className="text-[11px] text-[var(--orbit-muted)] leading-relaxed">
-              {svc.description}
-            </p>
-          ) : null}
-          <p className="text-[11px] text-[var(--orbit-subtle)]">
-            {svc.version} · {svc.installed ? "installed" : "not downloaded"} ·{" "}
-            {svc.status === "external" ? "port in use externally" : svc.status}
-            {svc.refs > 0 ? ` · ${svc.refs} project(s)` : ""}
-          </p>
-          {svc.status === "external" ? (
-            <p className="text-[10.5px] text-amber-300/90 leading-relaxed">
-              Another process on this machine is already using this port.
-              Orbit will not touch it.
-            </p>
-          ) : null}
-          {svc.webUrl ? (
-            <button
-              className="inline-flex items-center gap-1 text-[11px] text-[var(--orbit-accent-2)] hover:underline"
-              onClick={() => api.openURL(`http://${svc.webUrl}`)}
-            >
-              {svc.webUrl}
-              <ExternalLink className="size-3" />
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-1.5 shrink-0">
-        <Button variant="ghost" size="sm" onClick={() => actions.onSetup(svc)}>
-          <SlidersHorizontal className="size-3.5 mr-1.5" />
-          Setup
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={actions.busy === svc.engine || svc.status === "external"}
-          title={
-            svc.status === "external"
-              ? "Port in use by another process — Orbit cannot manage it"
-              : undefined
-          }
-          onClick={() => actions.onToggle(svc)}
-        >
-          {svc.status === "external" ? (
-            <AlertTriangle className="size-3.5 mr-1.5" />
-          ) : svc.status === "running" ? (
-            <Square className="size-3.5 mr-1.5" />
-          ) : (
-            <Play className="size-3.5 mr-1.5" />
-          )}
-          {svc.status === "external" ? "In use" : svc.status === "running" ? "Stop" : "Start"}
-        </Button>
-        {svc.installed ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-rose-300 hover:bg-rose-500/10 hover:text-rose-200"
-            onClick={() => actions.onRemove(svc)}
-            title="Uninstall"
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
 
 export function ServicesList() {
   const [items, setItems] = useState<ServiceInfo[]>([]);
@@ -178,31 +64,12 @@ export function ServicesList() {
             actions={actions}
           />
         ) : (
-          <div
+          <ServiceVersionCard
             key={key}
-            className="rounded-lg border border-white/10 bg-white/[0.03] overflow-hidden"
-          >
-            <div className="px-4 pt-3 pb-2 border-b border-white/[0.06] space-y-0.5">
-              <p className="text-[13px] font-medium">
-                {FAMILY_LABELS[key] ?? key}
-              </p>
-              {members[0].description ? (
-                <p className="text-[11px] text-[var(--orbit-muted)] leading-relaxed">
-                  {members[0].description}
-                </p>
-              ) : null}
-            </div>
-            <div className="divide-y divide-white/[0.04]">
-              {members.map((svc) => (
-                <ServiceRow
-                  key={svc.engine}
-                  svc={svc}
-                  compact
-                  actions={actions}
-                />
-              ))}
-            </div>
-          </div>
+            familyLabel={FAMILY_LABELS[key] ?? key}
+            members={members}
+            actions={actions}
+          />
         ),
       )}
 
