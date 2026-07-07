@@ -1,46 +1,42 @@
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
 import { useProjects } from "../store";
+import { useNotificationStore } from "../stores/notifications";
 import { useWailsEvent } from "./useWailsEvent";
+import { api } from "../api";
 import type { RuntimeStatusEvent } from "../types";
 
 interface TlsExpiringEvent {
   expiresAt: string;
 }
 
-function notify(title: string, body: string) {
-  if (typeof Notification === "undefined") return;
-  if (Notification.permission === "granted") {
-    new Notification(title, { body });
-    return;
-  }
-  if (Notification.permission !== "denied") {
-    Notification.requestPermission().then((p) => {
-      if (p === "granted") new Notification(title, { body });
-    });
-  }
-}
-
-export function useNotifications() {
+export function useNotificationEvents() {
   const projects = useProjects((s) => s.projects);
+  const push = useNotificationStore((s) => s.push);
 
-  useEffect(() => {
-    if (typeof Notification !== "undefined" && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
-  }, []);
+  const emit = useCallback(
+    (kind: "crash" | "cert", title: string, body: string) => {
+      push({ kind, title, body });
+      api.notify(title, body).catch(() => {});
+    },
+    [push],
+  );
 
   const onCrash = useCallback(
     (e: RuntimeStatusEvent) => {
       const name = projects.find((p) => p.id === e.projectId)?.name ?? "A project";
-      notify("Project crashed", `${name} stopped after repeated restart failures.`);
+      const reason = e.snapshot?.error?.trim();
+      emit("crash", `${name} stopped`, reason || "The runtime exited unexpectedly.");
     },
-    [projects],
+    [projects, emit],
   );
   useWailsEvent<RuntimeStatusEvent>("runtime:crash", onCrash);
 
-  const onTlsExpiring = useCallback((e: TlsExpiringEvent) => {
-    const when = new Date(e.expiresAt).toLocaleDateString();
-    notify("Orbit TLS certificate expiring", `The local HTTPS certificate expires on ${when}.`);
-  }, []);
+  const onTlsExpiring = useCallback(
+    (e: TlsExpiringEvent) => {
+      const when = new Date(e.expiresAt).toLocaleDateString();
+      emit("cert", "TLS certificate expiring", `The local HTTPS certificate expires on ${when}.`);
+    },
+    [emit],
+  );
   useWailsEvent<TlsExpiringEvent>("tls:expiring", onTlsExpiring);
 }

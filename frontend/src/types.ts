@@ -49,6 +49,17 @@ export interface Project {
   processes?: ProjectProcess[]
 }
 
+export type NotificationKind = 'crash' | 'cert' | 'info'
+
+export interface AppNotification {
+  id: string
+  kind: NotificationKind
+  title: string
+  body: string
+  ts: number
+  read: boolean
+}
+
 export interface GitInfo {
   repo: boolean
   branch: string
