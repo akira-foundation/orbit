@@ -56,6 +56,7 @@ type Manager interface {
 	SetServices(c ServiceCoordinator)
 	SetNodeAcquirer(a *services.Acquirer)
 	SetPHPAcquirer(a *services.Acquirer)
+	SetPythonAcquirer(a *services.Acquirer)
 	SetRuntimesConfig(c *services.RuntimesConfigStore)
 }
 
@@ -90,6 +91,7 @@ type manager struct {
 	services       ServiceCoordinator
 	nodeAcquirer   *services.Acquirer
 	phpAcquirer    *services.Acquirer
+	pythonAcquirer *services.Acquirer
 	runtimesConfig *services.RuntimesConfigStore
 	dataDir        string
 	sessions       map[string]*Session
@@ -366,30 +368,48 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 		return fmt.Errorf("runtime: node runtime: %w", err)
 	}
 
-	knownHash, _ := m.projects.InstalledHash(ctx, projectID)
-	if NeedsInstall(proj, knownHash) {
-		if err := m.runInstall(ctx, sess, proj, nodeBinDir); err != nil {
+	binDir := nodeBinDir
+	if proj.RuntimeKind == projects.RuntimeKindPython {
+		pyBinDir, err := m.pythonBinDir(ctx, proj)
+		if err != nil {
 			m.markStartFailed(sess, err)
-			return fmt.Errorf("runtime: install: %w", err)
+			return fmt.Errorf("runtime: python runtime: %w", err)
+		}
+		binDir = pyBinDir
+		knownHash, _ := m.projects.InstalledHash(ctx, projectID)
+		if needsPythonInstall(proj, knownHash) {
+			if err := m.runPythonInstall(ctx, sess, proj, pyBinDir); err != nil {
+				m.markStartFailed(sess, err)
+				return fmt.Errorf("runtime: install: %w", err)
+			}
+		}
+	} else {
+		knownHash, _ := m.projects.InstalledHash(ctx, projectID)
+		if NeedsInstall(proj, knownHash) {
+			if err := m.runInstall(ctx, sess, proj, nodeBinDir); err != nil {
+				m.markStartFailed(sess, err)
+				return fmt.Errorf("runtime: install: %w", err)
+			}
 		}
 	}
 
 	svcEnv := m.servicesOnStart(proj)
 
 	port := pickPort(proj.DevPort)
+	devCommand := substitutePort(proj.DevCommand, port)
 	log.Printf("[runtime] start project=%s devPort=%d picked=%d cmd=%q",
-		proj.ID, proj.DevPort, port, proj.DevCommand)
+		proj.ID, proj.DevPort, port, devCommand)
 	m.recordSystem(proj.ID, LevelInfo, SourceSystem,
-		fmt.Sprintf("starting runtime (cmd=%q port=%d)", proj.DevCommand, port))
+		fmt.Sprintf("starting runtime (cmd=%q port=%d)", devCommand, port))
 	env := append(stripEnvVar(os.Environ(), "CI"),
 		"FORCE_COLOR=1",
 		fmt.Sprintf("PORT=%d", port),
 	)
 	env = mergeServiceEnv(env, svcEnv)
 	env = mergeDotEnv(env, proj.Path)
-	env = prependNodeBinDir(env, nodeBinDir)
+	env = prependNodeBinDir(env, binDir)
 
-	handle, err := spawnDevCommand(proj.Path, proj.DevCommand, env)
+	handle, err := spawnDevCommand(proj.Path, devCommand, env)
 	if err != nil {
 		m.markStartFailed(sess, err)
 		return fmt.Errorf("runtime: spawn: %w", err)
@@ -881,6 +901,10 @@ var readyMarkers = []string{
 	"server started",
 	"compiled successfully",
 	"started development server",
+	"uvicorn running on",
+	"application startup complete",
+	"starting development server at",
+	"running on http",
 }
 
 func looksReady(s string) bool {
