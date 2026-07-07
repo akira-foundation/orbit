@@ -3,11 +3,13 @@ import { Play, Table2, TriangleAlert } from "lucide-react";
 import { api } from "../api";
 import type { QueryResult } from "../types";
 import { cn } from "../lib/cn";
+import { SqlEditor } from "../components/SqlEditor";
 
 export function DatabaseBrowser() {
   const [databases, setDatabases] = useState<string[]>([]);
   const [database, setDatabase] = useState<string>("");
   const [tables, setTables] = useState<string[]>([]);
+  const [schema, setSchema] = useState<Record<string, string[]>>({});
   const [sql, setSql] = useState("");
   const [allowWrites, setAllowWrites] = useState(false);
   const [result, setResult] = useState<QueryResult | null>(null);
@@ -35,6 +37,7 @@ export function DatabaseBrowser() {
         setTables([]);
         setError(e?.message ?? String(e));
       });
+    api.dbSchema(database).then(setSchema).catch(() => setSchema({}));
   }, [database]);
 
   const run = async (query?: string) => {
@@ -102,15 +105,9 @@ export function DatabaseBrowser() {
 
         <section className="min-h-0 flex flex-col gap-3">
           <div className="flex items-start gap-2">
-            <textarea
-              value={sql}
-              onChange={(e) => setSql(e.target.value)}
-              onKeyDown={(e) => {
-                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") run();
-              }}
-              placeholder="SELECT * FROM …  (Cmd+Enter to run)"
-              className="flex-1 h-20 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-[12px] font-mono outline-none focus:border-[var(--orbit-accent-2)]/50 resize-none"
-            />
+            <div className="flex-1 min-w-0">
+              <SqlEditor value={sql} onChange={setSql} onRun={() => run()} schema={schema} />
+            </div>
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => run()}

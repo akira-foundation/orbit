@@ -73,6 +73,28 @@ func Tables(ctx context.Context, dsn string) ([]string, error) {
 	return out, rows.Err()
 }
 
+func Schema(ctx context.Context, dsn string) (map[string][]string, error) {
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close(ctx)
+	rows, err := conn.Query(ctx, `SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' ORDER BY table_name, ordinal_position`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]string{}
+	for rows.Next() {
+		var table, column string
+		if err := rows.Scan(&table, &column); err != nil {
+			return nil, err
+		}
+		out[table] = append(out[table], column)
+	}
+	return out, rows.Err()
+}
+
 type QueryResult struct {
 	Columns []string   `json:"columns"`
 	Rows    [][]string `json:"rows"`

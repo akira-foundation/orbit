@@ -39,6 +39,14 @@ func (d *Data) DBDatabases() ([]string, error) {
 	return pgbrowse.Databases(d.ctx, dsn)
 }
 
+func (d *Data) DBSchema(database string) (map[string][]string, error) {
+	dsn, err := d.dsn(database)
+	if err != nil {
+		return nil, err
+	}
+	return pgbrowse.Schema(d.ctx, dsn)
+}
+
 func (d *Data) DBTables(database string) ([]string, error) {
 	dsn, err := d.dsn(database)
 	if err != nil {
