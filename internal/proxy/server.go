@@ -32,6 +32,11 @@ type Server struct {
 	lan            *http.Server
 	suffix         string
 	transport      *http.Transport
+	reqlog         *RequestLog
+}
+
+func (s *Server) RecentRequests(projectID string) []RequestEntry {
+	return s.reqlog.Recent(projectID)
 }
 
 type Options struct {
@@ -75,6 +80,7 @@ func NewServerWithOptions(opts Options) *Server {
 		services:  opts.Services,
 		suffix:    opts.Suffix,
 		transport: tr,
+		reqlog:    NewRequestLog(),
 	}
 	if opts.Services != nil && opts.ServiceStarter != nil {
 		s.serviceHandler = NewServiceHandler(opts.Services, opts.ServiceStarter)
@@ -220,6 +226,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.router.runtime.RecordRequest(
 			target.Project.ID, rec.status, ms, bytesIn, rec.bytes, isWS,
 		)
+		s.reqlog.Record(target.Project.ID, RequestEntry{
+			Ts:         start.UnixMilli(),
+			Method:     r.Method,
+			Path:       r.URL.Path,
+			Status:     rec.status,
+			DurationMs: ms,
+			Bytes:      rec.bytes,
+			WS:         isWS,
+		})
 	}()
 
 	targetDesc := target.SockPath

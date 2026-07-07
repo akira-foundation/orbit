@@ -5,6 +5,7 @@ import type { Project } from "../types";
 import { RuntimeStatusBadge } from "../components/RuntimeStatusBadge";
 import { Button } from "../components/ui/button";
 import {
+  Activity,
   ExternalLink,
   FileText,
   Info,
@@ -27,9 +28,10 @@ import { Card, Cell, SecureToggle } from "../components/ProjectDetailParts";
 import { ProjectActions } from "../components/ProjectActions";
 import { ProjectDetailsTab } from "../components/ProjectDetailsTab";
 import { SharePanel } from "../components/SharePanel";
+import { RequestInspector } from "../components/RequestInspector";
 import { cn } from "../lib/cn";
 
-type DetailTab = "details" | "services" | "env" | "share" | "logs" | "terminal";
+type DetailTab = "details" | "services" | "env" | "share" | "logs" | "requests" | "terminal";
 
 const DETAIL_TABS: {
   id: DetailTab;
@@ -39,6 +41,7 @@ const DETAIL_TABS: {
 }[] = [
   { id: "details", label: "Details", subtitle: "Resolved project metadata", icon: Info },
   { id: "logs", label: "Logs", subtitle: "Live stdout / stderr from the runtime", icon: FileText },
+  { id: "requests", label: "Requests", subtitle: "HTTP requests proxied to this project", icon: Activity },
   { id: "terminal", label: "Terminal", subtitle: "Interactive shell at the project root", icon: Terminal },
   { id: "services", label: "Services", subtitle: "Local services this project uses", icon: Server },
   { id: "env", label: "Env", subtitle: "Project .env variables", icon: KeyRound },
@@ -256,6 +259,8 @@ export function ProjectDetail({ id }: { id: string }) {
               )}
             </>
           )}
+
+          {tab === "requests" && <RequestInspector projectId={id} />}
 
           {tab === "terminal" && <ProjectTerminal projectId={id} />}
         </Card>

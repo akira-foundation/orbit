@@ -38,6 +38,7 @@ import {
   EnableLANShare,
   DisableLANShare,
 } from "../wailsjs/go/bindings/Share";
+import { ProjectRequests } from "../wailsjs/go/bindings/Requests";
 import {
   RuntimeStatus,
   RuntimeLogs,
@@ -106,6 +107,7 @@ import type {
   AnalyzeResult,
   GitInfo,
   Group,
+  RequestEntry,
   QueryResult,
   S3Object,
   MetricSample,
@@ -167,6 +169,8 @@ export const api = {
   openProject: (id: string): Promise<void> => OpenProject(id),
   openURL: (url: string): Promise<void> => OpenURL(url),
   gitStatus: (id: string): Promise<GitInfo> => cast(GitStatus(id)),
+  projectRequests: async (id: string): Promise<RequestEntry[]> =>
+    (await cast<RequestEntry[] | null>(ProjectRequests(id))) ?? [],
   shareInfo: (id: string): Promise<ShareInfo> => cast(ShareInfoBinding(id)),
   enableLANShare: (id: string): Promise<ShareInfo> => cast(EnableLANShare(id)),
   disableLANShare: (id: string): Promise<void> => DisableLANShare(id),

@@ -85,6 +85,16 @@ export interface ShareInfo {
   qr: string
 }
 
+export interface RequestEntry {
+  ts: number
+  method: string
+  path: string
+  status: number
+  durationMs: number
+  bytes: number
+  ws: boolean
+}
+
 export interface GitInfo {
   repo: boolean
   branch: string
