@@ -4,8 +4,31 @@ import (
 	"bufio"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
+
+func ReadProjectEnv(dir string) (map[string]string, error) {
+	out := map[string]string{}
+	applyDotEnvFile(filepath.Join(dir, ".env"), out)
+	return out, nil
+}
+
+func WriteProjectEnv(dir string, vars map[string]string) error {
+	keys := make([]string, 0, len(vars))
+	for k := range vars {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for _, k := range keys {
+		b.WriteString(k)
+		b.WriteByte('=')
+		b.WriteString(vars[k])
+		b.WriteByte('\n')
+	}
+	return os.WriteFile(filepath.Join(dir, ".env"), []byte(b.String()), 0o644)
+}
 
 var dotEnvFiles = []string{
 	".env",
