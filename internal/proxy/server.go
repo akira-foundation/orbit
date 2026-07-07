@@ -128,7 +128,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	rewriteShareHost(r, s.suffix)
+	rewriteShareHost(w, r, s.suffix)
 
 	if s.serviceHandler != nil && strings.HasPrefix(r.URL.Path, servicePrefix+"/") {
 		s.serviceHandler.ServeHTTP(w, r)

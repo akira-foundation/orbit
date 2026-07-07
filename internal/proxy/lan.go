@@ -6,8 +6,18 @@ import (
 	"time"
 )
 
-func rewriteShareHost(r *http.Request, suffix string) {
+const shareCookie = "orbit_share"
+
+func rewriteShareHost(w http.ResponseWriter, r *http.Request, suffix string) {
 	slug := r.URL.Query().Get("__orbit")
+	if slug != "" {
+		http.SetCookie(w, &http.Cookie{Name: shareCookie, Value: slug, Path: "/", MaxAge: 3600})
+	}
+	if slug == "" {
+		if c, err := r.Cookie(shareCookie); err == nil {
+			slug = c.Value
+		}
+	}
 	if slug == "" || suffix == "" {
 		return
 	}
