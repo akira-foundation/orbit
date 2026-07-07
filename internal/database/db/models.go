@@ -57,6 +57,7 @@ type Project struct {
 	NodeVersion       string `json:"node_version"`
 	RuntimeKind       string `json:"runtime_kind"`
 	PhpVersion        string `json:"php_version"`
+	PythonVersion     string `json:"python_version"`
 }
 
 type ProjectDomain struct {

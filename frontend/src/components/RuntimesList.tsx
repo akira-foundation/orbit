@@ -4,6 +4,7 @@ import { api } from "../api";
 import type {
   NodeVersionInfo,
   PHPVersionInfo,
+  PythonVersionInfo,
   RuntimesConfig,
   SystemRuntimeStatus,
 } from "../types";
@@ -12,7 +13,7 @@ import { Button } from "./ui/button";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ToggleRow } from "./SettingsSections";
 
-type VersionInfo = NodeVersionInfo | PHPVersionInfo;
+type VersionInfo = NodeVersionInfo | PHPVersionInfo | PythonVersionInfo;
 
 function formatBytes(n: number): string {
   if (n <= 0) return "0 B";
@@ -276,15 +277,98 @@ function PHPRuntimeGroup({
   );
 }
 
+function PythonRuntimeGroup({
+  cfg,
+  onSaveCfg,
+  systemPython,
+}: {
+  cfg: RuntimesConfig | null;
+  onSaveCfg: (next: RuntimesConfig) => void;
+  systemPython: SystemRuntimeStatus | null;
+}) {
+  const [versions, setVersions] = useState<PythonVersionInfo[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [removeFor, setRemoveFor] = useState<PythonVersionInfo | null>(null);
+
+  async function refresh() {
+    setVersions(await api.listPythonVersions());
+  }
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  async function install(v: PythonVersionInfo) {
+    setBusy(v.version);
+    try {
+      await api.installPythonVersion(v.version);
+      await refresh();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.03] overflow-hidden">
+      <div className="px-4 pt-3 pb-2 border-b border-white/[0.06] space-y-0.5">
+        <p className="text-[13px] font-medium">Python</p>
+        <p className="text-[11px] text-[var(--orbit-muted)] leading-relaxed">
+          Bundled CPython used to run Django, FastAPI, and Flask projects.
+          Resolved per project from .python-version or pyproject.toml.
+        </p>
+      </div>
+      {cfg && (
+        <SystemPreferenceToggle
+          label="Python"
+          system={systemPython}
+          checked={cfg.preferSystemPython}
+          onChange={(v) => onSaveCfg({ ...cfg, preferSystemPython: v })}
+        />
+      )}
+      <div className="divide-y divide-white/[0.04]">
+        {versions.map((v) => (
+          <RuntimeVersionRow
+            key={v.id}
+            label="Python"
+            v={v}
+            busy={busy === v.version}
+            onInstall={install}
+            onRemove={setRemoveFor}
+          />
+        ))}
+      </div>
+
+      <ConfirmDialog
+        open={!!removeFor}
+        onOpenChange={(o) => !o && setRemoveFor(null)}
+        title={`Remove Python ${removeFor?.version ?? ""}?`}
+        description="Deletes the downloaded binary. Projects pinned to this version will re-download it automatically on next start."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={async () => {
+          if (removeFor) {
+            await api.removePythonVersion(removeFor.version);
+            await refresh();
+          }
+        }}
+      />
+    </div>
+  );
+}
+
 export function RuntimesList() {
   const [cfg, setCfg] = useState<RuntimesConfig | null>(null);
   const [systemNode, setSystemNode] = useState<SystemRuntimeStatus | null>(null);
   const [systemPHP, setSystemPHP] = useState<SystemRuntimeStatus | null>(null);
+  const [systemPython, setSystemPython] = useState<SystemRuntimeStatus | null>(
+    null,
+  );
 
   useEffect(() => {
     api.runtimesConfig().then(setCfg);
     api.detectSystemNode().then(setSystemNode);
     api.detectSystemPHP().then(setSystemPHP);
+    api.detectSystemPython().then(setSystemPython);
   }, []);
 
   async function saveCfg(next: RuntimesConfig) {
@@ -296,6 +380,11 @@ export function RuntimesList() {
     <div className="space-y-2.5">
       <NodeRuntimeGroup cfg={cfg} onSaveCfg={saveCfg} systemNode={systemNode} />
       <PHPRuntimeGroup cfg={cfg} onSaveCfg={saveCfg} systemPHP={systemPHP} />
+      <PythonRuntimeGroup
+        cfg={cfg}
+        onSaveCfg={saveCfg}
+        systemPython={systemPython}
+      />
     </div>
   );
 }

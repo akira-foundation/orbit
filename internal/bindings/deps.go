@@ -22,6 +22,7 @@ type Deps struct {
 	SvcConfig   *services.ConfigStore
 	NodeAcq     *services.Acquirer
 	PHPAcq      *services.Acquirer
+	PythonAcq   *services.Acquirer
 	RuntimesCfg *services.RuntimesConfigStore
 	Terminals   *terminal.Manager
 	ProxyServer *proxy.Server

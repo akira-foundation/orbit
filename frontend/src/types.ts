@@ -18,7 +18,7 @@ export interface ProjectProcess {
   id: string
   projectId: string
   role: 'backend' | 'frontend'
-  kind: 'command' | 'php-fpm'
+  kind: 'command' | 'php-fpm' | 'python'
   workDir: string
   command: string
   port: number
@@ -41,6 +41,7 @@ export interface Project {
   devCommand: string
   devPort: number
   nodeVersion?: string
+  pythonVersion?: string
   status: ProjectStatus
   secure: boolean
   createdAt: string
@@ -216,6 +217,14 @@ export interface PHPVersionInfo {
   path: string
 }
 
+export interface PythonVersionInfo {
+  id: string
+  version: string
+  installed: boolean
+  diskBytes: number
+  path: string
+}
+
 export interface ServiceSnapshot {
   engine: string
   status: string
@@ -248,6 +257,7 @@ export interface ServicesConfig {
 export interface RuntimesConfig {
   preferSystemNode: boolean
   preferSystemPhp: boolean
+  preferSystemPython: boolean
 }
 
 export interface SystemRuntimeStatus {

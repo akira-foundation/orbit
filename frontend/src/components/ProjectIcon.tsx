@@ -8,6 +8,11 @@ const tints: Record<string, string> = {
   vite:   'from-violet-300 to-indigo-500',
   nestjs: 'from-rose-300 to-rose-600',
   express:'from-amber-300 to-amber-600',
+  django: 'from-emerald-300 to-green-700',
+  fastapi:'from-teal-300 to-teal-600',
+  flask:  'from-zinc-300 to-zinc-600',
+  starlette:'from-teal-300 to-cyan-600',
+  python: 'from-sky-300 to-yellow-500',
   unknown:'from-[var(--orbit-accent)] to-[var(--orbit-accent-2)]',
 }
 
