@@ -1,4 +1,4 @@
-import { BarChart3, FileText, Lock, LockOpen, Play, RotateCcw, Square, Trash2 } from "lucide-react";
+import { BarChart3, FileText, Lock, LockOpen, Play, RotateCcw, Share2, Square, Trash2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { IconBtn } from "./ProjectDetailParts";
 
@@ -7,6 +7,7 @@ export function ProjectActions({
   busy,
   isRunning,
   onToggleSecure,
+  onShare,
   onLogs,
   onMetrics,
   onRemove,
@@ -18,6 +19,7 @@ export function ProjectActions({
   busy: boolean;
   isRunning: boolean;
   onToggleSecure: () => void;
+  onShare: () => void;
   onLogs: () => void;
   onMetrics: () => void;
   onRemove: () => void;
@@ -33,6 +35,7 @@ export function ProjectActions({
         disabled={busy}
         title={secure ? "HTTPS only, click to disable" : "Force HTTPS"}
       />
+      <IconBtn icon={<Share2 />} onClick={onShare} disabled={busy} title="Share on network" />
       <IconBtn icon={<FileText />} onClick={onLogs} disabled={busy} title="Logs" />
       <IconBtn icon={<BarChart3 />} onClick={onMetrics} disabled={busy} title="Metrics" />
       <IconBtn icon={<Trash2 />} onClick={onRemove} disabled={busy} title="Remove" />

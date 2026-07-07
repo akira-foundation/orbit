@@ -25,6 +25,7 @@ import { EnvEditorPanel } from "../components/EnvEditorPanel";
 import { Card, Cell, SecureToggle } from "../components/ProjectDetailParts";
 import { ProjectActions } from "../components/ProjectActions";
 import { ProjectDetailsTab } from "../components/ProjectDetailsTab";
+import { SharePanel } from "../components/SharePanel";
 import { cn } from "../lib/cn";
 
 type DetailTab = "details" | "services" | "env" | "logs" | "terminal";
@@ -50,6 +51,7 @@ export function ProjectDetail({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [tab, setTab] = useState<DetailTab>("details");
   const [, copyToClipboard] = useCopyToClipboard();
 
@@ -178,6 +180,7 @@ export function ProjectDetail({ id }: { id: string }) {
                   setProject({ ...project, secure: !next });
                 }
               }}
+              onShare={() => setShareOpen(true)}
               onLogs={() => showProjectLogs(project.id)}
               onMetrics={() => showProjectMetrics(project.id)}
               onRemove={() => setConfirmRemove(true)}
@@ -255,6 +258,12 @@ export function ProjectDetail({ id }: { id: string }) {
           {tab === "terminal" && <ProjectTerminal projectId={id} />}
         </Card>
       </div>
+
+      <SharePanel
+        projectId={id}
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+      />
 
       <ConfirmDialog
         open={confirmRemove}
