@@ -42,6 +42,7 @@ type Engine struct {
 	WebDomain    string
 	ExtractTree  bool
 	RawBinary    bool
+	Zip          bool
 	Env          []string
 	ReadyMarkers []string
 	Platforms    map[string]Platform
@@ -148,7 +149,8 @@ func Catalog() []Engine {
 		},
 	}
 	out := append([]Engine{mp}, postgresEngines()...)
-	return append(out, minioEngine())
+	out = append(out, minioEngine())
+	return append(out, redisEngine())
 }
 
 func ResolveEngine(id string) (Engine, bool) {

@@ -2,6 +2,8 @@ package services
 
 import (
 	"archive/tar"
+	"archive/zip"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -125,6 +127,31 @@ func extractFromTarGz(archive []byte, wantPath, dst string) error {
 	}
 }
 
+func extractFromZip(archive []byte, wantPath, dst string) error {
+	zr, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
+	if err != nil {
+		return err
+	}
+	for _, f := range zr.File {
+		if path.Clean(f.Name) != path.Clean(wantPath) {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return err
+		}
+		defer rc.Close()
+		out, err := os.Create(dst)
+		if err != nil {
+			return err
+		}
+		defer out.Close()
+		_, err = io.Copy(out, rc)
+		return err
+	}
+	return fmt.Errorf("%s not found in archive", wantPath)
+}
+
 func (a *Acquirer) materialize(e Engine, p Platform, archive []byte, dst string) error {
 	if e.RawBinary {
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
@@ -137,6 +164,9 @@ func (a *Acquirer) materialize(e Engine, p Platform, archive []byte, dst string)
 	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
+	}
+	if e.Zip {
+		return extractFromZip(archive, p.ArchiveBinaryPath, dst)
 	}
 	return extractFromTarGz(archive, p.ArchiveBinaryPath, dst)
 }

@@ -13,3 +13,12 @@ func PostgresEnv(host string, port int, slug string) map[string]string {
 		"DB_PASSWORD":   "",
 	}
 }
+
+func RedisEnv(host string, port int) map[string]string {
+	return map[string]string{
+		"REDIS_URL":      fmt.Sprintf("redis://%s:%d", host, port),
+		"REDIS_HOST":     host,
+		"REDIS_PORT":     fmt.Sprintf("%d", port),
+		"REDIS_PASSWORD": "",
+	}
+}
