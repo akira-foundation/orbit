@@ -798,6 +798,7 @@ func (m *manager) scheduleRestart(sess *Session) {
 			sess.projectID, n)
 		m.recordSystem(sess.projectID, LevelError, SourceSystem,
 			fmt.Sprintf("self-heal giving up after %d attempts", n))
+		m.emit(EvtCrash, StatusEvent{ProjectID: sess.projectID, Snapshot: m.snap(sess)})
 		return
 	}
 	delay := time.Duration(1<<uint(n-1)) * time.Second

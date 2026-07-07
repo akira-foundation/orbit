@@ -138,6 +138,7 @@ func (a *App) startup(ctx context.Context) {
 		opts.TLSAddr = cfg.ProxyTLSAddr
 		opts.TLSCert = mat.LeafCert
 		opts.TLSKey = mat.LeafKey
+		go orbittls.StartSweep(ctx, mat.Dir, runtime.NewWailsEmitter(ctx).Emit)
 	} else {
 		log.Printf("[tls] ensure: %v (internal tls listener disabled)", err)
 	}
