@@ -2,6 +2,7 @@ package bindings
 
 import (
 	"context"
+	"path/filepath"
 
 	"orbit-app/internal/config"
 	"orbit-app/internal/projects"
@@ -63,7 +64,11 @@ func (s *Share) EnableLANShare(projectID string) (*ShareInfo, error) {
 		return nil, err
 	}
 	if s.state.Count() == 0 {
-		if err := s.proxy.EnableLAN(ip + ":" + s.cfg.InternalTLSPort()); err != nil {
+		certPath, keyPath, err := share.EnsureLocalCert(filepath.Join(s.cfg.DataDir, "share"))
+		if err != nil {
+			return nil, err
+		}
+		if err := s.proxy.EnableLAN(ip+":"+s.cfg.InternalTLSPort(), certPath, keyPath); err != nil {
 			return nil, err
 		}
 	}

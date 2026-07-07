@@ -38,5 +38,5 @@ func PrimaryLANIP() (string, error) {
 }
 
 func ShareURL(ip, port, slug string) string {
-	return "https://" + ip + ":" + port + "/?__orbit=" + slug
+	return "https://" + LocalIPHost(ip) + ":" + port + "/?__orbit=" + slug
 }

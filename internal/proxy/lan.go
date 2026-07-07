@@ -14,7 +14,7 @@ func rewriteShareHost(r *http.Request, suffix string) {
 	r.Host = slug + "." + suffix
 }
 
-func (s *Server) EnableLAN(addr string) error {
+func (s *Server) EnableLAN(addr, certFile, keyFile string) error {
 	if s.lan != nil {
 		return nil
 	}
@@ -23,16 +23,10 @@ func (s *Server) EnableLAN(addr string) error {
 		Handler:           s,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	if s.tlsCert != "" && s.tlsKey != "" {
-		cache := newCertCache(s.tlsCert, s.tlsKey)
-		s.lan.TLSConfig = &tls.Config{GetCertificate: cache.GetCertificate}
-		go func(srv *http.Server) {
-			_ = srv.ListenAndServeTLS("", "")
-		}(s.lan)
-		return nil
-	}
+	cache := newCertCache(certFile, keyFile)
+	s.lan.TLSConfig = &tls.Config{GetCertificate: cache.GetCertificate}
 	go func(srv *http.Server) {
-		_ = srv.ListenAndServe()
+		_ = srv.ListenAndServeTLS("", "")
 	}(s.lan)
 	return nil
 }

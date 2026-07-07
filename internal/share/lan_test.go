@@ -4,7 +4,7 @@ import "testing"
 
 func TestShareURL(t *testing.T) {
 	got := ShareURL("192.168.1.42", "2443", "shop")
-	if got != "https://192.168.1.42:2443/?__orbit=shop" {
+	if got != "https://192-168-1-42.local-ip.sh:2443/?__orbit=shop" {
 		t.Fatalf("ShareURL = %q", got)
 	}
 }
