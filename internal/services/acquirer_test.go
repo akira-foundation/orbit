@@ -2,6 +2,7 @@ package services
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -107,6 +108,65 @@ func TestAcquirerRejectsBadChecksum(t *testing.T) {
 
 func e_platformKey() string {
 	return Engine{}.PlatformKey()
+}
+
+func makeZip(t *testing.T, name string, content []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, err := zw.Create(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write(content); err != nil {
+		t.Fatal(err)
+	}
+	_ = zw.Close()
+	return buf.Bytes()
+}
+
+func TestAcquirerZip(t *testing.T) {
+	payload := []byte("#!/bin/sh\necho redka\n")
+	archive := makeZip(t, "redka", payload)
+	sum := sha256.Sum256(archive)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/redka.zip", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(archive)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	e := Engine{
+		ID:      "redis",
+		Version: "v1.0.1",
+		Zip:     true,
+		Platforms: map[string]Platform{
+			e_platformKey(): {
+				URL:               srv.URL + "/redka.zip",
+				SHA256:            hex.EncodeToString(sum[:]),
+				ArchiveBinaryPath: "redka",
+			},
+		},
+	}
+	base := t.TempDir()
+	a := NewAcquirer(newTestDB(t), base)
+
+	bin, err := a.Ensure(context.Background(), e)
+	if err != nil {
+		t.Fatalf("ensure: %v", err)
+	}
+	if bin != filepath.Join(base, "redis", "v1.0.1", "redka") {
+		t.Fatalf("bin = %s", bin)
+	}
+	data, err := os.ReadFile(bin)
+	if err != nil || string(data) != string(payload) {
+		t.Fatalf("content mismatch err=%v", err)
+	}
+	st, _ := os.Stat(bin)
+	if st.Mode().Perm()&0o111 == 0 {
+		t.Fatalf("not executable: %v", st.Mode())
+	}
 }
 
 func makeTreeTarGz(t *testing.T, files map[string][]byte) []byte {
