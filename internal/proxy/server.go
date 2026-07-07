@@ -130,6 +130,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rewriteShareHost(w, r, s.suffix)
 
+	if strings.HasPrefix(r.URL.Path, "/__port/") {
+		s.proxyToLocalPort(w, r)
+		return
+	}
+
 	if s.serviceHandler != nil && strings.HasPrefix(r.URL.Path, servicePrefix+"/") {
 		s.serviceHandler.ServeHTTP(w, r)
 		return
@@ -249,6 +254,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if target.Kind == TargetFastCGI {
 		rp.Transport = &fcgiTransport{SockPath: target.SockPath, DocRoot: target.DocRoot}
+	}
+	if isShareRequest(r) {
+		rp.ModifyResponse = injectShareResponse
 	}
 
 	rp.ServeHTTP(rec, r)
