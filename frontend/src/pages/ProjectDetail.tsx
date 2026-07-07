@@ -38,11 +38,11 @@ const DETAIL_TABS: {
   icon: typeof Info;
 }[] = [
   { id: "details", label: "Details", subtitle: "Resolved project metadata", icon: Info },
+  { id: "logs", label: "Logs", subtitle: "Live stdout / stderr from the runtime", icon: FileText },
+  { id: "terminal", label: "Terminal", subtitle: "Interactive shell at the project root", icon: Terminal },
   { id: "services", label: "Services", subtitle: "Local services this project uses", icon: Server },
   { id: "env", label: "Env", subtitle: "Project .env variables", icon: KeyRound },
   { id: "share", label: "Share", subtitle: "Serve this project on your local network", icon: Share2 },
-  { id: "logs", label: "Logs", subtitle: "Live stdout / stderr from the runtime", icon: FileText },
-  { id: "terminal", label: "Terminal", subtitle: "Interactive shell at the project root", icon: Terminal },
 ];
 
 export function ProjectDetail({ id }: { id: string }) {
