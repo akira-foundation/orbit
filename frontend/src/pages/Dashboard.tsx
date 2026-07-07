@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button'
 import type { GitInfo, Project } from '../types'
 import { cn } from '../lib/cn'
 import { RuntimeStatusBadge } from '../components/RuntimeStatusBadge'
+import { PROJECT_DND_MIME } from '../components/SidebarGroups'
 import { api } from '../api'
 
 export function Dashboard({ onAdd }: { onAdd: () => void }) {
@@ -81,6 +82,11 @@ function ListView({
           {projects.map((p) => (
             <tr
               key={p.id}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData(PROJECT_DND_MIME, p.id)
+                e.dataTransfer.effectAllowed = 'copy'
+              }}
               onClick={(e) => { e.stopPropagation(); setFocusId(p.id) }}
               onDoubleClick={() => onOpen(p)}
               className={cn(
