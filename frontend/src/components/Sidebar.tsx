@@ -17,6 +17,8 @@ import {
   Server,
   Cpu,
   Mail,
+  Database,
+  HardDrive,
   Settings,
 } from "lucide-react";
 
@@ -96,6 +98,18 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
             active={view === "mail"}
             badge={unread > 0 ? unread : undefined}
             onClick={() => setView("mail")}
+          />
+          <Row
+            icon={Database}
+            label="Database"
+            active={view === "database"}
+            onClick={() => setView("database")}
+          />
+          <Row
+            icon={HardDrive}
+            label="Storage"
+            active={view === "storage"}
+            onClick={() => setView("storage")}
           />
         </Section>
 

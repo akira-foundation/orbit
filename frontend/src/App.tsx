@@ -17,6 +17,8 @@ import { ProjectDetail } from "./pages/ProjectDetail";
 import { ProjectMetricsPage } from "./pages/ProjectMetrics";
 import { ProjectLogsPage } from "./pages/ProjectLogs";
 import { MailView } from "./components/viewers/mail/MailView";
+import { DatabaseBrowser } from "./pages/DatabaseBrowser";
+import { StorageBrowser } from "./pages/StorageBrowser";
 import { useProjects } from "./store";
 import { useWailsEvent } from "./hooks/useWailsEvent";
 import { useNotificationEvents } from "./hooks/useNotifications";
@@ -121,6 +123,10 @@ export function App() {
               <Runtimes />
             ) : view === "mail" ? (
               <MailView />
+            ) : view === "database" ? (
+              <DatabaseBrowser />
+            ) : view === "storage" ? (
+              <StorageBrowser />
             ) : view === "settings" ? (
               <SettingsPage
                 autoAction={autoAction}

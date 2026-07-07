@@ -351,6 +351,19 @@ func (m *Manager) APIBase(engine string) (string, bool) {
 	return fmt.Sprintf("http://%s:%d", e.Bind, e.WebPort), true
 }
 
+func (m *Manager) RunningEndpoint(family string) (host string, port int, ok bool) {
+	for _, e := range Catalog() {
+		if e.Family != family {
+			continue
+		}
+		st := m.Status(e.ID).Status
+		if st == "running" || st == "external" {
+			return e.Bind, e.Port, true
+		}
+	}
+	return "", 0, false
+}
+
 func (m *Manager) List(ctx context.Context) []ServiceInfo {
 	out := make([]ServiceInfo, 0)
 	for _, e := range Catalog() {
