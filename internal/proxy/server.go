@@ -135,6 +135,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.HasPrefix(r.URL.Path, "/__proj/") {
+		rewriteProjPath(r, s.suffix)
+	}
+
 	if s.serviceHandler != nil && strings.HasPrefix(r.URL.Path, servicePrefix+"/") {
 		s.serviceHandler.ServeHTTP(w, r)
 		return
@@ -256,7 +260,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rp.Transport = &fcgiTransport{SockPath: target.SockPath, DocRoot: target.DocRoot}
 	}
 	if isShareRequest(r) {
-		rp.ModifyResponse = injectShareResponse
+		rp.ModifyResponse = s.injectShareResponse
 	}
 
 	rp.ServeHTTP(rec, r)
