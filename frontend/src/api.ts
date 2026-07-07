@@ -25,6 +25,7 @@ import {
   StopGroup,
 } from "../wailsjs/go/bindings/Groups";
 import {
+  DBDatabases,
   DBTables,
   DBQuery,
   BucketList,
@@ -182,10 +183,12 @@ export const api = {
     RemoveFromGroup(groupId, projectId),
   startGroup: (id: string): Promise<void> => StartGroup(id),
   stopGroup: (id: string): Promise<void> => StopGroup(id),
-  dbTables: async (id: string): Promise<string[]> =>
-    (await cast<string[] | null>(DBTables(id))) ?? [],
-  dbQuery: (id: string, sql: string, allowWrites: boolean): Promise<QueryResult> =>
-    cast(DBQuery(id, sql, allowWrites)),
+  dbDatabases: async (): Promise<string[]> =>
+    (await cast<string[] | null>(DBDatabases())) ?? [],
+  dbTables: async (database: string): Promise<string[]> =>
+    (await cast<string[] | null>(DBTables(database))) ?? [],
+  dbQuery: (database: string, sql: string, allowWrites: boolean): Promise<QueryResult> =>
+    cast(DBQuery(database, sql, allowWrites)),
   bucketList: async (): Promise<string[]> =>
     (await cast<string[] | null>(BucketList())) ?? [],
   bucketObjects: async (bucket: string, prefix: string): Promise<S3Object[]> =>

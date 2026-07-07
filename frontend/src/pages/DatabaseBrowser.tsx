@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Play, Table2, TriangleAlert } from "lucide-react";
 import { api } from "../api";
-import { useProjects } from "../store";
 import type { QueryResult } from "../types";
 import { cn } from "../lib/cn";
 
 export function DatabaseBrowser() {
-  const { projects } = useProjects();
-  const [projectId, setProjectId] = useState<string>("");
+  const [databases, setDatabases] = useState<string[]>([]);
+  const [database, setDatabase] = useState<string>("");
   const [tables, setTables] = useState<string[]>([]);
   const [sql, setSql] = useState("");
   const [allowWrites, setAllowWrites] = useState(false);
@@ -16,29 +15,35 @@ export function DatabaseBrowser() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!projectId && projects.length > 0) setProjectId(projects[0].id);
-  }, [projects, projectId]);
+    api
+      .dbDatabases()
+      .then((dbs) => {
+        setDatabases(dbs);
+        setDatabase((d) => d || dbs.find((x) => x !== "postgres") || dbs[0] || "");
+      })
+      .catch((e) => setError(e?.message ?? String(e)));
+  }, []);
 
   useEffect(() => {
-    if (!projectId) return;
+    if (!database) return;
     setError(null);
     setResult(null);
     api
-      .dbTables(projectId)
+      .dbTables(database)
       .then(setTables)
       .catch((e) => {
         setTables([]);
         setError(e?.message ?? String(e));
       });
-  }, [projectId]);
+  }, [database]);
 
   const run = async (query?: string) => {
     const q = (query ?? sql).trim();
-    if (!q || !projectId) return;
+    if (!q || !database) return;
     setBusy(true);
     setError(null);
     try {
-      setResult(await api.dbQuery(projectId, q, allowWrites));
+      setResult(await api.dbQuery(database, q, allowWrites));
     } catch (e: any) {
       setResult(null);
       setError(e?.message ?? String(e));
@@ -63,13 +68,13 @@ export function DatabaseBrowser() {
           </p>
         </div>
         <select
-          value={projectId}
-          onChange={(e) => setProjectId(e.target.value)}
-          className="h-8 px-2 rounded-md bg-white/5 border border-white/10 text-[12px] outline-none"
+          value={database}
+          onChange={(e) => setDatabase(e.target.value)}
+          className="h-8 px-2 rounded-md bg-white/5 border border-white/10 text-[12px] outline-none font-mono"
         >
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
+          {databases.map((db) => (
+            <option key={db} value={db}>
+              {db}
             </option>
           ))}
         </select>

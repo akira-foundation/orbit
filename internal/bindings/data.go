@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"orbit-app/internal/projects"
 	"orbit-app/internal/services"
 	"orbit-app/internal/services/miniostore"
 	"orbit-app/internal/services/pgbrowse"
@@ -14,7 +13,6 @@ const queryRowLimit = 500
 
 type Data struct {
 	ctx      context.Context
-	service  *projects.Service
 	services *services.Manager
 }
 
@@ -22,37 +20,40 @@ func NewData() *Data { return &Data{} }
 
 func (d *Data) Attach(dep Deps) {
 	d.ctx = dep.Ctx
-	d.service = dep.Service
 	d.services = dep.Services
 }
 
-func (d *Data) dsn(projectID string) (string, error) {
-	p, err := d.service.Get(d.ctx, projectID)
-	if err != nil {
-		return "", err
-	}
+func (d *Data) dsn(db string) (string, error) {
 	host, port, ok := d.services.RunningEndpoint("postgres")
 	if !ok {
 		return "", fmt.Errorf("postgres service is not running")
 	}
-	return fmt.Sprintf("postgres://orbit@%s:%d/%s", host, port, p.Slug), nil
+	return fmt.Sprintf("postgres://orbit@%s:%d/%s?sslmode=disable", host, port, db), nil
 }
 
-func (d *Data) DBTables(projectID string) ([]string, error) {
-	dsn, err := d.dsn(projectID)
+func (d *Data) DBDatabases() ([]string, error) {
+	dsn, err := d.dsn("postgres")
+	if err != nil {
+		return nil, err
+	}
+	return pgbrowse.Databases(d.ctx, dsn)
+}
+
+func (d *Data) DBTables(database string) ([]string, error) {
+	dsn, err := d.dsn(database)
 	if err != nil {
 		return nil, err
 	}
 	return pgbrowse.Tables(d.ctx, dsn)
 }
 
-func (d *Data) DBQuery(projectID, sql string, allowWrites bool) (*pgbrowse.QueryResult, error) {
+func (d *Data) DBQuery(database, sql string, allowWrites bool) (*pgbrowse.QueryResult, error) {
 	if !allowWrites {
 		if err := pgbrowse.ReadOnly(sql); err != nil {
 			return nil, err
 		}
 	}
-	dsn, err := d.dsn(projectID)
+	dsn, err := d.dsn(database)
 	if err != nil {
 		return nil, err
 	}

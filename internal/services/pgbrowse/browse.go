@@ -29,6 +29,28 @@ func ReadOnly(sql string) error {
 	return nil
 }
 
+func Databases(ctx context.Context, dsn string) ([]string, error) {
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close(ctx)
+	rows, err := conn.Query(ctx, `SELECT datname FROM pg_database WHERE datistemplate=false ORDER BY datname`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out = append(out, name)
+	}
+	return out, rows.Err()
+}
+
 func Tables(ctx context.Context, dsn string) ([]string, error) {
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
