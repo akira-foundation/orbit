@@ -19,7 +19,7 @@ export function ProjectDetailsTab({
       </Detail>
       <Detail label="PID">
         <span className="font-mono text-[11.5px]">
-          {snapshot?.pid ? snapshot.pid : "—"}
+          {snapshot?.pid ? snapshot.pid : "-"}
         </span>
       </Detail>
       <Detail label="Path">

@@ -85,7 +85,7 @@ export function SecureToggle({
   return (
     <button
       onClick={() => onChange(!secure)}
-      title={secure ? "HTTPS only — click to disable" : "Force HTTPS"}
+      title={secure ? "HTTPS only, click to disable" : "Force HTTPS"}
       className={cn(
         "inline-flex items-center gap-1.5 h-6 px-2 rounded-md border text-[10.5px] font-medium tracking-wide transition-colors",
         secure

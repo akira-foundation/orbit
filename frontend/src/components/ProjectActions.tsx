@@ -31,7 +31,7 @@ export function ProjectActions({
         icon={secure ? <Lock /> : <LockOpen />}
         onClick={onToggleSecure}
         disabled={busy}
-        title={secure ? "HTTPS only — click to disable" : "Force HTTPS"}
+        title={secure ? "HTTPS only, click to disable" : "Force HTTPS"}
       />
       <IconBtn icon={<FileText />} onClick={onLogs} disabled={busy} title="Logs" />
       <IconBtn icon={<BarChart3 />} onClick={onMetrics} disabled={busy} title="Metrics" />
