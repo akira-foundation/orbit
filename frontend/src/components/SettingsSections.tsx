@@ -16,6 +16,7 @@ import type { SystemStatus } from "../types";
 import { cn } from "../lib/cn";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { resetOnboarding } from "./OnboardingServices";
+import { useNotificationStore } from "../stores/notifications";
 import type { ServiceInfo, ServicesConfig } from "../types";
 
 export type SettingsSectionID = "general" | "domains" | "services" | "about";
@@ -80,6 +81,8 @@ function GeneralSection() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const notificationsEnabled = useNotificationStore((s) => s.enabled);
+  const setNotificationsEnabled = useNotificationStore((s) => s.setEnabled);
 
   const refresh = async () => {
     try {
@@ -116,6 +119,12 @@ function GeneralSection() {
           checked={!!status?.launchAtLogin}
           disabled={busy || !status}
           onChange={toggle}
+        />
+        <ToggleRow
+          label="Notifications"
+          description="Show a toast and a system notification when a project crashes or the local TLS certificate is about to expire."
+          checked={notificationsEnabled}
+          onChange={setNotificationsEnabled}
         />
         {error && (
           <p className="text-[11px] text-rose-300 font-mono whitespace-pre-wrap">

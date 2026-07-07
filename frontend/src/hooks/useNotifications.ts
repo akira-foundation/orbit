@@ -12,13 +12,15 @@ interface TlsExpiringEvent {
 export function useNotificationEvents() {
   const projects = useProjects((s) => s.projects);
   const push = useNotificationStore((s) => s.push);
+  const enabled = useNotificationStore((s) => s.enabled);
 
   const emit = useCallback(
     (kind: "crash" | "cert", title: string, body: string) => {
+      if (!enabled) return;
       push({ kind, title, body });
       api.notify(title, body).catch(() => {});
     },
-    [push],
+    [push, enabled],
   );
 
   const onCrash = useCallback(
