@@ -29,6 +29,8 @@ type Server struct {
 	serviceHandler *ServiceHandler
 	http           *http.Server
 	https          *http.Server
+	lan            *http.Server
+	suffix         string
 	transport      *http.Transport
 }
 
@@ -37,6 +39,7 @@ type Options struct {
 	TLSAddr        string
 	TLSCert        string
 	TLSKey         string
+	Suffix         string
 	Router         *Router
 	Recovery       *RecoveryHandler
 	Services       ServiceResolver
@@ -70,6 +73,7 @@ func NewServerWithOptions(opts Options) *Server {
 		router:    opts.Router,
 		recovery:  opts.Recovery,
 		services:  opts.Services,
+		suffix:    opts.Suffix,
 		transport: tr,
 	}
 	if opts.Services != nil && opts.ServiceStarter != nil {
@@ -111,6 +115,9 @@ func (s *Server) ListenAndServe() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.lan != nil {
+		_ = s.lan.Shutdown(ctx)
+	}
 	if s.https != nil {
 		_ = s.https.Shutdown(ctx)
 	}
@@ -121,6 +128,19 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	rewriteShareHost(w, r, s.suffix)
+
+	if strings.HasPrefix(r.URL.Path, "/__port/") {
+		if !s.routePortToProject(r) {
+			s.proxyToLocalPort(w, r)
+			return
+		}
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/__proj/") {
+		rewriteProjPath(r, s.suffix)
+	}
+
 	if s.serviceHandler != nil && strings.HasPrefix(r.URL.Path, servicePrefix+"/") {
 		s.serviceHandler.ServeHTTP(w, r)
 		return
@@ -240,6 +260,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if target.Kind == TargetFastCGI {
 		rp.Transport = &fcgiTransport{SockPath: target.SockPath, DocRoot: target.DocRoot}
+	}
+	if isShareRequest(r) {
+		rp.ModifyResponse = s.injectShareResponse
 	}
 
 	rp.ServeHTTP(rec, r)

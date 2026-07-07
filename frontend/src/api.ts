@@ -25,6 +25,11 @@ import {
   StopGroup,
 } from "../wailsjs/go/bindings/Groups";
 import {
+  ShareInfo as ShareInfoBinding,
+  EnableLANShare,
+  DisableLANShare,
+} from "../wailsjs/go/bindings/Share";
+import {
   RuntimeStatus,
   RuntimeLogs,
   RuntimeLogsHistory,
@@ -94,6 +99,7 @@ import type {
   Group,
   MetricSample,
   Project,
+  ShareInfo,
   RuntimeSnapshot,
   RuntimeLogLine,
   SystemStatus as SystemStatusType,
@@ -150,6 +156,9 @@ export const api = {
   openProject: (id: string): Promise<void> => OpenProject(id),
   openURL: (url: string): Promise<void> => OpenURL(url),
   gitStatus: (id: string): Promise<GitInfo> => cast(GitStatus(id)),
+  shareInfo: (id: string): Promise<ShareInfo> => cast(ShareInfoBinding(id)),
+  enableLANShare: (id: string): Promise<ShareInfo> => cast(EnableLANShare(id)),
+  disableLANShare: (id: string): Promise<void> => DisableLANShare(id),
   notify: (title: string, body: string): Promise<void> => Notify(title, body),
   revealInFinder: (path: string): Promise<void> => RevealInFinder(path),
   systemStatus: (): Promise<SystemStatusType> => cast(SystemStatus()),
