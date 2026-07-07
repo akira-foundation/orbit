@@ -19,6 +19,7 @@ import { ProjectLogsPage } from "./pages/ProjectLogs";
 import { MailView } from "./components/viewers/mail/MailView";
 import { useProjects } from "./store";
 import { useWailsEvent } from "./hooks/useWailsEvent";
+import { useNotifications } from "./hooks/useNotifications";
 import { SetupBanner } from "./components/SetupBanner";
 import type { RuntimeStatusEvent } from "./types";
 
@@ -55,6 +56,7 @@ export function App() {
     [patchStatus],
   );
   useWailsEvent<RuntimeStatusEvent>(STATUS_EVENTS, onRuntimeStatus);
+  useNotifications();
 
   const openSettings = useCallback(
     (action: "setup" | "reset" | null) => {
