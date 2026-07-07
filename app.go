@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net"
 	"path/filepath"
 	"time"
 
@@ -144,7 +145,13 @@ func (a *App) startup(ctx context.Context) {
 			extraDomains = append(extraDomains, d.Domain)
 		}
 	}
-	if mat, err := orbittls.Ensure(cfg.DomainSuffix, extraDomains); err == nil {
+	var extraIPs []net.IP
+	if lanIP, err := share.PrimaryLANIP(); err == nil {
+		if ip := net.ParseIP(lanIP); ip != nil {
+			extraIPs = append(extraIPs, ip)
+		}
+	}
+	if mat, err := orbittls.Ensure(cfg.DomainSuffix, extraDomains, extraIPs); err == nil {
 		opts.TLSAddr = cfg.ProxyTLSAddr
 		opts.TLSCert = mat.LeafCert
 		opts.TLSKey = mat.LeafKey

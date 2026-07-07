@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"crypto/tls"
 	"net/http"
 	"time"
 )
@@ -21,6 +22,14 @@ func (s *Server) EnableLAN(addr string) error {
 		Addr:              addr,
 		Handler:           s,
 		ReadHeaderTimeout: 10 * time.Second,
+	}
+	if s.tlsCert != "" && s.tlsKey != "" {
+		cache := newCertCache(s.tlsCert, s.tlsKey)
+		s.lan.TLSConfig = &tls.Config{GetCertificate: cache.GetCertificate}
+		go func(srv *http.Server) {
+			_ = srv.ListenAndServeTLS("", "")
+		}(s.lan)
+		return nil
 	}
 	go func(srv *http.Server) {
 		_ = srv.ListenAndServe()

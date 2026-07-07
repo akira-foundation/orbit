@@ -45,7 +45,7 @@ func (s *Share) info(projectID string, enabled bool) (*ShareInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	url := share.ShareURL(ip, s.cfg.InternalPort(), p.Slug)
+	url := share.ShareURL(ip, s.cfg.InternalTLSPort(), p.Slug)
 	qr, err := share.QRDataURI(url)
 	if err != nil {
 		return nil, err
@@ -63,7 +63,7 @@ func (s *Share) EnableLANShare(projectID string) (*ShareInfo, error) {
 		return nil, err
 	}
 	if s.state.Count() == 0 {
-		if err := s.proxy.EnableLAN(ip + ":" + s.cfg.InternalPort()); err != nil {
+		if err := s.proxy.EnableLAN(ip + ":" + s.cfg.InternalTLSPort()); err != nil {
 			return nil, err
 		}
 	}

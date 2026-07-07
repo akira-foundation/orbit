@@ -66,6 +66,16 @@ func (c *Config) InternalPort() string {
 	return "2080"
 }
 
+func (c *Config) InternalTLSPort() string {
+	addr := c.ProxyTLSAddr
+	for i := len(addr) - 1; i >= 0; i-- {
+		if addr[i] == ':' {
+			return addr[i+1:]
+		}
+	}
+	return "2443"
+}
+
 func (c *Config) ProxyPort() string {
 	if c.PublicPort != "" {
 		return c.PublicPort

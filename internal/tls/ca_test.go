@@ -10,7 +10,7 @@ func withTestTLSDir(t *testing.T) {
 func TestEnsureLeafCoversMultiLabelDomain(t *testing.T) {
 	withTestTLSDir(t)
 
-	mat, err := Ensure("orbit.test", []string{"nosferry.com.orbit.test"})
+	mat, err := Ensure("orbit.test", []string{"nosferry.com.orbit.test"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,11 +26,11 @@ func TestEnsureLeafCoversMultiLabelDomain(t *testing.T) {
 func TestEnsureRegeneratesWhenNewDomainNotCovered(t *testing.T) {
 	withTestTLSDir(t)
 
-	if _, err := Ensure("orbit.test", nil); err != nil {
+	if _, err := Ensure("orbit.test", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 
-	mat, err := Ensure("orbit.test", []string{"app.two.orbit.test"})
+	mat, err := Ensure("orbit.test", []string{"app.two.orbit.test"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

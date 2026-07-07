@@ -3,8 +3,8 @@ package share
 import "testing"
 
 func TestShareURL(t *testing.T) {
-	got := ShareURL("192.168.1.42", "2080", "shop")
-	if got != "http://192.168.1.42:2080/?__orbit=shop" {
+	got := ShareURL("192.168.1.42", "2443", "shop")
+	if got != "https://192.168.1.42:2443/?__orbit=shop" {
 		t.Fatalf("ShareURL = %q", got)
 	}
 }
