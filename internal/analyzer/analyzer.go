@@ -18,6 +18,7 @@ type Analysis struct {
 	NodeVersion     string            `json:"nodeVersion"`
 	RuntimeKind     string            `json:"runtimeKind"`
 	PHPVersion      string            `json:"phpVersion"`
+	PythonVersion   string            `json:"pythonVersion"`
 	Scripts         map[string]string `json:"scripts"`
 	Processes       []ProcessSpec     `json:"processes,omitempty"`
 	AmbiguousLayout bool              `json:"ambiguousLayout,omitempty"`
@@ -101,6 +102,9 @@ func (a *defaultAnalyzer) Analyze(path string) (*Analysis, error) {
 
 	pkgPath := filepath.Join(abs, "package.json")
 	_, pkgStatErr := os.Stat(pkgPath)
+	if pkgStatErr != nil && isPythonProject(abs) {
+		return analyzePython(abs), nil
+	}
 	if compErr != nil && goModErr != nil && pkgStatErr != nil {
 		if a, ok := analyzeMonorepo(abs); ok {
 			return a, nil
