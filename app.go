@@ -35,6 +35,7 @@ type App struct {
 	svcConfig   *services.ConfigStore
 	nodeAcq     *services.Acquirer
 	phpAcq      *services.Acquirer
+	pythonAcq   *services.Acquirer
 	runtimesCfg *services.RuntimesConfigStore
 	terminals   *terminal.Manager
 
@@ -120,6 +121,8 @@ func (a *App) startup(ctx context.Context) {
 	a.runtime.SetNodeAcquirer(acq)
 	a.phpAcq = acq
 	a.runtime.SetPHPAcquirer(acq)
+	a.pythonAcq = acq
+	a.runtime.SetPythonAcquirer(acq)
 	a.runtimesCfg = services.LoadRuntimesConfig(cfg.DataDir)
 	a.runtime.SetRuntimesConfig(a.runtimesCfg)
 
@@ -182,6 +185,7 @@ func (a *App) startup(ctx context.Context) {
 		SvcConfig:   a.svcConfig,
 		NodeAcq:     a.nodeAcq,
 		PHPAcq:      a.phpAcq,
+		PythonAcq:   a.pythonAcq,
 		RuntimesCfg: a.runtimesCfg,
 		Terminals:   a.terminals,
 		ProxyServer: a.proxyServer,

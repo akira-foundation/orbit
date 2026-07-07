@@ -15,6 +15,7 @@ type Versions struct {
 	ctx         context.Context
 	nodeAcq     *services.Acquirer
 	phpAcq      *services.Acquirer
+	pythonAcq   *services.Acquirer
 	runtimesCfg *services.RuntimesConfigStore
 }
 
@@ -24,6 +25,7 @@ func (v *Versions) Attach(d Deps) {
 	v.ctx = d.Ctx
 	v.nodeAcq = d.NodeAcq
 	v.phpAcq = d.PHPAcq
+	v.pythonAcq = d.PythonAcq
 	v.runtimesCfg = d.RuntimesCfg
 }
 
@@ -49,6 +51,23 @@ func (v *Versions) InstallPHPVersion(version string) error {
 
 func (v *Versions) RemovePHPVersion(version string) error {
 	return services.RemovePHPVersion(v.ctx, v.phpAcq, version)
+}
+
+func (v *Versions) ListPythonVersions() []services.PythonVersionInfo {
+	return services.PythonVersionsInfo(v.ctx, v.pythonAcq)
+}
+
+func (v *Versions) InstallPythonVersion(version string) error {
+	return services.InstallPythonVersion(v.ctx, v.pythonAcq, version)
+}
+
+func (v *Versions) RemovePythonVersion(version string) error {
+	return services.RemovePythonVersion(v.ctx, v.pythonAcq, version)
+}
+
+func (v *Versions) DetectSystemPython() SystemRuntimeStatus {
+	sys, ok := services.DetectSystemPython()
+	return SystemRuntimeStatus{Available: ok, Version: sys.Version}
 }
 
 func (v *Versions) DetectSystemNode() SystemRuntimeStatus {
