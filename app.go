@@ -47,6 +47,7 @@ type App struct {
 	terminalAPI *bindings.Terminal
 	systemAPI   *bindings.System
 	shareAPI    *bindings.Share
+	requestsAPI *bindings.Requests
 	share       *share.State
 }
 
@@ -61,6 +62,7 @@ func NewApp() *App {
 		terminalAPI: bindings.NewTerminal(),
 		systemAPI:   bindings.NewSystem(),
 		shareAPI:    bindings.NewShare(),
+		requestsAPI: bindings.NewRequests(),
 		share:       share.NewState(),
 	}
 }
@@ -76,6 +78,7 @@ func (a *App) boundAPIs() []interface{} {
 		a.terminalAPI,
 		a.systemAPI,
 		a.shareAPI,
+		a.requestsAPI,
 	}
 }
 
@@ -183,7 +186,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 	for _, api := range []interface{ Attach(bindings.Deps) }{
 		a.projectsAPI, a.groupsAPI, a.runtimeAPI, a.servicesAPI,
-		a.mailAPI, a.versionsAPI, a.terminalAPI, a.systemAPI, a.shareAPI,
+		a.mailAPI, a.versionsAPI, a.terminalAPI, a.systemAPI, a.shareAPI, a.requestsAPI,
 	} {
 		api.Attach(deps)
 	}
