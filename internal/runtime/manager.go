@@ -774,6 +774,8 @@ func (m *manager) finalize(sess *Session, err error, requested bool) {
 
 		if wasRunning {
 			m.scheduleRestart(sess)
+		} else {
+			m.emit(EvtCrash, StatusEvent{ProjectID: sess.projectID, Snapshot: m.snap(sess)})
 		}
 		return
 	}
