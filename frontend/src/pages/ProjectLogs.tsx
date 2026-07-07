@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Check,
   Copy,
+  Download,
   Eraser,
   Pause,
   Play,
@@ -45,13 +46,11 @@ export function ProjectLogsPage({ id }: { id: string }) {
 
   const refresh = async () => {
     try {
-      // ts is stored in nanoseconds; the backend interprets sinceTs in the same
-      // unit. Math.round(ms * 1e6) gives a JS-safe ns value for our window.
       const sinceNs = Math.round((Date.now() - rangeMs) * 1_000_000);
       const data = await api.runtimeLogsHistory(id, sinceNs, 5000);
       setLogs(data);
     } catch {
-      /* ignore */
+      setLogs((prev) => prev);
     }
   };
 
@@ -71,14 +70,26 @@ export function ProjectLogsPage({ id }: { id: string }) {
     });
   }, [logs, streamFilter, query]);
 
-  const onCopy = async () => {
-    const text = filtered
+  const buildText = () =>
+    filtered
       .map((l) => l.text.replace(CURSOR_CTRL_RE, "").replace(STRAY_BRACKET_RE, ""))
       .join("\n");
-    if (await copy(text)) {
+
+  const onCopy = async () => {
+    if (await copy(buildText())) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     }
+  };
+
+  const onExport = () => {
+    const blob = new Blob([buildText()], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project?.slug ?? "project"}-logs.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   if (!project) {
@@ -188,6 +199,17 @@ export function ProjectLogsPage({ id }: { id: string }) {
             ) : (
               <Copy className="size-3.5" />
             )}
+          </button>
+          <button
+            onClick={onExport}
+            disabled={filtered.length === 0}
+            title="Download filtered logs"
+            className={cn(
+              "size-7 inline-flex items-center justify-center rounded-md border border-white/10 hover:bg-white/5 text-[var(--orbit-muted)]",
+              filtered.length === 0 && "opacity-40 cursor-default",
+            )}
+          >
+            <Download className="size-3.5" />
           </button>
           <button
             onClick={() => setLogs([])}
