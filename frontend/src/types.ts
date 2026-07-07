@@ -68,6 +68,17 @@ export interface Group {
   projectIds: string[]
 }
 
+export interface QueryResult {
+  columns: string[]
+  rows: string[][]
+}
+
+export interface S3Object {
+  key: string
+  size: number
+  lastModified: string
+}
+
 export interface GitInfo {
   repo: boolean
   branch: string
