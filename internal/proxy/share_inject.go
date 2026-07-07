@@ -65,6 +65,21 @@ func splitPrefixPath(path, prefix string) (head, tail string) {
 	return rest, "/"
 }
 
+func (s *Server) routePortToProject(r *http.Request) bool {
+	portStr, tail := splitPrefixPath(r.URL.Path, "/__port/")
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return false
+	}
+	proj, ok := s.router.registry.ResolveByDevPort(r.Context(), port)
+	if !ok {
+		return false
+	}
+	r.Host = proj.LocalDomain
+	r.URL.Path = tail
+	return true
+}
+
 func (s *Server) proxyToLocalPort(w http.ResponseWriter, r *http.Request) {
 	port, tail := splitPrefixPath(r.URL.Path, "/__port/")
 	if _, err := strconv.Atoi(port); err != nil {

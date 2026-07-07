@@ -131,8 +131,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rewriteShareHost(w, r, s.suffix)
 
 	if strings.HasPrefix(r.URL.Path, "/__port/") {
-		s.proxyToLocalPort(w, r)
-		return
+		if !s.routePortToProject(r) {
+			s.proxyToLocalPort(w, r)
+			return
+		}
 	}
 
 	if strings.HasPrefix(r.URL.Path, "/__proj/") {

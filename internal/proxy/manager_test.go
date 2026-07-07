@@ -16,6 +16,25 @@ func (f *fakeLookup) List(_ context.Context) ([]projects.Project, error) {
 	return f.items, nil
 }
 
+func TestResolveByDevPort(t *testing.T) {
+	lk := &fakeLookup{items: []projects.Project{
+		{ID: "1", Slug: "api", LocalDomain: "api.orbit.test", DevPort: 3000},
+		{ID: "2", Slug: "web", LocalDomain: "web.orbit.test", DevPort: 5173},
+	}}
+	m := New(lk, "orbit.test")
+
+	proj, ok := m.ResolveByDevPort(context.Background(), 3000)
+	if !ok || proj.Slug != "api" {
+		t.Fatalf("ResolveByDevPort(3000) = %v %v, want api", proj, ok)
+	}
+	if _, ok := m.ResolveByDevPort(context.Background(), 9999); ok {
+		t.Fatal("expected no match for unknown port")
+	}
+	if _, ok := m.ResolveByDevPort(context.Background(), 0); ok {
+		t.Fatal("port 0 must not match")
+	}
+}
+
 func TestResolve(t *testing.T) {
 	lk := &fakeLookup{items: []projects.Project{
 		{ID: "1", Slug: "my-app", LocalDomain: "my-app.orbit.test"},

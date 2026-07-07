@@ -16,6 +16,7 @@ type ProjectLookup interface {
 
 type Manager interface {
 	Resolve(ctx context.Context, host string) (*projects.Project, error)
+	ResolveByDevPort(ctx context.Context, port int) (*projects.Project, bool)
 	List(ctx context.Context) ([]string, error)
 }
 
@@ -63,6 +64,22 @@ func (r *registry) Resolve(ctx context.Context, host string) (*projects.Project,
 	}
 
 	return nil, ErrDomainNotRegistered
+}
+
+func (r *registry) ResolveByDevPort(ctx context.Context, port int) (*projects.Project, bool) {
+	if port == 0 {
+		return nil, false
+	}
+	all, err := r.projects.List(ctx)
+	if err != nil {
+		return nil, false
+	}
+	for i := range all {
+		if all[i].DevPort == port {
+			return &all[i], true
+		}
+	}
+	return nil, false
 }
 
 func (r *registry) List(ctx context.Context) ([]string, error) {
