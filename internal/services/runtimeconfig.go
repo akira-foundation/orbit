@@ -8,8 +8,9 @@ import (
 )
 
 type RuntimesConfig struct {
-	PreferSystemNode bool `json:"preferSystemNode"`
-	PreferSystemPHP  bool `json:"preferSystemPhp"`
+	PreferSystemNode   bool `json:"preferSystemNode"`
+	PreferSystemPHP    bool `json:"preferSystemPhp"`
+	PreferSystemPython bool `json:"preferSystemPython"`
 }
 
 type RuntimesConfigStore struct {
@@ -54,4 +55,10 @@ func (s *RuntimesConfigStore) PreferSystemPHP() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.cfg.PreferSystemPHP
+}
+
+func (s *RuntimesConfigStore) PreferSystemPython() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cfg.PreferSystemPython
 }

@@ -29,6 +29,32 @@ func DetectSystemNode() (SystemNode, bool) {
 	return SystemNode{Version: version, BinDir: filepath.Dir(nodePath)}, true
 }
 
+type SystemPython struct {
+	Version string `json:"version"`
+	BinDir  string `json:"binDir"`
+}
+
+var pythonVersionRe = regexp.MustCompile(`Python (\d+\.\d+\.\d+)`)
+
+func DetectSystemPython() (SystemPython, bool) {
+	for _, name := range []string{"python3", "python"} {
+		pyPath, err := exec.LookPath(name)
+		if err != nil {
+			continue
+		}
+		out, err := exec.Command(pyPath, "--version").Output()
+		if err != nil {
+			continue
+		}
+		m := pythonVersionRe.FindStringSubmatch(string(out))
+		if m == nil {
+			continue
+		}
+		return SystemPython{Version: m[1], BinDir: filepath.Dir(pyPath)}, true
+	}
+	return SystemPython{}, false
+}
+
 type SystemPHP struct {
 	Version    string `json:"version"`
 	PHPPath    string `json:"phpPath"`
