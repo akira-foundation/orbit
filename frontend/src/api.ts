@@ -25,6 +25,15 @@ import {
   StopGroup,
 } from "../wailsjs/go/bindings/Groups";
 import {
+  DBDatabases,
+  DBSchema,
+  DBTables,
+  DBQuery,
+  BucketList,
+  BucketObjects,
+  ObjectURL,
+} from "../wailsjs/go/bindings/Data";
+import {
   ShareInfo as ShareInfoBinding,
   EnableLANShare,
   DisableLANShare,
@@ -97,6 +106,8 @@ import type {
   AnalyzeResult,
   GitInfo,
   Group,
+  QueryResult,
+  S3Object,
   MetricSample,
   Project,
   ShareInfo,
@@ -182,6 +193,20 @@ export const api = {
     RemoveFromGroup(groupId, projectId),
   startGroup: (id: string): Promise<void> => StartGroup(id),
   stopGroup: (id: string): Promise<void> => StopGroup(id),
+  dbDatabases: async (): Promise<string[]> =>
+    (await cast<string[] | null>(DBDatabases())) ?? [],
+  dbSchema: async (database: string): Promise<Record<string, string[]>> =>
+    (await cast<Record<string, string[]> | null>(DBSchema(database))) ?? {},
+  dbTables: async (database: string): Promise<string[]> =>
+    (await cast<string[] | null>(DBTables(database))) ?? [],
+  dbQuery: (database: string, sql: string, allowWrites: boolean): Promise<QueryResult> =>
+    cast(DBQuery(database, sql, allowWrites)),
+  bucketList: async (): Promise<string[]> =>
+    (await cast<string[] | null>(BucketList())) ?? [],
+  bucketObjects: async (bucket: string, prefix: string): Promise<S3Object[]> =>
+    (await cast<S3Object[] | null>(BucketObjects(bucket, prefix))) ?? [],
+  objectURL: (bucket: string, key: string): Promise<string> =>
+    cast(ObjectURL(bucket, key)),
   systemConfig: (): Promise<Config> => cast(SystemConfig()),
   systemSaveConfig: (cfg: Config): Promise<void> => SystemSaveConfig(cfg),
   setLaunchAtLogin: (enabled: boolean): Promise<void> =>
