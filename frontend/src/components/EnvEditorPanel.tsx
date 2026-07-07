@@ -145,22 +145,27 @@ export function EnvEditorPanel({ projectId }: { projectId: string }) {
                 placeholder="KEY"
                 className="h-8 w-1/3 px-2.5 rounded-md bg-white/5 border border-white/10 text-[12px] font-mono outline-none focus:border-[var(--orbit-accent-2)]/50 placeholder:text-[var(--orbit-subtle)]"
               />
-              <input
-                value={r.value}
-                onChange={(e) => update(i, { value: e.target.value })}
-                type={hidden ? "password" : "text"}
-                placeholder="value"
-                className="h-8 flex-1 px-2.5 rounded-md bg-white/5 border border-white/10 text-[12px] font-mono outline-none focus:border-[var(--orbit-accent-2)]/50 placeholder:text-[var(--orbit-subtle)]"
-              />
-              {secret && (
-                <button
-                  onClick={() => toggleReveal(i)}
-                  title={hidden ? "Reveal" : "Hide"}
-                  className="shrink-0 size-8 inline-flex items-center justify-center rounded-md text-[var(--orbit-muted)] hover:text-[var(--orbit-text)] hover:bg-white/5 transition-colors"
-                >
-                  {hidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                </button>
-              )}
+              <div className="relative flex-1">
+                <input
+                  value={r.value}
+                  onChange={(e) => update(i, { value: e.target.value })}
+                  type={hidden ? "password" : "text"}
+                  placeholder="value"
+                  className={cn(
+                    "h-8 w-full px-2.5 rounded-md bg-white/5 border border-white/10 text-[12px] font-mono outline-none focus:border-[var(--orbit-accent-2)]/50 placeholder:text-[var(--orbit-subtle)]",
+                    secret && "pr-9",
+                  )}
+                />
+                {secret && (
+                  <button
+                    onClick={() => toggleReveal(i)}
+                    title={hidden ? "Reveal" : "Hide"}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 size-6 inline-flex items-center justify-center rounded text-[var(--orbit-muted)] hover:text-[var(--orbit-text)] hover:bg-white/5 transition-colors"
+                  >
+                    {hidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                  </button>
+                )}
+              </div>
               <button
                 onClick={() => removeRow(i)}
                 title="Remove"
