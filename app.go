@@ -37,6 +37,7 @@ type App struct {
 	terminals   *terminal.Manager
 
 	projectsAPI *bindings.Projects
+	groupsAPI   *bindings.Groups
 	runtimeAPI  *bindings.Runtime
 	servicesAPI *bindings.Services
 	mailAPI     *bindings.Mail
@@ -48,6 +49,7 @@ type App struct {
 func NewApp() *App {
 	return &App{
 		projectsAPI: bindings.NewProjects(),
+		groupsAPI:   bindings.NewGroups(),
 		runtimeAPI:  bindings.NewRuntime(),
 		servicesAPI: bindings.NewServices(),
 		mailAPI:     bindings.NewMail(),
@@ -60,6 +62,7 @@ func NewApp() *App {
 func (a *App) boundAPIs() []interface{} {
 	return []interface{}{
 		a.projectsAPI,
+		a.groupsAPI,
 		a.runtimeAPI,
 		a.servicesAPI,
 		a.mailAPI,
@@ -163,7 +166,7 @@ func (a *App) startup(ctx context.Context) {
 		Terminals:   a.terminals,
 	}
 	for _, api := range []interface{ Attach(bindings.Deps) }{
-		a.projectsAPI, a.runtimeAPI, a.servicesAPI,
+		a.projectsAPI, a.groupsAPI, a.runtimeAPI, a.servicesAPI,
 		a.mailAPI, a.versionsAPI, a.terminalAPI, a.systemAPI,
 	} {
 		api.Attach(deps)

@@ -60,6 +60,14 @@ export interface AppNotification {
   read: boolean
 }
 
+export interface Group {
+  id: string
+  name: string
+  order: number
+  createdAt: string
+  projectIds: string[]
+}
+
 export interface GitInfo {
   repo: boolean
   branch: string

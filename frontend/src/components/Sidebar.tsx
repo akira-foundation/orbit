@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useProjects, type Filter } from "../store";
 import type { ProjectStatus } from "../types";
 import { api } from "../api";
+import { SidebarGroups } from "./SidebarGroups";
 import { useWailsEvent } from "../hooks/useWailsEvent";
 import { cn } from "../lib/cn";
 import {
@@ -97,6 +98,8 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
             onClick={() => setView("mail")}
           />
         </Section>
+
+        <SidebarGroups />
 
         <Section title="Projects">
           {filterItems

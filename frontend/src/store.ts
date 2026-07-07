@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Project } from './types'
+import type { Group, Project } from './types'
 import { api } from './api'
 
 export type Filter = 'all' | 'running' | 'idle' | 'stopped' | 'suspended' | 'error'
@@ -32,6 +32,14 @@ interface State {
   start: (id: string) => Promise<void>
   stop: (id: string) => Promise<void>
   patchStatus: (id: string, status: Project['status']) => void
+  groups: Group[]
+  loadGroups: () => Promise<void>
+  createGroup: (name: string) => Promise<void>
+  deleteGroup: (id: string) => Promise<void>
+  startGroup: (id: string) => Promise<void>
+  stopGroup: (id: string) => Promise<void>
+  addToGroup: (groupId: string, projectId: string) => Promise<void>
+  removeFromGroup: (groupId: string, projectId: string) => Promise<void>
 }
 
 export const useProjects = create<State>()(persist((set, get) => ({
@@ -129,6 +137,34 @@ export const useProjects = create<State>()(persist((set, get) => ({
     set({
       projects: get().projects.map(p => p.id === id ? { ...p, status } : p),
     })
+  },
+  groups: [],
+  async loadGroups() {
+    set({ groups: await api.listGroups() })
+  },
+  async createGroup(name) {
+    await api.createGroup(name)
+    await get().loadGroups()
+  },
+  async deleteGroup(id) {
+    await api.deleteGroup(id)
+    await get().loadGroups()
+  },
+  async startGroup(id) {
+    await api.startGroup(id)
+    await get().load()
+  },
+  async stopGroup(id) {
+    await api.stopGroup(id)
+    await get().load()
+  },
+  async addToGroup(groupId, projectId) {
+    await api.addToGroup(groupId, projectId)
+    await get().loadGroups()
+  },
+  async removeFromGroup(groupId, projectId) {
+    await api.removeFromGroup(groupId, projectId)
+    await get().loadGroups()
   },
 }), {
   name: 'orbit.nav',
