@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 
 	"orbit-app/internal/projects"
@@ -210,6 +212,12 @@ func (m *manager) runPythonInstall(ctx context.Context, sess *Session, proj *pro
 	m.recordSystem(proj.ID, LevelInfo, SourceSystem, "install complete")
 	sess.setPhase("")
 	return nil
+}
+
+func substitutePort(cmd string, port int) string {
+	p := strconv.Itoa(port)
+	cmd = strings.ReplaceAll(cmd, "${PORT}", p)
+	return strings.ReplaceAll(cmd, "$PORT", p)
 }
 
 func joinArgs(args []string) string {

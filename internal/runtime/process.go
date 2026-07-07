@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"strconv"
 	"strings"
 	"syscall"
 )
@@ -84,12 +83,6 @@ func scanLines(r io.Reader, fn func(line string) bool) {
 			return
 		}
 	}
-}
-
-func substitutePort(cmd string, port int) string {
-	p := strconv.Itoa(port)
-	cmd = strings.ReplaceAll(cmd, "${PORT}", p)
-	return strings.ReplaceAll(cmd, "$PORT", p)
 }
 
 func splitCommand(s string) []string {
