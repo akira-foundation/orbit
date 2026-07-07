@@ -1,5 +1,6 @@
 import { Plus, Search } from "lucide-react";
 import { cn } from "../lib/cn";
+import { NotificationBell } from "./NotificationBell";
 
 interface ToolbarProps {
   onOpenPalette: () => void;
@@ -10,6 +11,7 @@ export function Toolbar({ onOpenPalette, onAdd }: ToolbarProps) {
   return (
     <div className="relative flex items-center justify-end h-full px-3 gap-2">
       <div className="no-drag flex items-center gap-2">
+        <NotificationBell />
         <Pill>
           <PillBtn onClick={onOpenPalette} title="Search (⌘K)">
             <Search className="size-4" />

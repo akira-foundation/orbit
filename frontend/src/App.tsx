@@ -19,6 +19,8 @@ import { ProjectLogsPage } from "./pages/ProjectLogs";
 import { MailView } from "./components/viewers/mail/MailView";
 import { useProjects } from "./store";
 import { useWailsEvent } from "./hooks/useWailsEvent";
+import { useNotificationEvents } from "./hooks/useNotifications";
+import { Toaster } from "./components/Toaster";
 import { SetupBanner } from "./components/SetupBanner";
 import type { RuntimeStatusEvent } from "./types";
 
@@ -55,6 +57,7 @@ export function App() {
     [patchStatus],
   );
   useWailsEvent<RuntimeStatusEvent>(STATUS_EVENTS, onRuntimeStatus);
+  useNotificationEvents();
 
   const openSettings = useCallback(
     (action: "setup" | "reset" | null) => {
@@ -157,6 +160,8 @@ export function App() {
       {showOnboarding && (
         <OnboardingServices onDone={() => setShowOnboarding(false)} />
       )}
+
+      <Toaster />
     </div>
   );
 }

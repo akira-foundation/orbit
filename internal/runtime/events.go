@@ -13,6 +13,7 @@ const (
 	EvtError    = "runtime:error"
 	EvtLog      = "runtime:log"
 	EvtSnapshot = "runtime:snapshot"
+	EvtCrash    = "runtime:crash"
 )
 
 type Emitter interface {
