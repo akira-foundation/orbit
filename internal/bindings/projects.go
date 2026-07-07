@@ -157,3 +157,19 @@ func (p *Projects) OpenProject(id string) error {
 	wailsruntime.BrowserOpenURL(p.ctx, u.URL)
 	return nil
 }
+
+func (p *Projects) ProjectEnv(id string) (map[string]string, error) {
+	proj, err := p.service.Get(p.ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return runtime.ReadProjectEnv(proj.Path)
+}
+
+func (p *Projects) SaveProjectEnv(id string, vars map[string]string) error {
+	proj, err := p.service.Get(p.ctx, id)
+	if err != nil {
+		return err
+	}
+	return runtime.WriteProjectEnv(proj.Path, vars)
+}

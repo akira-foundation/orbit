@@ -12,7 +12,18 @@ import {
   SelectProjectFolder,
   OpenProject,
   SetProjectSecure,
+  ProjectEnv,
+  SaveProjectEnv,
 } from "../wailsjs/go/bindings/Projects";
+import {
+  ListGroups,
+  CreateGroup,
+  DeleteGroup,
+  AddToGroup,
+  RemoveFromGroup,
+  StartGroup,
+  StopGroup,
+} from "../wailsjs/go/bindings/Groups";
 import {
   RuntimeStatus,
   RuntimeLogs,
@@ -79,6 +90,7 @@ import type { mailpit } from "../wailsjs/go/models";
 import type {
   AnalyzeResult,
   GitInfo,
+  Group,
   MetricSample,
   Project,
   RuntimeSnapshot,
@@ -145,6 +157,20 @@ export const api = {
   untrustCA: (): Promise<void> => UntrustCA(),
   setProjectSecure: (id: string, secure: boolean): Promise<void> =>
     SetProjectSecure(id, secure),
+  projectEnv: async (id: string): Promise<Record<string, string>> =>
+    (await cast<Record<string, string> | null>(ProjectEnv(id))) ?? {},
+  saveProjectEnv: (id: string, vars: Record<string, string>): Promise<void> =>
+    SaveProjectEnv(id, vars),
+  listGroups: async (): Promise<Group[]> =>
+    (await cast<Group[] | null>(ListGroups())) ?? [],
+  createGroup: (name: string): Promise<Group> => cast(CreateGroup(name)),
+  deleteGroup: (id: string): Promise<void> => DeleteGroup(id),
+  addToGroup: (groupId: string, projectId: string): Promise<void> =>
+    AddToGroup(groupId, projectId),
+  removeFromGroup: (groupId: string, projectId: string): Promise<void> =>
+    RemoveFromGroup(groupId, projectId),
+  startGroup: (id: string): Promise<void> => StartGroup(id),
+  stopGroup: (id: string): Promise<void> => StopGroup(id),
   systemConfig: (): Promise<Config> => cast(SystemConfig()),
   systemSaveConfig: (cfg: Config): Promise<void> => SystemSaveConfig(cfg),
   setLaunchAtLogin: (enabled: boolean): Promise<void> =>
