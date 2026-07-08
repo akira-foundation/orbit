@@ -79,6 +79,28 @@ func DetectSystemPHP() (SystemPHP, bool) {
 	return SystemPHP{Version: version, PHPPath: phpPath, PHPFPMPath: fpmPath}, true
 }
 
+type SystemDocker struct {
+	Version string `json:"version"`
+}
+
+var dockerComposeVersionRe = regexp.MustCompile(`v?(\d+\.\d+\.\d+)`)
+
+func DetectSystemDocker() (SystemDocker, bool) {
+	dockerPath, err := exec.LookPath("docker")
+	if err != nil {
+		return SystemDocker{}, false
+	}
+	out, err := exec.Command(dockerPath, "compose", "version").Output()
+	if err != nil {
+		return SystemDocker{}, false
+	}
+	m := dockerComposeVersionRe.FindStringSubmatch(string(out))
+	if m == nil {
+		return SystemDocker{}, false
+	}
+	return SystemDocker{Version: m[1]}, true
+}
+
 func phpVersionOf(binPath string) (string, bool) {
 	out, err := exec.Command(binPath, "-v").Output()
 	if err != nil {
