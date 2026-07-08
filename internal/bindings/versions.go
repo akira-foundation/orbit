@@ -80,6 +80,11 @@ func (v *Versions) DetectSystemPHP() SystemRuntimeStatus {
 	return SystemRuntimeStatus{Available: ok, Version: sys.Version}
 }
 
+func (v *Versions) DetectSystemDocker() SystemRuntimeStatus {
+	sys, ok := services.DetectSystemDocker()
+	return SystemRuntimeStatus{Available: ok, Version: sys.Version}
+}
+
 func (v *Versions) RuntimesConfig() services.RuntimesConfig {
 	return v.runtimesCfg.Get()
 }

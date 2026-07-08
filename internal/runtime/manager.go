@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"orbit-app/internal/compose"
 	"orbit-app/internal/config"
 	"orbit-app/internal/projects"
 	"orbit-app/internal/services"
@@ -63,19 +64,20 @@ type Manager interface {
 func New(projects ProjectLookup, db *sql.DB, cfg *config.Config) Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &manager{
-		ctx:        ctx,
-		cancel:     cancel,
-		projects:   projects,
-		emitter:    nopEmitter{},
-		sessions:   make(map[string]*Session),
-		stopGrace:  5 * time.Second,
-		logCap:     2000,
-		idleAfter:  10 * time.Second,
-		activeConn: make(map[string]int),
-		idleSince:  make(map[string]time.Time),
-		metrics:    newMetrics(db, cfg),
-		logs:       newLogStore(db),
-		dataDir:    cfg.DataDir,
+		ctx:         ctx,
+		cancel:      cancel,
+		projects:    projects,
+		emitter:     nopEmitter{},
+		sessions:    make(map[string]*Session),
+		stopGrace:   5 * time.Second,
+		logCap:      2000,
+		idleAfter:   10 * time.Second,
+		activeConn:  make(map[string]int),
+		idleSince:   make(map[string]time.Time),
+		metrics:     newMetrics(db, cfg),
+		logs:        newLogStore(db),
+		dataDir:     cfg.DataDir,
+		composeRuns: make(map[string]composeRef),
 	}
 	go m.idleSweeper()
 	go m.metricsSampler()
@@ -108,6 +110,14 @@ type manager struct {
 
 	projMu      sync.Mutex
 	projCounter map[string]*projMetrics
+
+	composeMu   sync.Mutex
+	composeRuns map[string]composeRef
+}
+
+type composeRef struct {
+	path string
+	file string
 }
 
 func (m *manager) projMetricsFor(projectID string) *projMetrics {
@@ -301,6 +311,43 @@ func (m *manager) servicesOnStop(projectID string) {
 	c.OnProjectStop(projectID)
 }
 
+func (m *manager) composeOnStart(proj *projects.Project) {
+	file, ok := compose.Detect(proj.Path)
+	if !ok {
+		return
+	}
+	if !compose.Available() {
+		m.recordSystem(proj.ID, LevelWarn, SourceSystem,
+			"docker-compose file found but docker is not installed, skipping")
+		return
+	}
+	m.recordSystem(proj.ID, LevelInfo, SourceSystem, "starting docker compose services")
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+	if err := compose.Up(ctx, proj.Path, file); err != nil {
+		m.recordSystem(proj.ID, LevelWarn, SourceSystem, fmt.Sprintf("compose up: %v", err))
+		return
+	}
+	m.composeMu.Lock()
+	m.composeRuns[proj.ID] = composeRef{path: proj.Path, file: file}
+	m.composeMu.Unlock()
+}
+
+func (m *manager) composeOnStop(projectID string) {
+	m.composeMu.Lock()
+	ref, ok := m.composeRuns[projectID]
+	delete(m.composeRuns, projectID)
+	m.composeMu.Unlock()
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if err := compose.Down(ctx, ref.path, ref.file); err != nil {
+		m.recordSystem(projectID, LevelWarn, SourceSystem, fmt.Sprintf("compose down: %v", err))
+	}
+}
+
 func (m *manager) emit(name string, data ...any) {
 	m.mu.RLock()
 	e := m.emitter
@@ -394,6 +441,7 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 	}
 
 	svcEnv := m.servicesOnStart(proj)
+	m.composeOnStart(proj)
 
 	port := pickPort(proj.DevPort)
 	devCommand := substitutePort(proj.DevCommand, port)
@@ -554,6 +602,7 @@ func (m *manager) Stop(ctx context.Context, projectID string) error {
 
 	_ = m.projects.UpdateStatus(ctx, projectID, projects.StatusStopped)
 	m.servicesOnStop(projectID)
+	m.composeOnStop(projectID)
 	return nil
 }
 
