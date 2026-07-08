@@ -35,6 +35,7 @@ type ServiceCoordinator interface {
 
 type Manager interface {
 	Start(ctx context.Context, projectID string) error
+	Prewarm(ctx context.Context, projectID string) error
 	Stop(ctx context.Context, projectID string) error
 	Restart(ctx context.Context, projectID string) error
 	Status(projectID string) Snapshot
@@ -78,9 +79,11 @@ func New(projects ProjectLookup, db *sql.DB, cfg *config.Config) Manager {
 		logs:        newLogStore(db),
 		dataDir:     cfg.DataDir,
 		composeRuns: make(map[string]composeRef),
+		prewarmAt:   make(map[string]time.Time),
 	}
 	go m.idleSweeper()
 	go m.metricsSampler()
+	go m.prewarmSweeper()
 	return m
 }
 
@@ -113,6 +116,9 @@ type manager struct {
 
 	composeMu   sync.Mutex
 	composeRuns map[string]composeRef
+
+	prewarmMu sync.Mutex
+	prewarmAt map[string]time.Time
 }
 
 type composeRef struct {
@@ -365,6 +371,13 @@ func (m *manager) snap(sess *Session) Snapshot {
 
 func (m *manager) Start(ctx context.Context, projectID string) error {
 	return m.start(ctx, projectID, false)
+}
+
+func (m *manager) Prewarm(ctx context.Context, projectID string) error {
+	if m.Status(projectID).Status != projects.StatusStopped {
+		return nil
+	}
+	return m.start(ctx, projectID, true)
 }
 
 func (m *manager) start(ctx context.Context, projectID string, internal bool) error {

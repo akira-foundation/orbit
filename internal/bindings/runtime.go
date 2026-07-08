@@ -1,6 +1,11 @@
 package bindings
 
-import "orbit-app/internal/runtime"
+import (
+	"context"
+	"time"
+
+	"orbit-app/internal/runtime"
+)
 
 type Runtime struct {
 	runtime runtime.Manager
@@ -12,6 +17,14 @@ func (r *Runtime) Attach(d Deps) { r.runtime = d.Runtime }
 
 func (r *Runtime) RuntimeStatus(id string) runtime.Snapshot {
 	return r.runtime.Status(id)
+}
+
+func (r *Runtime) Prewarm(id string) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_ = r.runtime.Prewarm(ctx, id)
+	}()
 }
 
 func (r *Runtime) RuntimeLogs(id string) []runtime.LogLine {
