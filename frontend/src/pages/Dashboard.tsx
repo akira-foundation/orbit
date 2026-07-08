@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useProjects } from '../store'
+import { usePrewarm } from '../hooks/usePrewarm'
 import { BarChart3, ExternalLink, FileText, GitBranch, Loader2, Orbit, Play, Plus, Square } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import type { GitInfo, Project } from '../types'
@@ -11,10 +12,19 @@ import { api } from '../api'
 export function Dashboard({ onAdd }: { onAdd: () => void }) {
   const { projects, filter, query, select } = useProjects()
   const [focusId, setFocusId] = useState<string | null>(null)
+  const [prewarmOn, setPrewarmOn] = useState(false)
+  const [hoverMs, setHoverMs] = useState(1000)
 
   useEffect(() => {
     setFocusId(null)
   }, [filter, query])
+
+  useEffect(() => {
+    api.runtimesConfig().then((c) => {
+      setPrewarmOn(c.prewarmEnabled)
+      setHoverMs(c.prewarmHoverMs || 1000)
+    })
+  }, [])
 
   const filtered = useMemo(() => {
     let xs = projects
@@ -47,6 +57,8 @@ export function Dashboard({ onAdd }: { onAdd: () => void }) {
         projects={filtered}
         focusId={focusId}
         setFocusId={setFocusId}
+        prewarmEnabled={prewarmOn}
+        hoverMs={hoverMs}
         onOpen={(p) => { setFocusId(null); select(p.id) }}
       />
     </div>
@@ -57,13 +69,19 @@ function ListView({
   projects,
   focusId,
   setFocusId,
+  prewarmEnabled,
+  hoverMs,
   onOpen,
 }: {
   projects: Project[]
   focusId: string | null
   setFocusId: (id: string | null) => void
+  prewarmEnabled: boolean
+  hoverMs: number
   onOpen: (p: Project) => void
 }) {
+  const { prewarm, onRowEnter, onRowLeave } = usePrewarm(prewarmEnabled, hoverMs)
+
   return (
     <div className="p-4">
       <table className="w-full text-sm">
@@ -87,7 +105,9 @@ function ListView({
                 e.dataTransfer.setData(PROJECT_DND_MIME, p.id)
                 e.dataTransfer.effectAllowed = 'copy'
               }}
-              onClick={(e) => { e.stopPropagation(); setFocusId(p.id) }}
+              onMouseEnter={() => onRowEnter(p.id)}
+              onMouseLeave={onRowLeave}
+              onClick={(e) => { e.stopPropagation(); setFocusId(p.id); prewarm(p.id) }}
               onDoubleClick={() => onOpen(p)}
               className={cn(
                 'cursor-default border-t border-[var(--orbit-border)] transition-colors',

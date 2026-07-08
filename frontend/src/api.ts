@@ -45,6 +45,7 @@ import {
   RuntimeLogsHistory,
   RuntimeMetrics,
   RuntimeMetricsAll,
+  Prewarm,
 } from "../wailsjs/go/bindings/Runtime";
 import {
   ListServices,
@@ -152,6 +153,7 @@ export const api = {
   startProject: (id: string): Promise<void> => StartProject(id),
   stopProject: (id: string): Promise<void> => StopProject(id),
   restartProject: (id: string): Promise<void> => RestartProject(id),
+  prewarm: (id: string): Promise<void> => Prewarm(id),
   runtimeStatus: (id: string): Promise<RuntimeSnapshot> =>
     cast(RuntimeStatus(id)),
   runtimeLogs: async (id: string): Promise<RuntimeLogLine[]> =>

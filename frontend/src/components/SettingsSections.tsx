@@ -15,6 +15,7 @@ import { api } from "../api";
 import type { SystemStatus } from "../types";
 import { cn } from "../lib/cn";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { PrewarmSettings } from "./PrewarmSettings";
 import { resetOnboarding } from "./OnboardingServices";
 import { useNotificationStore } from "../stores/notifications";
 import type { ServiceInfo, ServicesConfig } from "../types";
@@ -156,6 +157,7 @@ function GeneralSection() {
             className="mt-0.5 shrink-0"
           />
         </div>
+        <PrewarmSettings />
         {error && (
           <p className="text-[11px] text-rose-300 font-mono whitespace-pre-wrap">
             {error}
