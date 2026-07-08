@@ -45,6 +45,7 @@ import {
   RuntimeLogsHistory,
   RuntimeMetrics,
   RuntimeMetricsAll,
+  Prewarm,
 } from "../wailsjs/go/bindings/Runtime";
 import {
   ListServices,
@@ -152,6 +153,7 @@ export const api = {
   startProject: (id: string): Promise<void> => StartProject(id),
   stopProject: (id: string): Promise<void> => StopProject(id),
   restartProject: (id: string): Promise<void> => RestartProject(id),
+  prewarm: (id: string): Promise<void> => Prewarm(id),
   runtimeStatus: (id: string): Promise<RuntimeSnapshot> =>
     cast(RuntimeStatus(id)),
   runtimeLogs: async (id: string): Promise<RuntimeLogLine[]> =>
@@ -266,13 +268,11 @@ export const api = {
   runtimesConfig: (): Promise<RuntimesConfigType> => cast(RuntimesConfig()),
   saveRuntimesConfig: (cfg: RuntimesConfigType): Promise<void> =>
     SaveRuntimesConfig(cfg as never),
-  detectSystemNode: (): Promise<SystemRuntimeStatus> =>
-    cast(DetectSystemNode()),
+  detectSystemNode: (): Promise<SystemRuntimeStatus> => cast(DetectSystemNode()),
   detectSystemPHP: (): Promise<SystemRuntimeStatus> => cast(DetectSystemPHP()),
   detectSystemPython: (): Promise<SystemRuntimeStatus> =>
     cast(DetectSystemPython()),
-  detectSystemDocker: (): Promise<SystemRuntimeStatus> =>
-    cast(DetectSystemDocker()),
+  detectSystemDocker: (): Promise<SystemRuntimeStatus> => cast(DetectSystemDocker()),
   composeInfo: (projectId: string): Promise<ComposeInfo> =>
     cast(ComposeInfoCall(projectId)),
   terminalStart: (projectId: string): Promise<void> =>

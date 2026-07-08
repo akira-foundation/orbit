@@ -11,6 +11,8 @@ type RuntimesConfig struct {
 	PreferSystemNode   bool `json:"preferSystemNode"`
 	PreferSystemPHP    bool `json:"preferSystemPhp"`
 	PreferSystemPython bool `json:"preferSystemPython"`
+	PrewarmEnabled     bool `json:"prewarmEnabled"`
+	PrewarmHoverMs     int  `json:"prewarmHoverMs"`
 }
 
 type RuntimesConfigStore struct {

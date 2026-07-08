@@ -258,6 +258,8 @@ export interface RuntimesConfig {
   preferSystemNode: boolean
   preferSystemPhp: boolean
   preferSystemPython: boolean
+  prewarmEnabled: boolean
+  prewarmHoverMs: number
 }
 
 export interface SystemRuntimeStatus {
