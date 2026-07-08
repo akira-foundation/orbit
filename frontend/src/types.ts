@@ -264,3 +264,17 @@ export interface SystemRuntimeStatus {
   available: boolean
   version: string
 }
+
+export interface ComposeService {
+  name: string
+  state: string
+  status: string
+  ports: string
+}
+
+export interface ComposeInfo {
+  detected: boolean
+  file: string
+  available: boolean
+  services: ComposeService[]
+}

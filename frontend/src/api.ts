@@ -85,7 +85,9 @@ import {
   DetectSystemNode,
   DetectSystemPHP,
   DetectSystemPython,
+  DetectSystemDocker,
 } from "../wailsjs/go/bindings/Versions";
+import { ComposeInfo as ComposeInfoCall } from "../wailsjs/go/bindings/Compose";
 import {
   TerminalStart,
   TerminalWrite,
@@ -130,6 +132,7 @@ import type {
   PythonVersionInfo,
   RuntimesConfig as RuntimesConfigType,
   SystemRuntimeStatus,
+  ComposeInfo,
 } from "./types";
 
 function cast<T>(p: Promise<unknown>): Promise<T> {
@@ -268,6 +271,10 @@ export const api = {
   detectSystemPHP: (): Promise<SystemRuntimeStatus> => cast(DetectSystemPHP()),
   detectSystemPython: (): Promise<SystemRuntimeStatus> =>
     cast(DetectSystemPython()),
+  detectSystemDocker: (): Promise<SystemRuntimeStatus> =>
+    cast(DetectSystemDocker()),
+  composeInfo: (projectId: string): Promise<ComposeInfo> =>
+    cast(ComposeInfoCall(projectId)),
   terminalStart: (projectId: string): Promise<void> =>
     TerminalStart(projectId),
   terminalWrite: (projectId: string, data: string): Promise<void> =>
