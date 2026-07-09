@@ -16,6 +16,7 @@ import type { SystemStatus } from "../types";
 import { cn } from "../lib/cn";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { PrewarmSettings } from "./PrewarmSettings";
+import { CopilotSettings } from "./CopilotSettings";
 import { resetOnboarding } from "./OnboardingServices";
 import { useNotificationStore } from "../stores/notifications";
 import type { ServiceInfo, ServicesConfig } from "../types";
@@ -158,6 +159,7 @@ function GeneralSection() {
           />
         </div>
         <PrewarmSettings />
+        <CopilotSettings />
         {error && (
           <p className="text-[11px] text-rose-300 font-mono whitespace-pre-wrap">
             {error}
