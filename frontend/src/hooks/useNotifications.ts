@@ -15,7 +15,7 @@ export function useNotificationEvents() {
   const enabled = useNotificationStore((s) => s.enabled);
 
   const emit = useCallback(
-    (kind: "crash" | "cert", title: string, body: string) => {
+    (kind: "crash" | "cert" | "info", title: string, body: string) => {
       if (!enabled) return;
       push({ kind, title, body });
       api.notify(title, body).catch(() => {});
@@ -41,4 +41,18 @@ export function useNotificationEvents() {
     [emit],
   );
   useWailsEvent<TlsExpiringEvent>("tls:expiring", onTlsExpiring);
+
+  const onParkedAdded = useCallback(
+    (name: string) =>
+      emit("info", "Project discovered", `${name} was found in a parked folder and added.`),
+    [emit],
+  );
+  useWailsEvent<string>("parked:project-added", onParkedAdded);
+
+  const onParkedRemoved = useCallback(
+    (name: string) =>
+      emit("info", "Project removed", `${name} was deleted from its parked folder.`),
+    [emit],
+  );
+  useWailsEvent<string>("parked:project-removed", onParkedRemoved);
 }

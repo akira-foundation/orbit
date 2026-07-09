@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
 import { Switch } from "./ui/switch";
 import {
+  FolderSearch,
   Globe,
   Info,
   Orbit,
@@ -17,11 +18,17 @@ import { cn } from "../lib/cn";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { PrewarmSettings } from "./PrewarmSettings";
 import { CopilotSettings } from "./CopilotSettings";
+import { ParkedSettings } from "./ParkedSettings";
 import { resetOnboarding } from "./OnboardingServices";
 import { useNotificationStore } from "../stores/notifications";
 import type { ServiceInfo, ServicesConfig } from "../types";
 
-export type SettingsSectionID = "general" | "domains" | "services" | "about";
+export type SettingsSectionID =
+  | "general"
+  | "domains"
+  | "parked"
+  | "services"
+  | "about";
 type Section = SettingsSectionID;
 
 export const SETTINGS_SECTIONS: {
@@ -31,6 +38,7 @@ export const SETTINGS_SECTIONS: {
 }[] = [
   { id: "general", label: "General", icon: SettingsIcon },
   { id: "domains", label: "Local Domains", icon: Globe },
+  { id: "parked", label: "Parked Folders", icon: FolderSearch },
   { id: "services", label: "Services", icon: Server },
   { id: "about", label: "About", icon: Info },
 ];
@@ -55,9 +63,24 @@ export function SettingsSection({
       />
     );
   }
+  if (section === "parked") return <ParkedSection />;
   if (section === "services") return <ServicesSection />;
   if (section === "about") return <AboutSection />;
   return <GeneralSection />;
+}
+
+function ParkedSection() {
+  return (
+    <>
+      <SectionHeader
+        title="Parked Folders"
+        description="Folders Orbit watches to register projects automatically."
+      />
+      <div className="px-6 py-5">
+        <ParkedSettings />
+      </div>
+    </>
+  );
 }
 
 function SectionHeader({
