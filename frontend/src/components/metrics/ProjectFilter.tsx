@@ -2,6 +2,17 @@ import { useMemo, useState } from "react";
 import type { MetricSample, Project } from "../../types";
 import { cn } from "../../lib/cn";
 
+function FilterAction({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="text-[10px] text-[var(--orbit-muted)] hover:text-[var(--orbit-text)] underline-offset-2 hover:underline"
+    >
+      {label}
+    </button>
+  );
+}
+
 export function ProjectFilter({
   projects,
   visibleIds,
@@ -9,6 +20,8 @@ export function ProjectFilter({
   samples,
   onToggle,
   onReset,
+  onAll,
+  onNone,
 }: {
   projects: Project[];
   visibleIds: string[];
@@ -16,6 +29,8 @@ export function ProjectFilter({
   samples: Record<string, MetricSample[]>;
   onToggle: (id: string) => void;
   onReset: () => void;
+  onAll: () => void;
+  onNone: () => void;
 }) {
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
@@ -45,12 +60,9 @@ export function ProjectFilter({
               className="h-7 px-2.5 rounded-md bg-white/5 border border-white/10 text-[11px] outline-none focus:border-white/20 placeholder:text-[var(--orbit-subtle)]"
             />
           )}
-          <button
-            onClick={onReset}
-            className="text-[10px] text-[var(--orbit-muted)] hover:text-[var(--orbit-text)] underline-offset-2 hover:underline"
-          >
-            Reset
-          </button>
+          <FilterAction label="All" onClick={onAll} />
+          <FilterAction label="None" onClick={onNone} />
+          <FilterAction label="Reset" onClick={onReset} />
         </div>
       </div>
       <div className="flex flex-wrap gap-1.5 max-h-32 overflow-auto scrollbar-thin">

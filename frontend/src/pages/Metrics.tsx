@@ -163,6 +163,8 @@ export function MetricsPage() {
           samples={samples}
           onToggle={toggle}
           onReset={() => setSelected(null)}
+          onAll={() => setSelected(projects.map((p) => p.id))}
+          onNone={() => setSelected([])}
         />
 
         <TimeSeriesGrid
