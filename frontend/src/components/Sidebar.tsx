@@ -45,7 +45,7 @@ function countFor(filter: Filter, projects: { status: ProjectStatus }[]): number
 export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const { projects, filter, setFilter, selectedId, select, view, setView } =
     useProjects();
-  const recent = projects.slice(0, 8);
+  const recent = projects.slice(0, 2);
   const [runningServices, setRunningServices] = useState(0);
   const [unread, setUnread] = useState(0);
 
@@ -71,50 +71,6 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       <nav className="flex-1 overflow-auto scrollbar-thin px-2 pt-2 pb-2">
-        <Section title="Views">
-          <Row
-            icon={BarChart3}
-            label="Metrics"
-            active={view === "metrics"}
-            onClick={() => setView("metrics")}
-          />
-          <Row
-            icon={Server}
-            label="Services"
-            active={view === "services"}
-            badge={runningServices > 0 ? runningServices : undefined}
-            tone={runningServices > 0 ? "ok" : undefined}
-            onClick={() => setView("services")}
-          />
-          <Row
-            icon={Cpu}
-            label="Runtimes"
-            active={view === "runtimes"}
-            onClick={() => setView("runtimes")}
-          />
-          <Row
-            icon={Mail}
-            label="Mail"
-            active={view === "mail"}
-            badge={unread > 0 ? unread : undefined}
-            onClick={() => setView("mail")}
-          />
-          <Row
-            icon={Database}
-            label="Database"
-            active={view === "database"}
-            onClick={() => setView("database")}
-          />
-          <Row
-            icon={HardDrive}
-            label="Storage"
-            active={view === "storage"}
-            onClick={() => setView("storage")}
-          />
-        </Section>
-
-        <SidebarGroups />
-
         <Section title="Projects">
           {filterItems
             .filter((it) => it.id === "all" || countFor(it.id, projects) > 0)
@@ -158,6 +114,53 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
             ))}
           </Section>
         )}
+
+        <SidebarGroups />
+
+        <Section title="Tools">
+          <Row
+            icon={Mail}
+            label="Mail"
+            active={view === "mail"}
+            badge={unread > 0 ? unread : undefined}
+            onClick={() => setView("mail")}
+          />
+          <Row
+            icon={Database}
+            label="Database"
+            active={view === "database"}
+            onClick={() => setView("database")}
+          />
+          <Row
+            icon={HardDrive}
+            label="Storage"
+            active={view === "storage"}
+            onClick={() => setView("storage")}
+          />
+        </Section>
+
+        <Section title="System">
+          <Row
+            icon={BarChart3}
+            label="Metrics"
+            active={view === "metrics"}
+            onClick={() => setView("metrics")}
+          />
+          <Row
+            icon={Server}
+            label="Services"
+            active={view === "services"}
+            badge={runningServices > 0 ? runningServices : undefined}
+            tone={runningServices > 0 ? "ok" : undefined}
+            onClick={() => setView("services")}
+          />
+          <Row
+            icon={Cpu}
+            label="Runtimes"
+            active={view === "runtimes"}
+            onClick={() => setView("runtimes")}
+          />
+        </Section>
 
       </nav>
 

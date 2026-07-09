@@ -17,7 +17,9 @@ import {
 } from "./ui/dialog"
 import {
   Boxes, Play, Moon, Square, PauseCircle, AlertTriangle, Box, Plus,
+  BarChart3, Server, Cpu, Mail, Database, HardDrive, Settings,
 } from "lucide-react"
+import type { View } from "../store"
 
 interface FilterEntry {
   id: Filter
@@ -25,6 +27,20 @@ interface FilterEntry {
   icon: React.ComponentType<{ className?: string }>
   shortcut?: string
 }
+
+const views: {
+  id: View
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+}[] = [
+  { id: "mail",     label: "Mail",     icon: Mail },
+  { id: "database", label: "Database", icon: Database },
+  { id: "storage",  label: "Storage",  icon: HardDrive },
+  { id: "metrics",  label: "Metrics",  icon: BarChart3 },
+  { id: "services", label: "Services", icon: Server },
+  { id: "runtimes", label: "Runtimes", icon: Cpu },
+  { id: "settings", label: "Settings", icon: Settings },
+]
 
 const filters: FilterEntry[] = [
   { id: "all",       label: "All Projects", icon: Boxes,         shortcut: "⌘1" },
@@ -44,7 +60,7 @@ export function CommandPalette({
   onOpenChange: (v: boolean) => void
   onAdd: () => void
 }) {
-  const { projects, select, setFilter } = useProjects()
+  const { projects, select, setFilter, setView } = useProjects()
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -90,6 +106,26 @@ export function CommandPalette({
                 </CommandGroup>
               )}
 
+              <CommandGroup heading="Go to">
+                {views.map((v) => {
+                  const Icon = v.icon
+                  return (
+                    <CommandItem
+                      key={v.id}
+                      value={`go to ${v.label}`}
+                      onSelect={() => {
+                        select(null)
+                        setView(v.id)
+                        close()
+                      }}
+                    >
+                      <Icon />
+                      {v.label}
+                    </CommandItem>
+                  )
+                })}
+              </CommandGroup>
+
               <CommandGroup heading="Filters">
                 {filters.map((f) => {
                   const Icon = f.icon
@@ -99,6 +135,7 @@ export function CommandPalette({
                       value={`filter ${f.label}`}
                       onSelect={() => {
                         select(null)
+                        setView("projects")
                         setFilter(f.id)
                         close()
                       }}
