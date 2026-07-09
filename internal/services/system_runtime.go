@@ -86,8 +86,8 @@ type SystemDocker struct {
 var dockerComposeVersionRe = regexp.MustCompile(`v?(\d+\.\d+\.\d+)`)
 
 func DetectSystemDocker() (SystemDocker, bool) {
-	dockerPath, err := exec.LookPath("docker")
-	if err != nil {
+	dockerPath, ok := detectDockerPath()
+	if !ok {
 		return SystemDocker{}, false
 	}
 	out, err := exec.Command(dockerPath, "compose", "version").Output()
@@ -99,6 +99,22 @@ func DetectSystemDocker() (SystemDocker, bool) {
 		return SystemDocker{}, false
 	}
 	return SystemDocker{Version: m[1]}, true
+}
+
+func detectDockerPath() (string, bool) {
+	if dockerPath, err := exec.LookPath("docker"); err == nil {
+		return dockerPath, true
+	}
+	for _, dockerPath := range []string{
+		"/usr/local/bin/docker",
+		"/opt/homebrew/bin/docker",
+		"/Applications/Docker.app/Contents/Resources/bin/docker",
+	} {
+		if st, err := os.Stat(dockerPath); err == nil && !st.IsDir() && st.Mode()&0o111 != 0 {
+			return dockerPath, true
+		}
+	}
+	return "", false
 }
 
 func phpVersionOf(binPath string) (string, bool) {
