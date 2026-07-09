@@ -13,6 +13,7 @@ import (
 	"orbit-app/internal/bindings"
 	"orbit-app/internal/config"
 	"orbit-app/internal/database"
+	"orbit-app/internal/parked"
 	"orbit-app/internal/projects"
 	"orbit-app/internal/proxy"
 	"orbit-app/internal/runtime"
@@ -52,7 +53,9 @@ type App struct {
 	requestsAPI *bindings.Requests
 	composeAPI  *bindings.Compose
 	copilotAPI  *bindings.Copilot
+	parkedAPI   *bindings.Parked
 	share       *share.State
+	parked      *parked.Manager
 }
 
 func NewApp() *App {
@@ -70,6 +73,7 @@ func NewApp() *App {
 		requestsAPI: bindings.NewRequests(),
 		composeAPI:  bindings.NewCompose(),
 		copilotAPI:  bindings.NewCopilot(),
+		parkedAPI:   bindings.NewParked(),
 		share:       share.NewState(),
 	}
 }
@@ -89,6 +93,7 @@ func (a *App) boundAPIs() []interface{} {
 		a.requestsAPI,
 		a.composeAPI,
 		a.copilotAPI,
+		a.parkedAPI,
 	}
 }
 
@@ -181,26 +186,33 @@ func (a *App) startup(ctx context.Context) {
 		}
 	}()
 
+	parkedStore := parked.LoadStore(cfg.DataDir)
+	a.parked = parked.NewManager(parkedStore, a.service, runtime.NewWailsEmitter(ctx).Emit)
+	go a.parked.Start(ctx)
+
 	deps := bindings.Deps{
-		Ctx:         ctx,
-		Cfg:         a.cfg,
-		Service:     a.service,
-		Runtime:     a.runtime,
-		Services:    a.services,
-		SvcStore:    a.svcStore,
-		SvcConfig:   a.svcConfig,
-		NodeAcq:     a.nodeAcq,
-		PHPAcq:      a.phpAcq,
-		PythonAcq:   a.pythonAcq,
-		RuntimesCfg: a.runtimesCfg,
-		Terminals:   a.terminals,
-		ProxyServer: a.proxyServer,
-		Share:       a.share,
+		Ctx:           ctx,
+		Cfg:           a.cfg,
+		Service:       a.service,
+		Runtime:       a.runtime,
+		Services:      a.services,
+		SvcStore:      a.svcStore,
+		SvcConfig:     a.svcConfig,
+		NodeAcq:       a.nodeAcq,
+		PHPAcq:        a.phpAcq,
+		PythonAcq:     a.pythonAcq,
+		RuntimesCfg:   a.runtimesCfg,
+		Terminals:     a.terminals,
+		ProxyServer:   a.proxyServer,
+		Share:         a.share,
+		ParkedStore:   parkedStore,
+		ParkedManager: a.parked,
 	}
 	for _, api := range []interface{ Attach(bindings.Deps) }{
 		a.projectsAPI, a.groupsAPI, a.runtimeAPI, a.servicesAPI,
 		a.mailAPI, a.versionsAPI, a.terminalAPI, a.systemAPI,
 		a.dataAPI, a.shareAPI, a.requestsAPI, a.composeAPI, a.copilotAPI,
+		a.parkedAPI,
 	} {
 		api.Attach(deps)
 	}
