@@ -134,12 +134,24 @@ func pythonInstallCommand(proj *projects.Project) []string {
 	return nil
 }
 
+func resolvePythonBin(bin, venvBin string) string {
+	if bin != "python" || venvBin == "" {
+		return bin
+	}
+	venvPython := filepath.Join(venvBin, "python")
+	if st, err := os.Stat(venvPython); err == nil && !st.IsDir() {
+		return venvPython
+	}
+	return bin
+}
+
 func pythonInstallHandle(proj *projects.Project, venvBin string) (*processHandle, error) {
 	cmd := pythonInstallCommand(proj)
 	if len(cmd) == 0 {
 		return nil, nil
 	}
-	c := exec.Command(cmd[0], cmd[1:]...)
+	bin := resolvePythonBin(cmd[0], venvBin)
+	c := exec.Command(bin, cmd[1:]...)
 	c.Dir = proj.Path
 	env := append(stripEnvVar(os.Environ(), "CI"),
 		"VIRTUAL_ENV="+filepath.Join(proj.Path, ".venv"),

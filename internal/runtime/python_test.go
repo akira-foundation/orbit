@@ -46,6 +46,26 @@ func TestPythonInstallCommandPyprojectFallback(t *testing.T) {
 	}
 }
 
+func TestResolvePythonBinUsesVenvInterpreter(t *testing.T) {
+	venv := t.TempDir()
+	py := filepath.Join(venv, "python")
+	if err := os.WriteFile(py, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := resolvePythonBin("python", venv); got != py {
+		t.Fatalf("resolve = %q want %q", got, py)
+	}
+	if got := resolvePythonBin("python", ""); got != "python" {
+		t.Fatalf("no venv = %q", got)
+	}
+	if got := resolvePythonBin("uv", venv); got != "uv" {
+		t.Fatalf("non-python = %q", got)
+	}
+	if got := resolvePythonBin("python", t.TempDir()); got != "python" {
+		t.Fatalf("venv without python = %q", got)
+	}
+}
+
 func TestNeedsPythonInstallWhenVenvMissing(t *testing.T) {
 	dir := t.TempDir()
 	proj := &projects.Project{Path: dir, PythonVersion: "3.12.13"}
