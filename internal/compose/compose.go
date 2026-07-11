@@ -27,10 +27,27 @@ func Detect(projectPath string) (string, bool) {
 }
 
 func Available() bool {
-	if _, err := exec.LookPath("docker"); err != nil {
+	docker, ok := dockerBin()
+	if !ok {
 		return false
 	}
-	return exec.Command("docker", "compose", "version").Run() == nil
+	return exec.Command(docker, "compose", "version").Run() == nil
+}
+
+func dockerBin() (string, bool) {
+	if docker, err := exec.LookPath("docker"); err == nil {
+		return docker, true
+	}
+	for _, docker := range []string{
+		"/usr/local/bin/docker",
+		"/opt/homebrew/bin/docker",
+		"/Applications/Docker.app/Contents/Resources/bin/docker",
+	} {
+		if st, err := os.Stat(docker); err == nil && !st.IsDir() && st.Mode()&0o111 != 0 {
+			return docker, true
+		}
+	}
+	return "", false
 }
 
 func Up(ctx context.Context, projectPath, file string) error {
@@ -42,8 +59,12 @@ func Down(ctx context.Context, projectPath, file string) error {
 }
 
 func run(ctx context.Context, projectPath, file string, args ...string) error {
+	docker, ok := dockerBin()
+	if !ok {
+		return &Error{Args: args, Err: exec.ErrNotFound}
+	}
 	full := append([]string{"compose", "-f", file}, args...)
-	cmd := exec.CommandContext(ctx, "docker", full...)
+	cmd := exec.CommandContext(ctx, docker, full...)
 	cmd.Dir = projectPath
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -74,7 +95,11 @@ type Service struct {
 }
 
 func Ps(ctx context.Context, projectPath, file string) ([]Service, error) {
-	cmd := exec.CommandContext(ctx, "docker", "compose", "-f", file, "ps", "--format", "json", "--all")
+	docker, ok := dockerBin()
+	if !ok {
+		return nil, exec.ErrNotFound
+	}
+	cmd := exec.CommandContext(ctx, docker, "compose", "-f", file, "ps", "--format", "json", "--all")
 	cmd.Dir = projectPath
 	out, err := cmd.Output()
 	if err != nil {

@@ -71,6 +71,8 @@ export function App() {
   useWailsEvent("menu:open-settings", () => openSettings(null));
   useWailsEvent("menu:system-setup", () => openSettings("setup"));
   useWailsEvent("menu:system-reset", () => openSettings("reset"));
+  useWailsEvent("parked:project-added", load);
+  useWailsEvent("parked:project-removed", load);
 
   const selected = useMemo(
     () => projects.find((p) => p.id === selectedId) ?? null,

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useProjects } from '../store'
 import { usePrewarm } from '../hooks/usePrewarm'
+import { useParkedIds } from '../parkedApi'
 import { BarChart3, ExternalLink, FileText, GitBranch, Loader2, Orbit, Play, Plus, Square } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import type { GitInfo, Project } from '../types'
@@ -81,6 +82,7 @@ function ListView({
   onOpen: (p: Project) => void
 }) {
   const { prewarm, onRowEnter, onRowLeave } = usePrewarm(prewarmEnabled, hoverMs)
+  const parkedIds = useParkedIds()
 
   return (
     <div className="p-4">
@@ -114,7 +116,7 @@ function ListView({
                 focusId === p.id ? 'bg-white/[0.10]' : 'hover:bg-white/4',
               )}
             >
-              <Td className="font-medium">{p.name}</Td>
+              <Td className="font-medium">{p.name}{parkedIds.has(p.id) && <AutoChip />}</Td>
               <Td><RuntimeStatusBadge status={p.status} /></Td>
               <Td>{p.detectedFramework}</Td>
               <Td>{p.packageManager}</Td>
@@ -275,6 +277,9 @@ function Th({ children }: { children: React.ReactNode }) {
 }
 function Td({ children, className }: { children: React.ReactNode; className?: string }) {
   return <td className={cn('px-3 py-2.5 align-middle', className)}>{children}</td>
+}
+function AutoChip() {
+  return <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9.5px] uppercase tracking-wide bg-white/8 text-[var(--orbit-muted)]">auto</span>
 }
 
 function Empty({ onAdd }: { onAdd: () => void }) {
