@@ -469,6 +469,7 @@ func (m *manager) start(ctx context.Context, projectID string, internal bool) er
 	env = mergeServiceEnv(env, svcEnv)
 	env = mergeDotEnv(env, proj.Path)
 	env = prependNodeBinDir(env, binDir)
+	env = withLoginPath(env)
 
 	handle, err := spawnDevCommand(proj.Path, devCommand, env)
 	if err != nil {

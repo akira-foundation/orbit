@@ -81,7 +81,7 @@ func installHandle(proj *projects.Project, nodeBinDir string) (*processHandle, e
 	env := append(stripEnvVar(os.Environ(), "CI"),
 		"FORCE_COLOR=1",
 	)
-	c.Env = prependNodeBinDir(env, nodeBinDir)
+	c.Env = withLoginPath(prependNodeBinDir(env, nodeBinDir))
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	stdout, err := c.StdoutPipe()

@@ -159,7 +159,7 @@ func pythonInstallHandle(proj *projects.Project, venvBin string) (*processHandle
 		"PIPENV_VENV_IN_PROJECT=1",
 		"UV_PROJECT_ENVIRONMENT="+filepath.Join(proj.Path, ".venv"),
 	)
-	c.Env = prependNodeBinDir(env, venvBin)
+	c.Env = withLoginPath(prependNodeBinDir(env, venvBin))
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	stdout, err := c.StdoutPipe()
