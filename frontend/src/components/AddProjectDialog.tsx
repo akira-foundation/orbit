@@ -30,6 +30,7 @@ export function AddProjectDialog({
   const [installAfterAdd, setInstallAfterAdd] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [conflict, setConflict] = useState<string | null>(null)
 
   const reset = () => {
     setPath("")
@@ -37,6 +38,7 @@ export function AddProjectDialog({
     setNeedsInstall(false)
     setInstallAfterAdd(true)
     setError(null)
+    setConflict(null)
     setBusy(false)
   }
 
@@ -50,6 +52,7 @@ export function AddProjectDialog({
     if (!t) return
     setBusy(true)
     setError(null)
+    setConflict(null)
     setAnalysis(null)
     try {
       const a = await api.analyzePath(t)
@@ -74,19 +77,41 @@ export function AddProjectDialog({
     }
   }
 
+  const finish = (proj: Project) => {
+    onCreated(proj)
+    if (needsInstall && installAfterAdd) {
+      api.installProject(proj.id).catch((e) => {
+        console.warn("install kicked off failed:", e)
+      })
+    }
+    close()
+  }
+
   const create = async () => {
     if (!path) return
     setBusy(true)
     setError(null)
     try {
-      const proj = await api.addProject(path)
-      onCreated(proj)
-      if (needsInstall && installAfterAdd) {
-        api.installProject(proj.id).catch((e) => {
-          console.warn("install kicked off failed:", e)
-        })
+      const res = await api.addProject(path)
+      if (res.conflict) {
+        setConflict(res.conflictName)
+        setBusy(false)
+        return
       }
-      close()
+      if (res.project) finish(res.project)
+    } catch (e: any) {
+      setError(e?.message ?? String(e))
+      setBusy(false)
+    }
+  }
+
+  const overwrite = async () => {
+    if (!path) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await api.addProjectOverwrite(path)
+      if (res.project) finish(res.project)
     } catch (e: any) {
       setError(e?.message ?? String(e))
       setBusy(false)
@@ -110,6 +135,7 @@ export function AddProjectDialog({
                 setPath(e.target.value)
                 setAnalysis(null)
                 setError(null)
+                setConflict(null)
               }}
               onBlur={(e) => analyze(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && analyze(path)}
@@ -143,6 +169,22 @@ export function AddProjectDialog({
               <Row label="Package manager" value={analysis.packageManager} />
               <Row label="Dev command"     value={analysis.devCommand} mono />
               <Row label="Local domain"    value={`https://${analysis.suggestedDomain}`} mono />
+            </div>
+          )}
+
+          {conflict && (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.04] p-3.5">
+              <TriangleAlert className="size-4 mt-0.5 text-amber-300 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium text-amber-100">
+                  Already registered
+                </p>
+                <p className="text-[11px] text-amber-200/70 mt-0.5">
+                  A project named <span className="font-medium">{conflict}</span> already
+                  exists. Overwrite replaces its registration with this folder;
+                  its group membership and enabled services are reset.
+                </p>
+              </div>
             </div>
           )}
 
@@ -185,7 +227,19 @@ export function AddProjectDialog({
 
         <DialogFooter>
           <Button variant="ghost" onClick={close}>Cancel</Button>
-          <Button onClick={create} disabled={!analysis || busy || analysis.ambiguousLayout}>Add to Orbit</Button>
+          {conflict ? (
+            <Button
+              onClick={overwrite}
+              disabled={busy}
+              className="bg-amber-500/90 hover:bg-amber-500 text-black"
+            >
+              Overwrite
+            </Button>
+          ) : (
+            <Button onClick={create} disabled={!analysis || busy || analysis.ambiguousLayout}>
+              Add to Orbit
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

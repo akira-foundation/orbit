@@ -2,6 +2,7 @@ package bindings
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -86,9 +87,27 @@ func (p *Projects) AnalyzePath(path string) (*AnalyzeResult, error) {
 	}, nil
 }
 
-func (p *Projects) AddProject(path string) (*projects.Project, error) {
-	proj, err := p.service.Create(p.ctx, path)
+type AddResult struct {
+	Project      *projects.Project `json:"project"`
+	Conflict     bool              `json:"conflict"`
+	ConflictName string            `json:"conflictName"`
+}
+
+func (p *Projects) AddProject(path string) (*AddResult, error) {
+	return p.add(path, false)
+}
+
+func (p *Projects) AddProjectOverwrite(path string) (*AddResult, error) {
+	return p.add(path, true)
+}
+
+func (p *Projects) add(path string, overwrite bool) (*AddResult, error) {
+	proj, err := p.service.Add(p.ctx, path, overwrite)
 	if err != nil {
+		var conflict *projects.ConflictError
+		if errors.As(err, &conflict) {
+			return &AddResult{Conflict: true, ConflictName: conflict.Name}, nil
+		}
 		p.runtime.RecordEvent("", runtime.LevelError, runtime.SourceProject,
 			fmt.Sprintf("add project %q failed: %v", path, err))
 		return nil, err
@@ -98,7 +117,7 @@ func (p *Projects) AddProject(path string) (*projects.Project, error) {
 	for _, engine := range p.svcConfig.DefaultEngines() {
 		_ = p.svcStore.SetEnabled(p.ctx, proj.ID, engine, true)
 	}
-	return proj, nil
+	return &AddResult{Project: proj}, nil
 }
 
 func (p *Projects) ListProjects() ([]projects.Project, error) {

@@ -1,6 +1,7 @@
 import {
   AnalyzePath,
   AddProject,
+  AddProjectOverwrite,
   PathNeedsInstall,
   InstallProject,
   ListProjects,
@@ -111,6 +112,7 @@ import {
 } from "../wailsjs/go/bindings/System";
 import type { mailpit } from "../wailsjs/go/models";
 import type {
+  AddResult,
   AnalyzeResult,
   GitInfo,
   Group,
@@ -141,9 +143,10 @@ function cast<T>(p: Promise<unknown>): Promise<T> {
 }
 
 export const api = {
-  analyzePath: (path: string): Promise<AnalyzeResult> =>
-    cast(AnalyzePath(path)),
-  addProject: (path: string): Promise<Project> => cast(AddProject(path)),
+  analyzePath: (path: string): Promise<AnalyzeResult> => cast(AnalyzePath(path)),
+  addProject: (path: string): Promise<AddResult> => cast(AddProject(path)),
+  addProjectOverwrite: (path: string): Promise<AddResult> =>
+    cast(AddProjectOverwrite(path)),
   pathNeedsInstall: (path: string): Promise<boolean> => cast(PathNeedsInstall(path)),
   installProject: (id: string): Promise<void> => InstallProject(id),
   listProjects: async (): Promise<Project[]> =>
@@ -154,8 +157,7 @@ export const api = {
   stopProject: (id: string): Promise<void> => StopProject(id),
   restartProject: (id: string): Promise<void> => RestartProject(id),
   prewarm: (id: string): Promise<void> => Prewarm(id),
-  runtimeStatus: (id: string): Promise<RuntimeSnapshot> =>
-    cast(RuntimeStatus(id)),
+  runtimeStatus: (id: string): Promise<RuntimeSnapshot> => cast(RuntimeStatus(id)),
   runtimeLogs: async (id: string): Promise<RuntimeLogLine[]> =>
     (await cast<RuntimeLogLine[] | null>(RuntimeLogs(id))) ?? [],
   runtimeLogsHistory: async (
@@ -191,12 +193,10 @@ export const api = {
   systemUninstall: (): Promise<void> => SystemUninstall(),
   trustCA: (): Promise<void> => TrustCA(),
   untrustCA: (): Promise<void> => UntrustCA(),
-  setProjectSecure: (id: string, secure: boolean): Promise<void> =>
-    SetProjectSecure(id, secure),
+  setProjectSecure: (id: string, secure: boolean): Promise<void> => SetProjectSecure(id, secure),
   projectEnv: async (id: string): Promise<Record<string, string>> =>
     (await cast<Record<string, string> | null>(ProjectEnv(id))) ?? {},
-  saveProjectEnv: (id: string, vars: Record<string, string>): Promise<void> =>
-    SaveProjectEnv(id, vars),
+  saveProjectEnv: (id: string, vars: Record<string, string>): Promise<void> => SaveProjectEnv(id, vars),
   listGroups: async (): Promise<Group[]> =>
     (await cast<Group[] | null>(ListGroups())) ?? [],
   createGroup: (name: string): Promise<Group> => cast(CreateGroup(name)),

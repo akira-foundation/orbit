@@ -61,6 +61,12 @@ export interface AppNotification {
   read: boolean
 }
 
+export interface AddResult {
+  project: Project | null
+  conflict: boolean
+  conflictName: string
+}
+
 export interface Group {
   id: string
   name: string

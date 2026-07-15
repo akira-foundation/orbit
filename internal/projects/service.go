@@ -30,11 +30,16 @@ func (s *Service) AnalyzePath(path string) (*analyzer.Analysis, error) {
 	return s.analyzer.Analyze(path)
 }
 
-func (s *Service) Create(ctx context.Context, path string) (*Project, error) {
-	a, err := s.AnalyzePath(path)
-	if err != nil {
-		return nil, err
-	}
+type ConflictError struct {
+	Name string
+	Slug string
+}
+
+func (e *ConflictError) Error() string {
+	return "a project named " + e.Name + " is already registered"
+}
+
+func (s *Service) build(a *analyzer.Analysis) *Project {
 	slug := Slugify(a.Name)
 	p := &Project{
 		Name:              a.Name,
@@ -63,6 +68,51 @@ func (s *Service) Create(ctx context.Context, path string) (*Project, error) {
 			Port:       ps.Port,
 			PHPVersion: ps.PHPVersion,
 		})
+	}
+	return p
+}
+
+func (s *Service) Create(ctx context.Context, path string) (*Project, error) {
+	a, err := s.AnalyzePath(path)
+	if err != nil {
+		return nil, err
+	}
+	p := s.build(a)
+	if err := s.repo.Create(ctx, p); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func (s *Service) Add(ctx context.Context, path string, overwrite bool) (*Project, error) {
+	a, err := s.AnalyzePath(path)
+	if err != nil {
+		return nil, err
+	}
+	p := s.build(a)
+
+	existing, err := s.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var slugOwner *Project
+	for i := range existing {
+		if existing[i].Path == p.Path {
+			found := existing[i]
+			return &found, nil
+		}
+		if existing[i].Slug == p.Slug {
+			found := existing[i]
+			slugOwner = &found
+		}
+	}
+	if slugOwner != nil {
+		if !overwrite {
+			return nil, &ConflictError{Name: slugOwner.Name, Slug: p.Slug}
+		}
+		if err := s.repo.Delete(ctx, slugOwner.ID); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.repo.Create(ctx, p); err != nil {
 		return nil, err
