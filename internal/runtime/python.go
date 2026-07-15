@@ -150,16 +150,20 @@ func pythonInstallHandle(proj *projects.Project, venvBin string) (*processHandle
 	if len(cmd) == 0 {
 		return nil, nil
 	}
-	bin := resolvePythonBin(cmd[0], venvBin)
-	c := exec.Command(bin, cmd[1:]...)
-	c.Dir = proj.Path
 	env := append(stripEnvVar(os.Environ(), "CI"),
 		"VIRTUAL_ENV="+filepath.Join(proj.Path, ".venv"),
 		"POETRY_VIRTUALENVS_IN_PROJECT=1",
 		"PIPENV_VENV_IN_PROJECT=1",
 		"UV_PROJECT_ENVIRONMENT="+filepath.Join(proj.Path, ".venv"),
 	)
-	c.Env = withLoginPath(prependNodeBinDir(env, venvBin))
+	env = withLoginPath(prependNodeBinDir(env, venvBin))
+	bin := resolvePythonBin(cmd[0], venvBin)
+	if bin == cmd[0] {
+		bin = lookPathIn(cmd[0], envPathValue(env))
+	}
+	c := exec.Command(bin, cmd[1:]...)
+	c.Dir = proj.Path
+	c.Env = env
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	stdout, err := c.StdoutPipe()

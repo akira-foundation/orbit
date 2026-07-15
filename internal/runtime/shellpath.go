@@ -87,6 +87,31 @@ func withLoginPath(env []string) []string {
 	return append(env, "PATH="+extra)
 }
 
+func envPathValue(env []string) string {
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "PATH=") {
+			return strings.TrimPrefix(kv, "PATH=")
+		}
+	}
+	return os.Getenv("PATH")
+}
+
+func lookPathIn(name, pathList string) string {
+	if strings.ContainsRune(name, filepath.Separator) {
+		return name
+	}
+	for _, dir := range strings.Split(pathList, ":") {
+		if dir == "" {
+			continue
+		}
+		candidate := filepath.Join(dir, name)
+		if st, err := os.Stat(candidate); err == nil && !st.IsDir() && st.Mode()&0o111 != 0 {
+			return candidate
+		}
+	}
+	return name
+}
+
 func mergePathList(existing, extra string) string {
 	seen := map[string]bool{}
 	var out []string

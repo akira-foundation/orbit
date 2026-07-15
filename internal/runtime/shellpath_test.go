@@ -1,9 +1,33 @@
 package runtime
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestLookPathInFindsExecutable(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "bun")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := lookPathIn("bun", "/nope:"+dir); got != bin {
+		t.Fatalf("lookPathIn = %q want %q", got, bin)
+	}
+	if got := lookPathIn("/abs/bun", dir); got != "/abs/bun" {
+		t.Fatalf("absolute passthrough = %q", got)
+	}
+	if got := lookPathIn("missing", dir); got != "missing" {
+		t.Fatalf("missing fallback = %q", got)
+	}
+	nonExec := filepath.Join(dir, "data")
+	_ = os.WriteFile(nonExec, []byte("x"), 0o644)
+	if got := lookPathIn("data", dir); got != "data" {
+		t.Fatalf("non-executable should be skipped, got %q", got)
+	}
+}
 
 func TestMergePathListDedupsAndOrders(t *testing.T) {
 	got := mergePathList("/usr/bin:/bin", "/opt/homebrew/bin:/usr/bin")

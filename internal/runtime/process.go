@@ -23,7 +23,8 @@ func spawnDevCommand(cwd, devCmd string, env []string) (*processHandle, error) {
 		return nil, errors.New("empty dev command")
 	}
 
-	cmd := exec.Command(parts[0], parts[1:]...)
+	bin := lookPathIn(parts[0], envPathValue(env))
+	cmd := exec.Command(bin, parts[1:]...)
 	cmd.Dir = cwd
 	if env != nil {
 		cmd.Env = env

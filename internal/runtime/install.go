@@ -76,12 +76,13 @@ func installHandle(proj *projects.Project, nodeBinDir string) (*processHandle, e
 	if len(cmd) == 0 {
 		return nil, errors.New("install: unknown package manager")
 	}
-	c := exec.Command(cmd[0], cmd[1:]...)
-	c.Dir = proj.Path
 	env := append(stripEnvVar(os.Environ(), "CI"),
 		"FORCE_COLOR=1",
 	)
-	c.Env = withLoginPath(prependNodeBinDir(env, nodeBinDir))
+	env = withLoginPath(prependNodeBinDir(env, nodeBinDir))
+	c := exec.Command(lookPathIn(cmd[0], envPathValue(env)), cmd[1:]...)
+	c.Dir = proj.Path
+	c.Env = env
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	stdout, err := c.StdoutPipe()
