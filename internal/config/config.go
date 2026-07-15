@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Config struct {
@@ -16,12 +17,22 @@ type Config struct {
 	PublicTLSPort string `json:"publicTlsPort"`
 }
 
-func Load() (*Config, error) {
+func dataDir() (string, error) {
+	if override := strings.TrimSpace(os.Getenv("ORBIT_DATA_DIR")); override != "" {
+		return override, nil
+	}
 	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, dataDirName), nil
+}
+
+func Load() (*Config, error) {
+	dir, err := dataDir()
 	if err != nil {
 		return nil, err
 	}
-	dir := filepath.Join(home, ".orbit")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
