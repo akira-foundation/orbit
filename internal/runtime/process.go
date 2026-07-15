@@ -67,8 +67,6 @@ func (h *processHandle) forceKill() error {
 	return syscall.Kill(-h.pgid, syscall.SIGKILL)
 }
 
-// killPGID hard-kills a process group by pgid. Used defensively to clean up
-// any leftover child group from a prior session before spawning a new one.
 func killPGID(pgid int) error {
 	if pgid <= 0 {
 		return nil
