@@ -23,7 +23,8 @@ func spawnDevCommand(cwd, devCmd string, env []string) (*processHandle, error) {
 		return nil, errors.New("empty dev command")
 	}
 
-	cmd := exec.Command(parts[0], parts[1:]...)
+	bin := lookPathIn(parts[0], envPathValue(env))
+	cmd := exec.Command(bin, parts[1:]...)
 	cmd.Dir = cwd
 	if env != nil {
 		cmd.Env = env
@@ -66,8 +67,6 @@ func (h *processHandle) forceKill() error {
 	return syscall.Kill(-h.pgid, syscall.SIGKILL)
 }
 
-// killPGID hard-kills a process group by pgid. Used defensively to clean up
-// any leftover child group from a prior session before spawning a new one.
 func killPGID(pgid int) error {
 	if pgid <= 0 {
 		return nil
