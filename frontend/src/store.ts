@@ -111,7 +111,21 @@ export const useProjects = create<State>()(persist((set, get) => ({
       canForward: newIndex < history.length - 1,
     })
   },
-  add(p) { set({ projects: [p, ...get().projects] }) },
+  add(p) {
+    const { projects, selectedId, history } = get()
+    const replaced = projects.find(x => x.slug === p.slug && x.id !== p.id)
+    const next = [p, ...projects.filter(x => x.id !== p.id && x.slug !== p.slug)]
+    if (!replaced) {
+      set({ projects: next })
+      return
+    }
+    set({
+      projects: next,
+      selectedId: selectedId === replaced.id ? p.id : selectedId,
+      history: history.map(h => (h === replaced.id ? p.id : h)),
+    })
+    get().loadGroups().catch(e => set({ error: e?.message ?? String(e) }))
+  },
   async remove(id) {
     await api.deleteProject(id)
     const { history, historyIndex } = get()
