@@ -2,6 +2,7 @@ package projects
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -72,6 +73,65 @@ func TestAddOverwriteReplacesSlugOwner(t *testing.T) {
 	list, _ := s.List(context.Background())
 	if len(list) != 1 || list[0].Path != "/b/shop" {
 		t.Fatalf("expected only /b/shop, got %+v", list)
+	}
+}
+
+func TestAddOverwriteKeepsSlugOwnerWhenCreateFails(t *testing.T) {
+	s := newTestService(t)
+	ctx := context.Background()
+	old, err := s.Add(ctx, "/a/shop", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := s.Add(ctx, "/c/other", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.repo.raw.ExecContext(ctx,
+		`UPDATE project_domains SET domain = 'shop-old.orbit.test' WHERE project_id = ?`, old.ID,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.repo.raw.ExecContext(ctx,
+		`UPDATE project_domains SET domain = 'shop.orbit.test' WHERE project_id = ?`, other.ID,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.Add(ctx, "/b/shop", true); err == nil {
+		t.Fatal("expected overwrite to fail on the taken domain")
+	}
+
+	kept, err := s.Get(ctx, old.ID)
+	if err != nil {
+		t.Fatalf("slug owner was deleted: %v", err)
+	}
+	if kept.Path != "/a/shop" || len(kept.Processes) == 0 {
+		t.Fatalf("slug owner not intact: %+v", kept)
+	}
+	list, err := s.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("expected 2 projects, got %d", len(list))
+	}
+}
+
+func TestReplaceMissingProjectInsertsNothing(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	p := &Project{Name: "shop", Path: "/b/shop", Slug: "shop"}
+
+	if err := repo.Replace(ctx, "missing-id", p); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+	list, err := repo.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("expected no projects, got %+v", list)
 	}
 }
 

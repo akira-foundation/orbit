@@ -110,9 +110,10 @@ func (s *Service) Add(ctx context.Context, path string, overwrite bool) (*Projec
 		if !overwrite {
 			return nil, &ConflictError{Name: slugOwner.Name, Slug: p.Slug}
 		}
-		if err := s.repo.Delete(ctx, slugOwner.ID); err != nil {
+		if err := s.repo.Replace(ctx, slugOwner.ID, p); err != nil {
 			return nil, err
 		}
+		return p, nil
 	}
 	if err := s.repo.Create(ctx, p); err != nil {
 		return nil, err
