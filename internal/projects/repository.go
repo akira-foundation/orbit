@@ -23,6 +23,42 @@ func NewRepository(sqlDB *sql.DB, q *db.Queries) *Repository {
 }
 
 func (r *Repository) Create(ctx context.Context, p *Project) error {
+	tx, err := r.raw.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	if err := r.insertProject(ctx, r.q.WithTx(tx), p); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (r *Repository) Replace(ctx context.Context, oldID string, p *Project) error {
+	tx, err := r.raw.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	qtx := r.q.WithTx(tx)
+	if _, err := qtx.GetProject(ctx, oldID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if err := qtx.DeleteProject(ctx, oldID); err != nil {
+		return err
+	}
+	if err := r.insertProject(ctx, qtx, p); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (r *Repository) insertProject(ctx context.Context, qtx *db.Queries, p *Project) error {
 	if p.ID == "" {
 		p.ID = uuid.NewString()
 	}
@@ -32,14 +68,6 @@ func (r *Repository) Create(ctx context.Context, p *Project) error {
 	if p.Status == "" {
 		p.Status = StatusStopped
 	}
-
-	tx, err := r.raw.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback() //nolint:errcheck
-
-	qtx := r.q.WithTx(tx)
 
 	if _, err := qtx.CreateProject(ctx, db.CreateProjectParams{
 		ID:                p.ID,
@@ -97,8 +125,7 @@ func (r *Repository) Create(ctx context.Context, p *Project) error {
 			return err
 		}
 	}
-
-	return tx.Commit()
+	return nil
 }
 
 func (r *Repository) Delete(ctx context.Context, id string) error {
