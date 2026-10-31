@@ -31,7 +31,8 @@ struct RuntimeVersionResolver: Sendable {
         guard let newest = catalog.python.first else {
             return nil
         }
-        let constraint = versionFile(".python-version", in: directory) ?? requiresPython(in: directory)
+        let constraint = (versionFile(".python-version", in: directory) ?? requiresPython(in: directory))
+            .map { $0.replacingOccurrences(of: ",", with: " ") }
         guard let constraint else {
             return newest
         }

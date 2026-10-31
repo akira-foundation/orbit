@@ -37,6 +37,13 @@ struct PythonAnalysisTests {
         #expect(analysis.pythonVersion == "3.12.13")
     }
 
+    @Test func commaSeparatedRequiresPythonExcludesTheUpperBound() throws {
+        let dir = try TemporaryDirectory()
+        try dir.write("[project]\nname='api'\nrequires-python='>=3.10,<3.13'\n", to: "pyproject.toml")
+
+        #expect(try ProjectAnalyzer().analyze(path: dir.path).pythonVersion == "3.12.13")
+    }
+
     @Test func flaskProjectWithPipenv() throws {
         let dir = try TemporaryDirectory()
         try dir.write("Flask>=3.0\n", to: "requirements.txt")
