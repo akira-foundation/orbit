@@ -1,0 +1,55 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orbit-nightly
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      recent: ${{ steps.check.outputs.recent }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: develop
+          fetch-depth: 50
+      - id: check
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          count="$(git rev-list --count --since='24 hours ago' HEAD)"
+          if [ "$EVENT" = "workflow_dispatch" ] || [ "$count" -gt 0 ]; then
+            echo "recent=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "recent=false" >> "$GITHUB_OUTPUT"
+            echo "No commits on develop in the last 24 hours; skipping the macOS runner."
+          fi
+
+  test:
+    needs: changes
+    if: needs.changes.outputs.recent == 'true'
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: develop
+
+      - name: Select Xcode 27
+        run: ./Tools/select-xcode.sh
+
+      - name: Run the Core suite
+        env:
+          SWIFT_BACKTRACE: enable=yes,interactive=no
+        run: make test
