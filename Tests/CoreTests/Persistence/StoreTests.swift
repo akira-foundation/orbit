@@ -79,6 +79,29 @@ import Testing
         #expect(try await first.projects().count == 100)
     }
 
+    @Test func aWriteWaitsForAnotherConnectionToReleaseItsWriteLock() async throws {
+        let dir = try TemporaryDirectory()
+        let path = dir.path + "/orbit.sqlite"
+        let store = try Store(path: path)
+        let holder = try SQLiteDatabase(path: path)
+        let project = Project(
+            id: "22222222-2222-2222-2222-222222222222", name: "app", path: "/tmp/app", slug: "app",
+            localDomain: "app.orbit.test")
+        try holder.execute("BEGIN IMMEDIATE;")
+
+        let write = Task {
+            try await store.upsert(project)
+            return ContinuousClock.now
+        }
+        try await Task.sleep(for: .milliseconds(300))
+        let released = ContinuousClock.now
+        try holder.execute("COMMIT;")
+        let finished = try await write.value
+
+        #expect(finished >= released)
+        #expect(try await store.project(id: project.id)?.name == "app")
+    }
+
     @Test func readingGroupsDoesNotWaitForAnotherWriter() async throws {
         let dir = try TemporaryDirectory()
         let path = dir.path + "/orbit.sqlite"
