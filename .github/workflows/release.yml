@@ -20,7 +20,6 @@ jobs:
     timeout-minutes: 15
     env:
       TAG_NAME: ${{ github.ref_name }}
-      DISCORD_WEBHOOK: ${{ secrets.DISCORD }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -186,11 +185,20 @@ jobs:
             --notes-file "${RUNNER_TEMP}/release-notes.md" \
             --latest="${LATEST}" \
             --prerelease="${PRERELEASE}"
+      - name: Check the Discord webhook
+        id: discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD }}
+        run: |
+          if [ -n "${DISCORD_WEBHOOK}" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Send GitHub Release to Discord
-        if: env.DISCORD_WEBHOOK != ''
+        if: steps.discord.outputs.enabled == 'true' && steps.branch.outputs.prerelease == 'false'
+        continue-on-error: true
         uses: SethCohen/github-releases-to-discord@24d166886aee4646d448c8a389ff9e1ebcab3682 # v1.20.0
         with:
-          webhook_url: ${{ env.DISCORD_WEBHOOK }}
+          webhook_url: ${{ secrets.DISCORD }}
           release_name: ${{ github.ref_name }}
           release_body: ${{ steps.notes.outputs.body }}
           release_html_url: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}
