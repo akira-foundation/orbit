@@ -31,3 +31,12 @@ extension SQLiteRow {
         return value
     }
 }
+
+extension SQLiteRow {
+    func requiredInt(_ key: String, in table: String) throws -> Int64 {
+        guard let value = int(key) else {
+            throw StoreError.corruptRow(table: table, column: key, value: string(key))
+        }
+        return value
+    }
+}
