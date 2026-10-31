@@ -1,0 +1,77 @@
+name: Branch Policy
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+permissions:
+  contents: read
+jobs:
+  enforce-targets:
+    name: Enforce branch targets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check PR base branch rules
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          echo "PR: $HEAD → $BASE"
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+          repo_error=""
+          repo_status=0
+          repo_error=$(gh api "repos/$REPO" --silent 2>&1) || repo_status=$?
+          [[ "$repo_status" -eq 0 ]] \
+            || fail "Cannot read $REPO, so the mode is unknown and no pull request is judged: $repo_error"
+          develop_error=""
+          develop_status=0
+          develop_error=$(gh api "repos/$REPO/branches/develop" --silent 2>&1) || develop_status=$?
+          mode=develop
+          if [[ "$develop_status" -ne 0 ]]; then
+            [[ "$develop_error" == *"(HTTP 404)"* ]] \
+              || fail "Cannot read whether $REPO has a develop branch: $develop_error"
+            mode=main
+          fi
+          known="^(release|milestone|feat|fix|chore|docs|refactor|test|task)/"
+          if [[ "$mode" == "develop" ]]; then
+            echo "Mode: develop"
+            if [[ "$BASE" == "main" || "$BASE" == "master" ]]; then
+              [[ "$HEAD" =~ ^release/ ]] || fail "Only release/* branches merge into $BASE. Got head: '$HEAD'"
+            fi
+            if [[ "$HEAD" == "main" || "$HEAD" == "master" ]]; then
+              [[ "$BASE" == "develop" ]] || fail "$HEAD only merges back into develop. Got base: '$BASE'"
+            fi
+            if [[ "$HEAD" =~ ^release/ ]]; then
+              [[ "$BASE" == "main" || "$BASE" == "master" ]] || fail "Release branches merge into main. Got base: '$BASE'"
+            fi
+            if [[ "$HEAD" =~ ^milestone/ ]]; then
+              [[ "$BASE" == "develop" ]] || fail "Milestone branches merge into develop. Got base: '$BASE'"
+            fi
+            if [[ "$HEAD" =~ ^(feat|fix|chore|docs|refactor|test|task)/ ]]; then
+              [[ "$BASE" == "develop" || "$BASE" =~ ^milestone/ || "$BASE" =~ ^release/ ]] \
+                || fail "Branch '$HEAD' must target develop, a milestone/* or a release/* branch. Got: '$BASE'"
+            fi
+            if [[ ! "$HEAD" =~ $known && "$HEAD" != "main" && "$HEAD" != "master" ]]; then
+              [[ "$BASE" == "develop" ]] \
+                || fail "Branch '$HEAD' carries no recognised prefix, so it only merges into develop. Got: '$BASE'"
+            fi
+          else
+            echo "Mode: main"
+            if [[ "$HEAD" =~ ^(feat|fix|chore|docs|refactor|test|task)/ ]]; then
+              [[ "$BASE" =~ ^milestone/ || "$BASE" == "main" || "$BASE" == "master" ]] \
+                || fail "Branch '$HEAD' must target a milestone/* branch or main. Got: '$BASE'"
+            fi
+            if [[ "$HEAD" =~ ^milestone/ ]]; then
+              [[ "$BASE" == "main" || "$BASE" == "master" ]] || fail "Milestone branches must merge into main. Got base: '$BASE'"
+            fi
+            if [[ ! "$HEAD" =~ $known && "$HEAD" != "main" && "$HEAD" != "master" ]]; then
+              [[ "$BASE" =~ ^milestone/ || "$BASE" == "main" || "$BASE" == "master" ]] \
+                || fail "Branch '$HEAD' carries no recognised prefix, so it only merges into a milestone/* branch or main. Got: '$BASE'"
+            fi
+          fi
+          echo "Branch policy OK: $HEAD → $BASE"

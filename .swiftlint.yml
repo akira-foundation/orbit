@@ -1,0 +1,59 @@
+# file_length, type_body_length, function_body_length, closure_body_length: thresholds fire on files that are right.
+# cyclomatic_complexity, function_parameter_count, nesting: same, a number cannot tell a right shape from a wrong one.
+# line_length: swift-format already wraps at 120 columns and owns layout.
+# trailing_comma: house style keeps a trailing comma on every multi-line literal for one-line diffs.
+# large_tuple: a small tuple is the right return when no type is worth naming.
+# optional_data_string_conversion: subprocess output must decode with replacement, not fail to nil.
+# multiple_closures_with_trailing_closure: SwiftUI's own shape for callbacks plus content.
+# redundant_discardable_let: `let _ =` is the only spelling that compiles inside a @ViewBuilder.
+# empty_collection_literal: `#expect(x == [])` reads better than its rewrite behind an optional.
+
+included:
+  - Sources
+  - Tests
+
+disabled_rules:
+  - file_length
+  - type_body_length
+  - function_body_length
+  - closure_body_length
+  - cyclomatic_complexity
+  - function_parameter_count
+  - nesting
+  - line_length
+  - trailing_comma
+  - large_tuple
+  - optional_data_string_conversion
+  - multiple_closures_with_trailing_closure
+  - redundant_discardable_let
+  - empty_collection_literal
+
+opt_in_rules:
+  - discarded_notification_center_observer
+  - unhandled_throwing_task
+  - private_swiftui_state
+  - weak_delegate
+  - overridden_super_call
+  - prohibited_super_call
+  - static_over_final_class
+  - non_overridable_class_declaration
+  - fatal_error_message
+  - explicit_init
+  - yoda_condition
+  - contains_over_filter_is_empty
+  - contains_over_filter_count
+  - contains_over_first_not_nil
+  - first_where
+  - last_where
+  - sorted_first_last
+  - flatmap_over_map_reduce
+  - redundant_nil_coalescing
+  - toggle_bool
+  - joined_default_parameter
+
+identifier_name:
+  min_length:
+    warning: 1
+  max_length:
+    warning: 60
+  allowed_symbols: ["_"]

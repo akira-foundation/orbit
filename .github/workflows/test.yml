@@ -1,0 +1,99 @@
+name: Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orbit-test-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Lint the workflows
+        env:
+          ACTIONLINT_VERSION: 1.7.7
+          ACTIONLINT_SHA256: 023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757
+        run: |
+          set -euo pipefail
+          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -sSfL -o "$archive" "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/$archive"
+          echo "${ACTIONLINT_SHA256}  $archive" | sha256sum -c -
+          tar xzf "$archive" actionlint
+          ./actionlint -no-color .github/workflows/*.yml
+
+      - name: Check the shell scripts parse
+        run: |
+          set -euo pipefail
+          command -v zsh >/dev/null || sudo apt-get install -y -qq zsh
+          git ls-files '*.sh' | while read -r script; do
+            case "$(head -1 "$script")" in
+              *zsh*) zsh -n "$script" ;;
+              *) bash -n "$script" && shellcheck "$script" ;;
+            esac
+            echo "ok $script"
+          done
+
+      - name: Check the house rules themselves
+        run: ./Tools/house-rules.sh --self-test
+
+      - name: Check the house rules
+        run: ./Tools/house-rules.sh
+
+      - name: Lint the Swift
+        env:
+          SWIFTLINT_VERSION: 0.65.1
+          SWIFTLINT_SHA256: caeed6f4a679c35539ffaf124f6c4ab4a8416917f7d8796279dc52b74026059d
+        run: |
+          set -euo pipefail
+          curl -sSfL -o swiftlint.zip "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/swiftlint_linux_amd64.zip"
+          echo "${SWIFTLINT_SHA256}  swiftlint.zip" | sha256sum -c -
+          mkdir -p swiftlint-bin
+          unzip -q -j swiftlint.zip swiftlint-static -d swiftlint-bin
+          mv swiftlint-bin/swiftlint-static swiftlint-bin/swiftlint
+          chmod +x swiftlint-bin/swiftlint
+          PATH="$PWD/swiftlint-bin:$PATH" ./Tools/swiftlint.sh
+
+  build:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Select Xcode 27
+        run: ./Tools/select-xcode.sh
+
+      - name: Build every target
+        run: swift build -Xswiftc -warnings-as-errors
+
+      - name: Check formatting
+        run: ./Tools/format.sh --check
+
+      - name: Run the OrbitDesign suite
+        run: swift test --filter OrbitDesignTests
+
+  test:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Select Xcode 27
+        run: ./Tools/select-xcode.sh
+
+      - name: Run the Core suite
+        env:
+          SWIFT_BACKTRACE: enable=yes,interactive=no
+        run: ./Tools/test-core.sh

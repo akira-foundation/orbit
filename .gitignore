@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+*.xcodeproj
+.DS_Store
+.superpowers/
+.claude/worktrees/
+docs/superpowers/
