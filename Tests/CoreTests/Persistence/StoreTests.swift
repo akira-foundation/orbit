@@ -114,4 +114,14 @@ import Testing
         #expect(counts == [1, 1])
         #expect(try reader.query("SELECT COUNT(*) AS n FROM parked_folders;").first?.int("n") == 2)
     }
+
+    @Test func openingADatabaseFromANewerSchemaThrows() throws {
+        let dir = try TemporaryDirectory()
+        let path = dir.path + "/orbit.sqlite"
+        try SQLiteDatabase(path: path).execute("PRAGMA user_version = 99;")
+
+        #expect(throws: StoreError.unsupportedSchemaVersion(99)) {
+            try Store(path: path)
+        }
+    }
 }

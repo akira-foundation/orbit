@@ -3,26 +3,39 @@ import Foundation
 extension Store {
     @discardableResult
     public func upsert(_ project: Project, replacing replacedID: String? = nil) throws -> Project {
-        try db.transaction {
-            if let replacedID, replacedID != project.id {
-                try db.run("DELETE FROM projects WHERE id = ?;", [.text(replacedID)])
+        try reportingDuplicates {
+            try db.transaction {
+                if let replacedID, replacedID != project.id {
+                    try db.run("DELETE FROM projects WHERE id = ?;", [.text(replacedID)])
+                }
+                try write(project)
             }
-            try write(project)
         }
         return project
     }
 
     @discardableResult
     public func update(projectID: String, _ change: @Sendable (inout Project) -> Void) throws -> Project {
-        try db.transaction {
-            guard var project = try loadProjects(where: "id = ?", [.text(projectID)]).first else {
-                throw StoreError.projectNotFound(projectID)
+        try reportingDuplicates {
+            try db.transaction {
+                guard var project = try loadProjects(where: "id = ?", [.text(projectID)]).first else {
+                    throw StoreError.projectNotFound(projectID)
+                }
+                change(&project)
+                project.id = projectID
+                project.updatedAt = .now
+                try write(project)
+                return project
             }
-            change(&project)
-            project.id = projectID
-            project.updatedAt = .now
-            try write(project)
-            return project
+        }
+    }
+
+    private func reportingDuplicates<T>(_ body: () throws -> T) throws -> T {
+        do {
+            return try body()
+        } catch let error as SQLiteError {
+            guard let column = error.duplicateColumn else { throw error }
+            throw StoreError.duplicate(column: column)
         }
     }
 

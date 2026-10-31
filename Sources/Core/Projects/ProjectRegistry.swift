@@ -1,5 +1,4 @@
 import Foundation
-import SQLite3
 
 public struct ProjectRegistry: Sendable {
     private let store: Store
@@ -29,7 +28,8 @@ public struct ProjectRegistry: Sendable {
             analysis: analysis, slug: slug, localDomain: domain(forSlug: slug), parkedFolder: parkedFolder)
         do {
             return try await register(project, overwrite: overwrite)
-        } catch let error as SQLiteError where error.code == SQLITE_CONSTRAINT {
+        } catch let error as StoreError {
+            guard case .duplicate = error else { throw error }
             return try await resolveRace(project, after: error)
         }
     }
@@ -48,7 +48,7 @@ public struct ProjectRegistry: Sendable {
         return try await store.upsert(project, replacing: owner.id)
     }
 
-    func resolveRace(_ project: Project, after error: SQLiteError) async throws -> Project {
+    func resolveRace(_ project: Project, after error: StoreError) async throws -> Project {
         let existing = try await store.projects()
         if let samePath = existing.first(where: { $0.path == project.path }) {
             return samePath

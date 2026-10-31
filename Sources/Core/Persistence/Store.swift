@@ -39,9 +39,9 @@ public actor Store {
                 try db.execute("PRAGMA user_version = \(index + 1);")
             }
         }
-        let version = Int(try db.userVersion)
-        guard version <= migrations.count else {
-            throw SQLiteError(message: "Unsupported database schema version \(version)", sql: nil)
+        let version = try db.userVersion
+        guard Int(version) <= migrations.count else {
+            throw StoreError.unsupportedSchemaVersion(version)
         }
     }
 }

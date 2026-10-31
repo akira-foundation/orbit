@@ -211,4 +211,50 @@ import Testing
             try await store.projects()
         }
     }
+
+    @Test func upsertOfATakenSlugThrowsDuplicate() async throws {
+        let store = try Store.inMemory()
+        let owner = fullProject(id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+        try await store.upsert(owner)
+        var intruder = fullProject(id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+        intruder.slug = owner.slug
+
+        await #expect(throws: StoreError.duplicate(column: "slug")) {
+            try await store.upsert(intruder)
+        }
+    }
+
+    @Test func updateIntoATakenPathThrowsDuplicate() async throws {
+        let store = try Store.inMemory()
+        let owner = fullProject(id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+        let other = fullProject(id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+        try await store.upsert(owner)
+        try await store.upsert(other)
+
+        await #expect(throws: StoreError.duplicate(column: "path")) {
+            try await store.update(projectID: other.id) { $0.path = owner.path }
+        }
+    }
+
+    @Test func failedReplacingUpsertLeavesTheReplacedOwnerIntact() async throws {
+        let store = try Store.inMemory()
+        let owner = fullProject(id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+        let third = fullProject(id: "cccccccc-cccc-cccc-cccc-cccccccccccc")
+        try await store.upsert(owner)
+        try await store.upsert(third)
+        let group = try await store.createGroup(named: "stack")
+        try await store.addProject(owner.id, toGroup: group.id)
+        var replacement = fullProject(id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+        replacement.slug = owner.slug
+        replacement.localDomain = owner.localDomain
+        replacement.path = third.path
+
+        await #expect(throws: StoreError.duplicate(column: "path")) {
+            try await store.upsert(replacement, replacing: owner.id)
+        }
+
+        #expect(try await store.project(id: owner.id) == owner)
+        #expect(try await store.project(id: replacement.id) == nil)
+        #expect(try await store.groups().first?.projectIDs == [owner.id])
+    }
 }

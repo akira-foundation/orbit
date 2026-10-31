@@ -89,15 +89,37 @@ import Testing
         }
     }
 
+    private func duplicateError(inserting project: Project, into store: Store) async -> StoreError? {
+        do {
+            try await store.upsert(project)
+            return nil
+        } catch {
+            return error as? StoreError
+        }
+    }
+
+    @Test func aDomainTakenBehindTheRegistrysBackSurfacesAsDuplicate() async throws {
+        let (registry, store) = try registry()
+        try await store.upsert(
+            Project(
+                analysis: ProjectAnalysis(name: "other", path: "/c/other"), slug: "other",
+                localDomain: "shop.orbit.test"))
+
+        await #expect(throws: StoreError.duplicate(column: "local_domain")) {
+            try await registry.add(path: "/a/shop", overwrite: false)
+        }
+    }
+
     @Test func competingRegistrationOfTheSameSlugSurfacesAsConflict() async throws {
         let (registry, store) = try registry()
         let competitor = ProjectAnalysis(name: "shop", path: "/c/shop")
         try await store.upsert(Project(analysis: competitor, slug: "shop", localDomain: "shop.orbit.test"))
         let late = Project(
             analysis: ProjectAnalysis(name: "shop", path: "/d/shop"), slug: "shop", localDomain: "shop.orbit.test")
+        let error = try #require(await duplicateError(inserting: late, into: store))
 
         await #expect(throws: ProjectConflict(existingName: "shop", slug: "shop")) {
-            try await registry.resolveRace(late, after: SQLiteError(message: "UNIQUE", sql: nil, code: 19))
+            try await registry.resolveRace(late, after: error)
         }
     }
 
@@ -108,8 +130,9 @@ import Testing
                 analysis: ProjectAnalysis(name: "shop", path: "/c/shop"), slug: "shop", localDomain: "shop.orbit.test"))
         let late = Project(
             analysis: ProjectAnalysis(name: "shop", path: "/c/shop"), slug: "shop", localDomain: "shop.orbit.test")
+        let error = try #require(await duplicateError(inserting: late, into: store))
 
-        let resolved = try await registry.resolveRace(late, after: SQLiteError(message: "UNIQUE", sql: nil, code: 19))
+        let resolved = try await registry.resolveRace(late, after: error)
 
         #expect(resolved.id == winner.id)
     }

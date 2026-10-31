@@ -2,4 +2,6 @@ public enum StoreError: Error, Equatable, Sendable {
     case projectNotFound(String)
     case groupNotFound(String)
     case corruptRow(table: String, column: String, value: String?)
+    case duplicate(column: String)
+    case unsupportedSchemaVersion(Int32)
 }
