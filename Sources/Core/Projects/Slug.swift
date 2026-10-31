@@ -17,8 +17,17 @@ public enum Slug {
                 pendingSeparator = true
             }
         }
-        let trimmed = result.trimmingCharacters(in: CharacterSet(charactersIn: "-."))
-        return trimmed.isEmpty ? "project" : trimmed
+        let labels = result.split(separator: ".").compactMap(validLabel)
+        return labels.isEmpty ? "project" : labels.joined(separator: ".")
+    }
+
+    private static let maxLabelLength = 63
+
+    private static func validLabel(_ label: Substring) -> String? {
+        let hyphens = CharacterSet(charactersIn: "-")
+        let trimmed = String(label).trimmingCharacters(in: hyphens)
+        let capped = String(trimmed.prefix(maxLabelLength)).trimmingCharacters(in: hyphens)
+        return capped.isEmpty ? nil : capped
     }
 
     private static func isAllowed(_ scalar: Unicode.Scalar) -> Bool {
