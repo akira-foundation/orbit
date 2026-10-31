@@ -35,6 +35,9 @@ public struct ProjectAnalyzer: ProjectAnalyzing {
             )
         }
         let manifest = try ManifestReader.package(in: canonical)
+        if manifest == nil, PythonProjectAnalyzer.isPythonProject(canonical) {
+            return PythonProjectAnalyzer(resolver: resolver).analyze(at: canonical)
+        }
         if manifest == nil, !FileManager.default.fileExists(atPath: canonical + "/composer.json") {
             if let monorepo = MonorepoAnalyzer(resolver: resolver).analyze(at: canonical) {
                 return monorepo

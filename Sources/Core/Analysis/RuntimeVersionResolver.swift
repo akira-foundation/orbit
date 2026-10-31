@@ -27,6 +27,46 @@ struct RuntimeVersionResolver: Sendable {
         return VersionConstraint.resolve(constraint, among: catalog.php) ?? newest
     }
 
+    func python(in directory: String) -> String? {
+        guard let newest = catalog.python.first else {
+            return nil
+        }
+        let constraint = versionFile(".python-version", in: directory) ?? requiresPython(in: directory)
+        guard let constraint else {
+            return newest
+        }
+        if let resolved = VersionConstraint.resolve(constraint, among: catalog.python) {
+            return resolved
+        }
+        return catalog.python.first { version in
+            guard let dot = version.lastIndex(of: ".") else {
+                return false
+            }
+            return constraint.contains(version[..<dot])
+        } ?? newest
+    }
+
+    private func requiresPython(in directory: String) -> String? {
+        let path = URL(fileURLWithPath: directory).appendingPathComponent("pyproject.toml").path
+        guard let contents = try? String(contentsOfFile: path, encoding: .utf8) else {
+            return nil
+        }
+        for rawLine in contents.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard
+                line.hasPrefix("requires-python") || line.hasPrefix("python ") || line.hasPrefix("python="),
+                let equals = line.firstIndex(of: "=")
+            else {
+                continue
+            }
+            let value = line[line.index(after: equals)...]
+                .trimmingCharacters(in: .whitespaces)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+            return value.isEmpty ? nil : value
+        }
+        return nil
+    }
+
     private func versionFile(_ name: String, in directory: String) -> String? {
         let path = URL(fileURLWithPath: directory).appendingPathComponent(name).path
         guard let contents = try? String(contentsOfFile: path, encoding: .utf8) else {
