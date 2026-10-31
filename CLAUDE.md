@@ -11,7 +11,9 @@ area is implemented.
 - `swift-tools-version: 6.2`, `.swiftLanguageMode(.v6)` on every target, complete strict concurrency, zero
   warnings (`-warnings-as-errors` in CI).
 - `platforms: [.macOS("27.0")]`, no fallbacks for earlier versions.
-- Third-party dependencies only where the system has no equivalent, as listed in the design.
+- Third-party dependencies only where the system has no equivalent. The allowed set: SwiftNIO, swift-nio-ssl,
+  swift-nio-http2, swift-certificates, swift-crypto, PostgresNIO and SwiftTerm. Anything else needs the owner's
+  approval first.
 - Bundle ids: `io.akira.orbit` (production) and `io.akira.orbit.dev` (development).
 - Domains: `orbit.test` on `127.0.0.2` (production) and `orbit-dev.test` on `127.0.0.3` (development).
 - Only `Orbit`, `OrbitDesign` and `OrbitDesignTests` import SwiftUI or AppKit. `Core` never does.
@@ -23,7 +25,8 @@ area is implemented.
 - Code, identifiers, commits and pull requests in English; thinking docs (`docs/superpowers/`) in Portuguese.
 - Commits only with the owner's authorisation, through commit-guard; no agent attribution; pull requests and
   issues with `--assignee @me`.
-- Branches: work branches open pull requests into `develop`; only `release/*` merges into `main`.
+- Branches: work branches open pull requests into `develop` (or into a `milestone/*` or `release/*` branch when
+  one exists for the work); only `release/*` merges into `main`.
 
 ## Commit scopes
 
