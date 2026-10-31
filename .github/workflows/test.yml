@@ -2,7 +2,11 @@ name: Test
 
 on:
   push:
-    branches: [main, develop]
+    branches:
+      - main
+      - develop
+      - 'release/**'
+      - '[0-9]+.x'
   pull_request:
   workflow_dispatch:
 
