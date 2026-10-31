@@ -3,4 +3,5 @@ public enum AnalysisError: Error, Equatable, Sendable {
     case notADirectory(String)
     case noSupportedProject(String)
     case invalidManifest(path: String, reason: String)
+    case ambiguousLayout(path: String, reason: String)
 }

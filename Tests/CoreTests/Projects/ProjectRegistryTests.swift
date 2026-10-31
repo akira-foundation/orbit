@@ -64,6 +64,20 @@ import Testing
         #expect(try await store.projects().count == 1)
     }
 
+    @Test func anAmbiguousMonorepoIsRejectedAndNothingIsStored() async throws {
+        let directory = try TemporaryDirectory()
+        let laravel = #"{"require":{"laravel/framework":"^11.0"}}"#
+        try directory.write(laravel, to: "stack/api/composer.json")
+        try directory.write(laravel, to: "stack/admin/composer.json")
+        let (registry, store) = try registry(analyzer: ProjectAnalyzer())
+        let path = CanonicalPath.of("\(directory.path)/stack")
+
+        await #expect(throws: AnalysisError.ambiguousLayout(path: path, reason: MonorepoAnalyzer.ambiguousReason)) {
+            try await registry.add(path: "\(directory.path)/stack", overwrite: false)
+        }
+        #expect(try await store.projects().isEmpty)
+    }
+
     @Test func domainUsesTheEnvironmentSuffix() throws {
         let (production, _) = try registry(environment: .production)
         let (development, _) = try registry(environment: .development)

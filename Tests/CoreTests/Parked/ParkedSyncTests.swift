@@ -86,6 +86,22 @@ import Testing
         #expect(result.skipped.map(\.path) == ["\(directory.path)/sites/broken"])
     }
 
+    @Test func syncSkipsAnAmbiguousMonorepo() async throws {
+        let directory = try TemporaryDirectory()
+        let laravel = #"{"require":{"laravel/framework":"^11.0"}}"#
+        try directory.write(laravel, to: "sites/stack/api/composer.json")
+        try directory.write(laravel, to: "sites/stack/admin/composer.json")
+        try directory.makeDirectory("sites/stack/.git")
+        try nodeProject(directory, "ok")
+        let (sync, store, _) = try await makeSync(directory)
+
+        let result = try await sync.run()
+
+        #expect(result.added.map(\.name) == ["ok"])
+        #expect(result.skipped.map(\.path) == ["\(directory.path)/sites/stack"])
+        #expect(try await store.projects().map(\.name) == ["ok"])
+    }
+
     @Test func syncDoesNotTouchProjectsAddedByHand() async throws {
         let directory = try TemporaryDirectory()
         try nodeProject(directory, "manual", in: "elsewhere")

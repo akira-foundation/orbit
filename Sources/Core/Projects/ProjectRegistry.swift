@@ -23,6 +23,9 @@ public struct ProjectRegistry: Sendable {
 
     public func add(path: String, overwrite: Bool, parkedFolder: String? = nil) async throws -> Project {
         let analysis = try analyze(path: path)
+        if let reason = analysis.ambiguousReason {
+            throw AnalysisError.ambiguousLayout(path: analysis.path, reason: reason)
+        }
         let slug = Slug.make(from: analysis.name)
         let project = Project(
             analysis: analysis, slug: slug, localDomain: domain(forSlug: slug), parkedFolder: parkedFolder)
