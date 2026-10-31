@@ -21,8 +21,9 @@ public struct ParkedSync: Sendable {
     private func removeMissing(from projects: [Project], into result: inout ParkedSyncResult) async throws {
         for project in projects {
             guard let root = project.parkedFolder, Self.isGone(project.path, under: root) else { continue }
-            try await store.deleteProject(id: project.id)
-            result.removed.append(project)
+            if try await store.deleteParkedProject(id: project.id, parkedFolder: root) {
+                result.removed.append(project)
+            }
         }
     }
 

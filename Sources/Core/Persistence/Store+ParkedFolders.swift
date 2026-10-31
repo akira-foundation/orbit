@@ -14,6 +14,13 @@ extension Store {
             [.text(CanonicalPath.of(path)), .double(Date.now.timeIntervalSince1970)])
     }
 
+    public func deleteParkedProject(id: String, parkedFolder: String) throws -> Bool {
+        try db.transaction {
+            try db.run(
+                "DELETE FROM projects WHERE id = ? AND parked_folder = ?;", [.text(id), .text(parkedFolder)]) > 0
+        }
+    }
+
     public func removeParkedFolder(_ path: String) throws {
         let canonical = CanonicalPath.of(path)
         try db.transaction {

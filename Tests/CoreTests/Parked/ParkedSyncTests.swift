@@ -129,6 +129,35 @@ import Testing
         #expect(try await store.parkedFolders().isEmpty)
     }
 
+    @Test func aProjectUnparkedAfterTheSnapshotSurvivesTheConditionalDelete() async throws {
+        let directory = try TemporaryDirectory()
+        try nodeProject(directory, "shop")
+        let (sync, store, _) = try await makeSync(directory)
+        _ = try await sync.run()
+        let snapshot = try #require(try await store.projects().first)
+        let folder = try #require(snapshot.parkedFolder)
+
+        try await store.removeParkedFolder(folder)
+        let deleted = try await store.deleteParkedProject(id: snapshot.id, parkedFolder: folder)
+
+        let survivor = try await store.project(id: snapshot.id)
+        #expect(!deleted)
+        #expect(survivor != nil)
+        #expect(survivor?.parkedFolder == nil)
+    }
+
+    @Test func aProjectStillParkedIsDeletedConditionally() async throws {
+        let directory = try TemporaryDirectory()
+        try nodeProject(directory, "shop")
+        let (sync, store, _) = try await makeSync(directory)
+        let project = try #require(try await sync.run().added.first)
+
+        let deleted = try await store.deleteParkedProject(id: project.id, parkedFolder: "\(directory.path)/sites")
+
+        #expect(deleted)
+        #expect(try await store.projects().isEmpty)
+    }
+
     @Test func slugConflictIsASkipNotAnOverwrite() async throws {
         let directory = try TemporaryDirectory()
         try nodeProject(directory, "shop", in: "other")
