@@ -12,7 +12,7 @@ public enum VersionConstraint {
     }
 
     private static func clauses(in group: Substring) -> [VersionClause]? {
-        let terms = group.split(whereSeparator: \.isWhitespace)
+        let terms = group.split { $0.isWhitespace || $0 == "," }
         guard !terms.isEmpty else {
             return nil
         }

@@ -16,6 +16,14 @@ import Testing
 
     @Test(
         arguments: [
+            (">=8.2,<8.4", "8.3.32"), (">=8.2, <8.4", "8.3.32"), ("^8.3,<8.5", "8.4.23"), (">=8.2,garbage", nil),
+        ] as [(String, String?)])
+    func commaIsAnd(constraint: String, expected: String?) {
+        #expect(VersionConstraint.resolve(constraint, among: RuntimeCatalog.bundled.php) == expected)
+    }
+
+    @Test(
+        arguments: [
             ("8.3.17", SemanticVersion(8, 3, 17)), ("v8.3.17", SemanticVersion(8, 3, 17)),
             ("8.3", SemanticVersion(8, 3, 0)), ("8", SemanticVersion(8, 0, 0)), ("not-a-version", nil),
         ] as [(String, SemanticVersion?)])

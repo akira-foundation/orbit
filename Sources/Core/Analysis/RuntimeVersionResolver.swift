@@ -14,7 +14,8 @@ struct RuntimeVersionResolver: Sendable {
         guard let constraint else {
             return newest
         }
-        return VersionConstraint.resolve(constraint, among: catalog.node) ?? newest
+        return VersionConstraint.resolve(constraint, among: catalog.node)
+            ?? closest(to: constraint, among: catalog.node, matchingMinor: false) ?? newest
     }
 
     func php(constraint: String?) -> String? {
@@ -24,15 +25,16 @@ struct RuntimeVersionResolver: Sendable {
         guard let constraint, !constraint.isEmpty else {
             return newest
         }
-        return VersionConstraint.resolve(constraint, among: catalog.php) ?? newest
+        return VersionConstraint.resolve(constraint, among: catalog.php)
+            ?? closest(to: constraint, among: catalog.php, matchingMinor: true)
+            ?? closest(to: constraint, among: catalog.php, matchingMinor: false) ?? newest
     }
 
     func python(in directory: String) -> String? {
         guard let newest = catalog.python.first else {
             return nil
         }
-        let constraint = (versionFile(".python-version", in: directory) ?? requiresPython(in: directory))
-            .map { $0.replacingOccurrences(of: ",", with: " ") }
+        let constraint = versionFile(".python-version", in: directory) ?? requiresPython(in: directory)
         guard let constraint else {
             return newest
         }
@@ -45,6 +47,17 @@ struct RuntimeVersionResolver: Sendable {
             }
             return constraint.contains(version[..<dot])
         } ?? newest
+    }
+
+    private func closest(to constraint: String, among available: [String], matchingMinor: Bool) -> String? {
+        guard let wanted = SemanticVersion(constraint) else {
+            return nil
+        }
+        let candidates = available.compactMap { raw in SemanticVersion(raw).map { (version: $0, raw: raw) } }
+        return candidates.filter { candidate in
+            candidate.version.major == wanted.major && (!matchingMinor || candidate.version.minor == wanted.minor)
+        }
+        .max { $0.version < $1.version }?.raw
     }
 
     private func requiresPython(in directory: String) -> String? {

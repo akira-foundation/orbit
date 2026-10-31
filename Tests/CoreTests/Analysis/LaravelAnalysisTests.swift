@@ -41,6 +41,13 @@ struct LaravelAnalysisTests {
         #expect(try ProjectAnalyzer().analyze(path: tilde.path).phpVersion == "8.4.23")
     }
 
+    @Test func commaSeparatedPHPConstraintExcludesTheUpperBound() throws {
+        let dir = try TemporaryDirectory()
+        try dir.write(Self.composer(php: ">=8.2,<8.4"), to: "composer.json")
+
+        #expect(try ProjectAnalyzer().analyze(path: dir.path).phpVersion == "8.3.32")
+    }
+
     @Test func inertiaDetectsFrontendCompanion() throws {
         let dir = try TemporaryDirectory()
         try dir.write(Self.composer(), to: "composer.json")
