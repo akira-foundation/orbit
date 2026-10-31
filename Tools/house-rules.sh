@@ -47,7 +47,7 @@ findings_as() {
 rule_ui_import() {
   local root="$1"
   swift_files "$root" Sources Tests \
-    | xargs -0 grep -nHE '^[[:space:]]*(@[A-Za-z]+[[:space:]]+)*import[[:space:]]+([a-z]+[[:space:]]+)?(SwiftUI|AppKit)([^A-Za-z0-9_]|$)' /dev/null \
+    | xargs -0 grep -nHE '^[[:space:]]*((@[A-Za-z_]+|public|package|internal|private|fileprivate)[[:space:]]+)*import[[:space:]]+([a-z]+[[:space:]]+)?(SwiftUI|AppKit)([^A-Za-z0-9_]|$)' /dev/null \
     | relative "$root" \
     | grep -vE '^(Sources/(Orbit|OrbitDesign)|Tests/OrbitDesignTests)/' \
     | findings_as ui-import || true
@@ -64,16 +64,16 @@ rule_banned_folders() {
   local dir
   for dir in Sources Tests; do
     [ -d "$root/$dir" ] || continue
-    find "$root/$dir" -type f \( -path '*/Helpers/*' -o -path '*/Extensions/*' \)
-  done | relative "$root" | sed 's|$|:1: banned-folders|'
+    find "$root/$dir" -type f
+  done | relative "$root" | grep -E '(^|/)(Helpers|Extensions)/' | sed 's|$|:1: banned-folders|' || true
 }
 
 rule_view_subprocess() {
   local root="$1"
   local file
   swift_files "$root" Sources | while IFS= read -r -d '' file; do
-    grep -qE '^[[:space:]]*([a-z]+[[:space:]]+)*(struct|class|extension)[[:space:]][^{]*:[^{]*(^|[^A-Za-z0-9_])View([^A-Za-z0-9_]|$)' "$file" || continue
-    grep -nHE '(^|[^A-Za-z0-9_])Process(\(|\.run)' "$file" | relative "$root" | findings_as view-subprocess || true
+    grep -qE '(^|[:,])[[:space:]]*View[[:space:]]*([{,]|$)' "$file" || continue
+    grep -nHE '(^|[^A-Za-z0-9_])(Process|NSTask)(\(|\.run|\.launchedProcess)' "$file" | relative "$root" | findings_as view-subprocess || true
   done
 }
 
@@ -109,12 +109,13 @@ report_case() {
 
 expect() {
   local outcome="$1" rule="$2" path="$3" content="$4"
-  local tree output
-  tree="$(mktemp -d)"
+  local scratch tree output
+  scratch="$(mktemp -d)"
+  tree="$scratch/Helpers/Extensions/repository"
   mkdir -p "$tree/$(dirname "$path")"
   printf '%s\n' "$content" > "$tree/$path"
   output="$(run_rules "$tree")"
-  rm -rf "$tree"
+  rm -rf "$scratch"
   if report_case "$outcome" "$rule" "$path" "$output"; then
     echo "ok $outcome $rule $path"
     return 0
@@ -130,6 +131,8 @@ self_test() {
   expect fail ui-import Sources/Core/Y.swift '@preconcurrency import AppKit'
   expect fail ui-import Tests/CoreTests/X.swift 'import struct SwiftUI.Color'
   expect pass ui-import Tests/OrbitDesignTests/X.swift 'import SwiftUI'
+  expect fail ui-import Sources/Core/Z.swift 'public import AppKit'
+  expect fail ui-import Sources/Core/W.swift '@_exported import SwiftUI'
   expect fail dashes Sources/Core/X.swift "let x = 1 // a $em_dash b"
   expect fail dashes README.md "a $en_dash b"
   expect pass dashes docs/superpowers/specs/x.md "a $em_dash b"
@@ -138,6 +141,9 @@ self_test() {
   expect pass banned-folders Sources/Core/Projects/X.swift 'struct X {}'
   expect fail view-subprocess Sources/Orbit/Views/X.swift "$(printf 'struct X: View {\n    let p = Process()\n}')"
   expect pass view-subprocess Sources/Core/Runtime/X.swift 'let p = Process()'
+  expect fail view-subprocess Sources/Orbit/Views/Y.swift "$(printf '@MainActor struct Y: View {\n    let p = Process()\n}')"
+  expect fail view-subprocess Sources/Orbit/Views/Z.swift "$(printf 'struct Z:\n    View {\n    let p = NSTask()\n}')"
+  expect fail view-subprocess Sources/Orbit/Views/W.swift "$(printf 'struct W: View {\n    let p = Process.launchedProcess(launchPath: \"/bin/ls\", arguments: [])\n}')"
   expect fail old-stack Sources/Core/X.swift "let x = \"$old_stack\""
   expect pass old-stack docs/superpowers/specs/x.md "$old_stack"
   if [ "$self_test_failures" -gt 0 ]; then

@@ -8,10 +8,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 root="$PWD"
-mirror="$root/.build/core-mirror"
 scratch="$root/.build/core-tests"
+mkdir -p "$root/.build"
+mirror="$(mktemp -d "$root/.build/core-mirror.XXXXXX")"
+trap 'rm -rf "$mirror"' EXIT INT TERM HUP
 
-rm -rf "$mirror"
 mkdir -p "$mirror/Sources" "$mirror/Tests"
 ln -s "$root/Sources/Core" "$mirror/Sources/Core"
 ln -s "$root/Tests/CoreTests" "$mirror/Tests/CoreTests"
