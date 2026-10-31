@@ -44,6 +44,7 @@ tag_pattern = "v?[0-9].*"
 skip_tags = ""
 ignore_tags = ""
 topology_order = false
+use_branch_tags = true
 sort_commits = "oldest"
 
 [remote.github]

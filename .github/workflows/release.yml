@@ -185,6 +185,30 @@ jobs:
             --notes-file "${RUNNER_TEMP}/release-notes.md" \
             --latest="${LATEST}" \
             --prerelease="${PRERELEASE}"
+      - name: Check the Discord webhook
+        id: discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD }}
+        run: |
+          if [ -n "${DISCORD_WEBHOOK}" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Send GitHub Release to Discord
+        if: steps.discord.outputs.enabled == 'true' && steps.branch.outputs.prerelease == 'false'
+        continue-on-error: true
+        uses: SethCohen/github-releases-to-discord@24d166886aee4646d448c8a389ff9e1ebcab3682 # v1.20.0
+        with:
+          webhook_url: ${{ secrets.DISCORD }}
+          release_name: ${{ github.ref_name }}
+          release_body: ${{ steps.notes.outputs.body }}
+          release_html_url: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+          color: "2105893"
+          username: "Orbit"
+          avatar_url: "https://avatars.githubusercontent.com/u/116525492?s=96&v=4"
+          content: "||@everyone||"
+          footer_title: "Orbit"
+          footer_icon_url: "https://avatars.githubusercontent.com/u/116525492?s=96&v=4"
+          footer_timestamp: true
       - name: Commit CHANGELOG
         continue-on-error: true
         env:
