@@ -28,7 +28,7 @@ jobs:
       - name: Install git-cliff
         uses: taiki-e/install-action@9114bf4d891761788c546334fd37538eae1bf8b3 # v2.87.16
         with:
-          tool: git-cliff
+          tool: git-cliff@2.14.2
       - name: Resolve production branch
         run: |
           set -euo pipefail
