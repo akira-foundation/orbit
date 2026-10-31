@@ -31,3 +31,17 @@ enum SQLValue: Sendable, Equatable {
         }
     }
 }
+
+extension SQLValue {
+    static func optional(_ value: String?) -> SQLValue {
+        value.map(SQLValue.text) ?? .null
+    }
+
+    static func optional(_ value: Int?) -> SQLValue {
+        value.map { .int(Int64($0)) } ?? .null
+    }
+
+    static func bool(_ value: Bool) -> SQLValue {
+        .int(value ? 1 : 0)
+    }
+}

@@ -43,9 +43,39 @@ import Testing
         #expect(versions == Array(repeating: Int32(StoreMigrations.all.count), count: 8))
     }
 
-    @Test(.disabled("needs Task 6"))
-    func twoStoresOnOneFileSeeEachOthersWrites() async throws {}
+    @Test func twoStoresOnOneFileSeeEachOthersWrites() async throws {
+        let dir = try TemporaryDirectory()
+        let path = dir.path + "/orbit.sqlite"
+        let writer = try Store(path: path)
+        let reader = try Store(path: path)
+        let project = Project(
+            id: "11111111-1111-1111-1111-111111111111", name: "app", path: "/tmp/app", slug: "app",
+            localDomain: "app.orbit.test")
 
-    @Test(.disabled("needs Task 6"))
-    func concurrentWritersFromTwoStoresAllLand() async throws {}
+        try await writer.upsert(project)
+
+        #expect(try await reader.project(id: project.id)?.name == "app")
+    }
+
+    @Test func concurrentWritersFromTwoStoresAllLand() async throws {
+        let dir = try TemporaryDirectory()
+        let path = dir.path + "/orbit.sqlite"
+        let first = try Store(path: path)
+        let second = try Store(path: path)
+
+        @Sendable func write(_ store: Store, prefix: String) async throws {
+            for index in 0..<50 {
+                try await store.upsert(
+                    Project(
+                        id: "\(prefix)-\(index)", name: "\(prefix)\(index)", path: "/tmp/\(prefix)/\(index)",
+                        slug: "\(prefix)-\(index)", localDomain: "\(prefix)-\(index).orbit.test"))
+            }
+        }
+
+        async let a: Void = write(first, prefix: "a")
+        async let b: Void = write(second, prefix: "b")
+        _ = try await (a, b)
+
+        #expect(try await first.projects().count == 100)
+    }
 }

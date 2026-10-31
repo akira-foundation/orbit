@@ -1,7 +1,7 @@
 import Foundation
 
 public actor Store {
-    private let db: SQLiteDatabase
+    nonisolated let db: SQLiteDatabase
 
     public init(path: String) throws {
         let db = try SQLiteDatabase(path: path)
