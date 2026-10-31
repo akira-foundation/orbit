@@ -34,7 +34,7 @@ extension Store {
     }
 
     public func groups() throws -> [ProjectGroup] {
-        try db.transaction { try loadGroups(where: nil, []) }
+        try db.read { try loadGroups(where: nil, []) }
     }
 
     public func deleteGroup(id: String) throws {

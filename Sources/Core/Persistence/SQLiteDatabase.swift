@@ -120,7 +120,15 @@ final class SQLiteDatabase: @unchecked Sendable {
     }
 
     func transaction<T>(_ body: () throws -> T) throws -> T {
-        try execute("BEGIN IMMEDIATE;")
+        try within("BEGIN IMMEDIATE;", body)
+    }
+
+    func read<T>(_ body: () throws -> T) throws -> T {
+        try within("BEGIN DEFERRED;", body)
+    }
+
+    private func within<T>(_ begin: String, _ body: () throws -> T) throws -> T {
+        try execute(begin)
         do {
             let result = try body()
             try execute("COMMIT;")

@@ -27,19 +27,19 @@ extension Store {
     }
 
     public func project(id: String) throws -> Project? {
-        try loadProjects(where: "id = ?", [.text(id)]).first
+        try db.read { try loadProjects(where: "id = ?", [.text(id)]).first }
     }
 
     public func project(path: String) throws -> Project? {
-        try loadProjects(where: "path = ?", [.text(path)]).first
+        try db.read { try loadProjects(where: "path = ?", [.text(path)]).first }
     }
 
     public func project(domain: String) throws -> Project? {
-        try loadProjects(where: "local_domain = ?", [.text(domain)]).first
+        try db.read { try loadProjects(where: "local_domain = ?", [.text(domain)]).first }
     }
 
     public func projects() throws -> [Project] {
-        try loadProjects(where: nil, [])
+        try db.read { try loadProjects(where: nil, []) }
     }
 
     public func deleteProject(id: String) throws {

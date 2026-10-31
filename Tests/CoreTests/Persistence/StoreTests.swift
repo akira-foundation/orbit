@@ -78,4 +78,40 @@ import Testing
 
         #expect(try await first.projects().count == 100)
     }
+
+    @Test func readingGroupsDoesNotWaitForAnotherWriter() async throws {
+        let dir = try TemporaryDirectory()
+        let path = dir.path + "/orbit.sqlite"
+        let store = try Store(path: path)
+        _ = try await store.createGroup(named: "stack")
+        let writer = try SQLiteDatabase(path: path)
+        try writer.execute("BEGIN IMMEDIATE;")
+        defer { try? writer.execute("ROLLBACK;") }
+
+        let started = ContinuousClock.now
+        let groups = try await store.groups()
+
+        #expect(groups.map(\.name) == ["stack"])
+        #expect(ContinuousClock.now - started < .seconds(1))
+    }
+
+    @Test func aReadSeesOneSnapshotWhileAnotherConnectionWrites() throws {
+        let dir = try TemporaryDirectory()
+        let path = dir.path + "/orbit.sqlite"
+        _ = try Store(path: path)
+        let reader = try SQLiteDatabase(path: path)
+        let writer = try SQLiteDatabase(path: path)
+        let insert = "INSERT INTO parked_folders (path, created_at) VALUES (?, 0);"
+        try writer.run(insert, [.text("/a")])
+
+        let counts = try reader.read {
+            let before = try reader.query("SELECT COUNT(*) AS n FROM parked_folders;").first?.int("n")
+            try writer.run(insert, [.text("/b")])
+            let after = try reader.query("SELECT COUNT(*) AS n FROM parked_folders;").first?.int("n")
+            return [before, after]
+        }
+
+        #expect(counts == [1, 1])
+        #expect(try reader.query("SELECT COUNT(*) AS n FROM parked_folders;").first?.int("n") == 2)
+    }
 }
