@@ -38,9 +38,16 @@ import Testing
         ("io.akira.orbit", OrbitEnvironment.production),
         ("io.akira.orbit.dev", .development),
         ("com.example.other", .production),
+        ("io.akira.orbit.dev.helper", .production),
+        ("io.akira.orbit.development", .production),
     ])
     func currentFromBundleIdentifier(id: String, expected: OrbitEnvironment) {
         #expect(OrbitEnvironment.current(bundleIdentifier: id) == expected)
+    }
+
+    @Test func everyEnvironmentResolvesFromItsOwnBundleIdentifier() {
+        let resolved = OrbitEnvironment.allCases.map { OrbitEnvironment.current(bundleIdentifier: $0.bundleIdentifier) }
+        #expect(resolved == OrbitEnvironment.allCases)
     }
 
     @Test func currentWithoutBundleIsProduction() {
