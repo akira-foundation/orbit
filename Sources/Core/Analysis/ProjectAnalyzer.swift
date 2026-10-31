@@ -12,7 +12,7 @@ public struct ProjectAnalyzer: ProjectAnalyzing {
         guard !trimmed.isEmpty else {
             throw AnalysisError.emptyPath
         }
-        let canonical = URL(fileURLWithPath: trimmed).standardizedFileURL.resolvingSymlinksInPath().path
+        let canonical = CanonicalPath.of(trimmed)
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: canonical, isDirectory: &isDirectory), isDirectory.boolValue
         else {

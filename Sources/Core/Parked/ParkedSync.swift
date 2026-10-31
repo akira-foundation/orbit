@@ -11,13 +11,15 @@ public struct ParkedSync: Sendable {
 
     public func run() async throws -> ParkedSyncResult {
         var result = ParkedSyncResult()
-        try await removeMissing(into: &result)
-        try await addDiscovered(into: &result)
+        let projects = try await store.projects()
+        try await removeMissing(from: projects, into: &result)
+        let removed = Set(result.removed.map(\.id))
+        try await addDiscovered(knowing: projects.filter { !removed.contains($0.id) }, into: &result)
         return result
     }
 
-    private func removeMissing(into result: inout ParkedSyncResult) async throws {
-        for project in try await store.projects() {
+    private func removeMissing(from projects: [Project], into result: inout ParkedSyncResult) async throws {
+        for project in projects {
             guard let root = project.parkedFolder, Self.isGone(project.path, under: root) else { continue }
             try await store.deleteProject(id: project.id)
             result.removed.append(project)
@@ -30,14 +32,14 @@ public struct ParkedSync: Sendable {
         return stat(path, &info) != 0 && errno == ENOENT
     }
 
-    private func addDiscovered(into result: inout ParkedSyncResult) async throws {
-        var known = Set(try await store.projects().map(\.id))
-        var knownPaths = Set(try await store.projects().map(\.path))
+    private func addDiscovered(knowing projects: [Project], into result: inout ParkedSyncResult) async throws {
+        var known = Set(projects.map(\.id))
+        var knownPaths = Set(projects.map(\.path))
         for folder in try await store.parkedFolders() {
-            for path in ParkedScanner.discoverProjects(in: folder) where !knownPaths.contains(path) {
+            for path in ParkedScanner.discoverProjects(in: folder) where !knownPaths.contains(CanonicalPath.of(path)) {
                 do {
                     let project = try await registry.add(path: path, overwrite: false, parkedFolder: folder)
-                    knownPaths.insert(path)
+                    knownPaths.insert(project.path)
                     if known.insert(project.id).inserted {
                         result.added.append(project)
                     }

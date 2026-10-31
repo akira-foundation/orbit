@@ -126,4 +126,34 @@ import Testing
         #expect(result.skipped.map(\.path) == ["\(directory.path)/sites/shop"])
         #expect(try await store.projects().map(\.id) == [manual.id])
     }
+
+    @Test func aTrailingSlashDoesNotAddTheParkedFolderTwice() async throws {
+        let directory = try TemporaryDirectory()
+        let (_, store, _) = try await makeSync(directory)
+
+        try await store.addParkedFolder("\(directory.path)/sites/")
+        let folders = try await store.parkedFolders()
+        try await store.removeParkedFolder("\(directory.path)/sites/")
+
+        #expect(folders == ["\(directory.path)/sites"])
+        #expect(try await store.parkedFolders().isEmpty)
+    }
+
+    @Test func aParkedFolderAddedThroughASymlinkIsNotReanalysedOnTheNextRun() async throws {
+        let directory = try TemporaryDirectory()
+        try nodeProject(directory, "shop")
+        let link = "\(directory.path)/link"
+        try FileManager.default.createSymbolicLink(atPath: link, withDestinationPath: "\(directory.path)/sites")
+        let store = try Store.inMemory()
+        let registry = ProjectRegistry(store: store, analyzer: ProjectAnalyzer(), environment: .production)
+        let sync = ParkedSync(store: store, registry: registry)
+        try await store.addParkedFolder(link)
+        let first = try await sync.run()
+
+        try directory.write("{", to: "sites/shop/package.json")
+        let second = try await sync.run()
+
+        #expect(first.added.map(\.parkedFolder) == ["\(directory.path)/sites"])
+        #expect(second == ParkedSyncResult())
+    }
 }

@@ -11,13 +11,14 @@ extension Store {
     public func addParkedFolder(_ path: String) throws {
         try db.run(
             "INSERT OR IGNORE INTO parked_folders (path, created_at) VALUES (?, ?);",
-            [.text(path), .double(Date.now.timeIntervalSince1970)])
+            [.text(CanonicalPath.of(path)), .double(Date.now.timeIntervalSince1970)])
     }
 
     public func removeParkedFolder(_ path: String) throws {
+        let canonical = CanonicalPath.of(path)
         try db.transaction {
-            try db.run("UPDATE projects SET parked_folder = NULL WHERE parked_folder = ?;", [.text(path)])
-            try db.run("DELETE FROM parked_folders WHERE path = ?;", [.text(path)])
+            try db.run("UPDATE projects SET parked_folder = NULL WHERE parked_folder = ?;", [.text(canonical)])
+            try db.run("DELETE FROM parked_folders WHERE path = ?;", [.text(canonical)])
         }
     }
 }
