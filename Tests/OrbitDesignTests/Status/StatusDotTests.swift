@@ -16,6 +16,6 @@ import Testing
 
     @Test func everyStatusHasADistinctColor() {
         let colors = StatusDot.Status.allCases.map(\.color)
-        #expect(Set(colors.map(String.init(describing:))).count == colors.count)
+        #expect(Set(colors).count == colors.count)
     }
 }
