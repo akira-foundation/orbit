@@ -44,6 +44,36 @@ import Testing
         #expect(try await store.projects().isEmpty)
     }
 
+    @Test func syncKeepsProjectsWhenTheWholeParkedFolderIsGone() async throws {
+        let directory = try TemporaryDirectory()
+        try nodeProject(directory, "shop")
+        try nodeProject(directory, "blog")
+        let (sync, store, _) = try await makeSync(directory)
+        let added = try await sync.run().added
+
+        try FileManager.default.removeItem(atPath: "\(directory.path)/sites")
+        let result = try await sync.run()
+
+        #expect(result.removed.isEmpty)
+        #expect(try await store.projects().map(\.id).sorted() == added.map(\.id).sorted())
+    }
+
+    @Test func syncKeepsProjectsWhenTheParkedFolderCannotBeRead() async throws {
+        let directory = try TemporaryDirectory()
+        try nodeProject(directory, "shop")
+        let (sync, store, _) = try await makeSync(directory)
+        _ = try await sync.run()
+        let sites = "\(directory.path)/sites"
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: sites) }
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: sites)
+        let result = try await sync.run()
+
+        #expect(result.removed.isEmpty)
+        #expect(try await store.projects().count == 1)
+        withExtendedLifetime(directory) {}
+    }
+
     @Test func syncSkipsAFolderThatFailsAnalysisAndKeepsGoing() async throws {
         let directory = try TemporaryDirectory()
         try directory.write("{", to: "sites/broken/package.json")

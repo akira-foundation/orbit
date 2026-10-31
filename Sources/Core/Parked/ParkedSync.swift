@@ -17,11 +17,17 @@ public struct ParkedSync: Sendable {
     }
 
     private func removeMissing(into result: inout ParkedSyncResult) async throws {
-        for project in try await store.projects() where project.parkedFolder != nil {
-            guard !FileManager.default.fileExists(atPath: project.path) else { continue }
+        for project in try await store.projects() {
+            guard let root = project.parkedFolder, Self.isGone(project.path, under: root) else { continue }
             try await store.deleteProject(id: project.id)
             result.removed.append(project)
         }
+    }
+
+    private static func isGone(_ path: String, under root: String) -> Bool {
+        guard (try? FileManager.default.contentsOfDirectory(atPath: root)) != nil else { return false }
+        var info = stat()
+        return stat(path, &info) != 0 && errno == ENOENT
     }
 
     private func addDiscovered(into result: inout ParkedSyncResult) async throws {
