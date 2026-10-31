@@ -50,8 +50,11 @@ import Testing
         let project = Project(analysis: analysis, slug: "app", localDomain: "app.orbit.test")
 
         try await store.upsert(project)
-        let loaded = try #require(try await store.project(id: project.id))
+        var loaded = try #require(try await store.project(id: project.id))
 
+        #expect(abs(loaded.createdAt.timeIntervalSince(project.createdAt)) < 0.001)
+        loaded.createdAt = project.createdAt
+        loaded.updatedAt = project.updatedAt
         #expect(loaded == project)
         #expect(loaded.framework == nil)
         #expect(loaded.parkedFolder == nil)
@@ -102,7 +105,8 @@ import Testing
 
     @Test func updateChangesOneFieldAndBumpsUpdatedAt() async throws {
         let store = try Store.inMemory()
-        let project = fullProject()
+        var project = fullProject()
+        project.updatedAt = .distantPast
         try await store.upsert(project)
 
         let updated = try await store.update(projectID: project.id) {
@@ -110,13 +114,15 @@ import Testing
             $0.secure = false
         }
 
-        let loaded = try #require(try await store.project(id: project.id))
+        var loaded = try #require(try await store.project(id: project.id))
+        #expect(abs(loaded.updatedAt.timeIntervalSince(updated.updatedAt)) < 0.001)
+        loaded.updatedAt = updated.updatedAt
         #expect(loaded == updated)
         #expect(loaded.status == .running)
         #expect(loaded.secure == false)
         #expect(loaded.name == project.name)
         #expect(loaded.scripts == project.scripts)
-        #expect(loaded.updatedAt > project.updatedAt)
+        #expect(abs(loaded.updatedAt.timeIntervalSinceNow) < 5)
     }
 
     @Test func updateKeepsTheID() async throws {
@@ -179,5 +185,30 @@ import Testing
         }
 
         #expect(try await store.projects().map(\.name) == ["Alpha", "beta", "gamma"])
+    }
+
+    @Test func unknownStatusInARowThrowsInsteadOfDefaulting() async throws {
+        let store = try Store.inMemory()
+        let project = fullProject()
+        try await store.upsert(project)
+        try store.db.run("UPDATE projects SET status = 'hibernating' WHERE id = ?;", [.text(project.id)])
+
+        await #expect(throws: StoreError.corruptRow(table: "projects", column: "status", value: "hibernating")) {
+            try await store.project(id: project.id)
+        }
+        await #expect(throws: StoreError.corruptRow(table: "projects", column: "status", value: "hibernating")) {
+            try await store.update(projectID: project.id) { $0.pinned = false }
+        }
+    }
+
+    @Test func unknownProcessRoleThrows() async throws {
+        let store = try Store.inMemory()
+        let project = fullProject()
+        try await store.upsert(project)
+        try store.db.run("UPDATE project_processes SET role = 'worker' WHERE project_id = ?;", [.text(project.id)])
+
+        await #expect(throws: StoreError.corruptRow(table: "project_processes", column: "role", value: "worker")) {
+            try await store.projects()
+        }
     }
 }

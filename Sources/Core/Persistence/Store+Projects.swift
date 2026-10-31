@@ -103,16 +103,20 @@ extension Store {
         let filter = condition.map { " WHERE \($0)" } ?? ""
         let rows = try db.query("SELECT * FROM projects\(filter) ORDER BY name COLLATE NOCASE, id;", bindings)
         return try rows.map { row in
-            let id = row.string("id") ?? ""
+            let id = try row.requiredText("id", in: "projects")
             let scripts = try db.query(
                 "SELECT name, command FROM project_scripts WHERE project_id = ? ORDER BY name;", [.text(id)]
-            ).map { ProjectScript(name: $0.string("name") ?? "", command: $0.string("command") ?? "") }
+            ).map {
+                ProjectScript(
+                    name: try $0.requiredText("name", in: "project_scripts"),
+                    command: try $0.requiredText("command", in: "project_scripts"))
+            }
             let processes = try db.query(
                 "SELECT * FROM project_processes WHERE project_id = ? ORDER BY sort_order;", [.text(id)]
             ).map { process in
                 ProcessSpec(
-                    role: process.string("role").flatMap(ProcessRole.init(rawValue:)) ?? .backend,
-                    kind: process.string("kind").flatMap(RuntimeKind.init(rawValue:)) ?? .command,
+                    role: try process.requiredRaw("role", in: "project_processes"),
+                    kind: try process.requiredRaw("kind", in: "project_processes"),
                     workDirectory: process.string("work_dir"),
                     command: process.string("command"),
                     port: process.int("port").map(Int.init),
@@ -120,25 +124,25 @@ extension Store {
             }
             return Project(
                 id: id,
-                name: row.string("name") ?? "",
-                path: row.string("path") ?? "",
-                slug: row.string("slug") ?? "",
-                localDomain: row.string("local_domain") ?? "",
+                name: try row.requiredText("name", in: "projects"),
+                path: try row.requiredText("path", in: "projects"),
+                slug: try row.requiredText("slug", in: "projects"),
+                localDomain: try row.requiredText("local_domain", in: "projects"),
                 framework: row.string("framework"),
                 packageManager: row.string("package_manager"),
                 devCommand: row.string("dev_command"),
                 devPort: row.int("dev_port").map(Int.init),
-                runtimeKind: row.string("runtime_kind").flatMap(RuntimeKind.init(rawValue:)) ?? .command,
+                runtimeKind: try row.requiredRaw("runtime_kind", in: "projects"),
                 nodeVersion: row.string("node_version"),
                 phpVersion: row.string("php_version"),
                 pythonVersion: row.string("python_version"),
-                status: row.string("status").flatMap(ProjectStatus.init(rawValue:)) ?? .stopped,
+                status: try row.requiredRaw("status", in: "projects"),
                 secure: row.bool("secure"),
                 pinned: row.bool("pinned"),
                 installedHash: row.string("installed_hash"),
                 parkedFolder: row.string("parked_folder"),
-                createdAt: Date(timeIntervalSince1970: row.double("created_at") ?? 0),
-                updatedAt: Date(timeIntervalSince1970: row.double("updated_at") ?? 0),
+                createdAt: Date(timeIntervalSince1970: try row.requiredDouble("created_at", in: "projects")),
+                updatedAt: Date(timeIntervalSince1970: try row.requiredDouble("updated_at", in: "projects")),
                 scripts: scripts,
                 processes: processes)
         }
