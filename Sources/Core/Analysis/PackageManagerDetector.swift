@@ -9,18 +9,28 @@ enum PackageManagerDetector {
         ("package-lock.json", "npm"),
     ]
 
+    private static let nodeManagers: Set<String> = ["npm", "pnpm", "yarn", "bun"]
+
     static func node(in directory: String, declared: String?) -> String {
-        if let declared, !declared.isEmpty {
-            if let separator = declared.lastIndex(of: "@"), separator != declared.startIndex {
-                return String(declared[..<separator])
-            }
-            return declared.trimmingCharacters(in: .whitespaces)
+        if let declared, let name = declaredName(declared), nodeManagers.contains(name) {
+            return name
         }
         let base = URL(fileURLWithPath: directory)
         let match = lockfiles.first { file, _ in
             FileManager.default.fileExists(atPath: base.appendingPathComponent(file).path)
         }
         return match?.1 ?? "npm"
+    }
+
+    private static func declaredName(_ declared: String) -> String? {
+        let trimmed = declared.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else {
+            return nil
+        }
+        if let separator = trimmed.lastIndex(of: "@"), separator != trimmed.startIndex {
+            return String(trimmed[..<separator])
+        }
+        return trimmed
     }
 
     static func python(in directory: String) -> String {

