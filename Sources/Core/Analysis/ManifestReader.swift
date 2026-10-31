@@ -16,6 +16,14 @@ enum ManifestReader {
         }
     }
 
+    static func composer(in directory: String) -> ComposerManifest? {
+        let path = URL(fileURLWithPath: directory).appendingPathComponent("composer.json").path
+        guard let data = FileManager.default.contents(atPath: path) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(ComposerManifest.self, from: data)
+    }
+
     private static func hasTrailingComma(_ data: Data) -> Bool {
         var inString = false
         var escaped = false
