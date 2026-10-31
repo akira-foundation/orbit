@@ -31,6 +31,18 @@ import Testing
             Store.databaseURL(in: base, environment: .development).path == "/tmp/support/Orbit (Dev)/orbit.sqlite")
     }
 
+    @Test func concurrentOpensOfAFreshFileAllSucceed() async throws {
+        let dir = try TemporaryDirectory()
+        let path = dir.path + "/orbit.sqlite"
+        let versions = try await withThrowingTaskGroup(of: Int32.self) { group in
+            for _ in 0..<8 {
+                group.addTask { try await Store(path: path).schemaVersion() }
+            }
+            return try await group.reduce(into: []) { $0.append($1) }
+        }
+        #expect(versions == Array(repeating: Int32(StoreMigrations.all.count), count: 8))
+    }
+
     @Test(.disabled("needs Task 6"))
     func twoStoresOnOneFileSeeEachOthersWrites() async throws {}
 

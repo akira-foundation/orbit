@@ -18,7 +18,20 @@ final class SQLiteDatabase: @unchecked Sendable {
         try execute("PRAGMA foreign_keys = ON;")
         try execute("PRAGMA busy_timeout = 5000;")
         if path != ":memory:" {
-            try execute("PRAGMA journal_mode = WAL;")
+            try enableWriteAheadLogging()
+        }
+    }
+
+    private func enableWriteAheadLogging() throws {
+        let deadline = ContinuousClock.now + .seconds(5)
+        while true {
+            do {
+                if try query("PRAGMA journal_mode;").first?.string("journal_mode") == "wal" { return }
+                try execute("PRAGMA journal_mode = WAL;")
+                return
+            } catch let error as SQLiteError where error.code == SQLITE_BUSY && ContinuousClock.now < deadline {
+                Thread.sleep(forTimeInterval: 0.005)
+            }
         }
     }
 
@@ -28,7 +41,7 @@ final class SQLiteDatabase: @unchecked Sendable {
 
     private func fail(_ sql: String?) -> SQLiteError {
         let message = handle.map { String(cString: sqlite3_errmsg($0)) } ?? "database is closed"
-        return SQLiteError(message: message, sql: sql)
+        return SQLiteError(message: message, sql: sql, code: handle.map { sqlite3_errcode($0) & 0xFF } ?? 0)
     }
 
     func execute(_ sql: String) throws {

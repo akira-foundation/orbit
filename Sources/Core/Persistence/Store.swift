@@ -32,15 +32,16 @@ public actor Store {
 
     private static func migrate(_ db: SQLiteDatabase) throws {
         let migrations = StoreMigrations.all
-        let current = Int(try db.userVersion)
-        guard current <= migrations.count else {
-            throw SQLiteError(message: "Unsupported database schema version \(current)", sql: nil)
-        }
-        for index in current..<migrations.count {
+        for index in 0..<migrations.count {
             try db.transaction {
+                guard Int(try db.userVersion) <= index else { return }
                 try db.execute(migrations[index])
                 try db.execute("PRAGMA user_version = \(index + 1);")
             }
+        }
+        let version = Int(try db.userVersion)
+        guard version <= migrations.count else {
+            throw SQLiteError(message: "Unsupported database schema version \(version)", sql: nil)
         }
     }
 }
