@@ -11,12 +11,18 @@ final class ScriptedLeaderInspector: ProcessInspector {
     }
 
     private let reads: Mutex<[Read]>
+    private let inspected = Mutex<Set<Int32>>([])
 
     init(_ reads: [Read]) {
         self.reads = Mutex(reads)
     }
 
+    var inspectedPIDs: Set<Int32> {
+        inspected.withLock { $0 }
+    }
+
     func identity(of pid: Int32) throws -> ProcessIdentity {
+        inspected.withLock { _ = $0.insert(pid) }
         let read = reads.withLock { $0.count > 1 ? $0.removeFirst() : $0[0] }
         switch read {
         case .changed: throw RuntimeError.identityMismatch("changed during enrichment")
