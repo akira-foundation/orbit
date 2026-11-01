@@ -10,15 +10,11 @@ public enum OwnedMemberCleanup {
         let termError = signal(
             members.ordered, except: supervisor.pid, with: .terminate, signalled: &terminated, inspector: inspector
         )
-        let waitError = await drainUntilOnlySupervisor(
+        let termWait = await drainUntilOnlySupervisor(
             supervisor, &members, phase: .terminate, signalled: &terminated, inspector: inspector, limit: grace
         )
-        guard let waitError else {
-            if let termError { throw termError }
-            return
-        }
-        guard shouldEscalate(waitError) else {
-            if let error = RuntimeErrors.join([termError, waitError]) { throw error }
+        guard let endError = termWait.end, shouldEscalate(endError) else {
+            if let error = RuntimeErrors.join([termError, termWait.late, termWait.end]) { throw error }
             return
         }
         var killed: Set<Int32> = []
@@ -27,17 +23,19 @@ public enum OwnedMemberCleanup {
         )
         let survivors = members
         let alreadyKilled = killed
-        let finalWaitError = await Task.detached {
+        let killWaitResult = await Task.detached {
             var remaining = survivors
             var signalled = alreadyKilled
             return await drainUntilOnlySupervisor(
                 supervisor, &remaining, phase: .kill, signalled: &signalled, inspector: inspector, limit: killWait
             )
         }.value
-        let retainedWaitErrors = ((waitError as? RuntimeErrors)?.errors ?? [waitError]).filter {
+        let retainedEndErrors = ((endError as? RuntimeErrors)?.errors ?? [endError]).filter {
             !$0.contains(.groupNotEmpty)
         }
-        if let error = RuntimeErrors.join([termError] + retainedWaitErrors + [killError, finalWaitError]) {
+        let errors =
+            [termError, termWait.late] + retainedEndErrors + [killError, killWaitResult.late, killWaitResult.end]
+        if let error = RuntimeErrors.join(errors) {
             throw error
         }
     }
@@ -63,7 +61,7 @@ public enum OwnedMemberCleanup {
     private static func drainUntilOnlySupervisor(
         _ supervisor: ProcessIdentity, _ members: inout KnownRuntimeMembers, phase: ProcessSignal,
         signalled: inout Set<Int32>, inspector: any ProcessInspector, limit: Duration
-    ) async -> (any Error)? {
+    ) async -> (late: (any Error)?, end: (any Error)?) {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: limit)
         var lateErrors: [(any Error)?] = []
@@ -71,25 +69,25 @@ public enum OwnedMemberCleanup {
             do {
                 try members.refresh(supervisor: supervisor, inspector: inspector)
             } catch {
-                return RuntimeErrors.join(lateErrors + [error])
+                return (RuntimeErrors.join(lateErrors), error)
             }
             lateErrors.append(
                 signal(
                     members.ordered, except: supervisor.pid, with: phase, signalled: &signalled, inspector: inspector)
             )
             if members.containsOnly(supervisor.pid) {
-                return RuntimeErrors.join(lateErrors)
+                return (RuntimeErrors.join(lateErrors), nil)
             }
             if Task.isCancelled {
-                return RuntimeErrors.join(lateErrors + [RuntimeError.cancelled])
+                return (RuntimeErrors.join(lateErrors), RuntimeError.cancelled)
             }
             if clock.now >= deadline {
-                return RuntimeErrors.join(lateErrors + [deadlineError(members)])
+                return (RuntimeErrors.join(lateErrors), deadlineError(members))
             }
             do {
                 try await clock.sleep(for: pollInterval)
             } catch {
-                return RuntimeErrors.join(lateErrors + [RuntimeError.cancelled])
+                return (RuntimeErrors.join(lateErrors), RuntimeError.cancelled)
             }
         }
     }

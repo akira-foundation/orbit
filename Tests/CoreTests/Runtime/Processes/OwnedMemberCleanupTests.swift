@@ -192,4 +192,17 @@ struct OwnedMemberCleanupTests {
         #expect(error?.contains(.identityMismatch("")) == true)
         #expect(fake.signals.isEmpty)
     }
+
+    @Test func lateMismatchDoesNotEscalateARefreshFailureThatStopsCleanup() async {
+        let fake = FakeProcessInspector.supervised(members: [
+            .init(pid: 4101, ignoresTerm: true, spawnsOnTerm: 4102, spawnedRecyclesInsideSignal: true)
+        ])
+        fake.failGroupListing(fromRead: 3, message: "group listing failed")
+        let error = await #expect(throws: (any Error).self) {
+            try await OwnedMemberCleanup.run(supervisor: fake.identity(4100), inspector: fake, grace: .seconds(5))
+        }
+        #expect(error?.contains(.identityMismatch("")) == true)
+        #expect(error.map { "\($0)" }?.contains("group listing failed") == true)
+        #expect(!fake.signals.contains { $0.1 == .kill })
+    }
 }

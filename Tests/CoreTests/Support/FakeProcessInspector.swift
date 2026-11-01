@@ -17,6 +17,7 @@ final class FakeProcessInspector: ProcessInspector {
         var spawnsOnTerm: Int32?
         var spawnsOnKill: Int32?
         var spawnedDeniesSignalOnce: String?
+        var spawnedRecyclesInsideSignal = false
     }
 
     private struct State {
@@ -30,6 +31,8 @@ final class FakeProcessInspector: ProcessInspector {
         var pendingDeathReads: [Int32: Int] = [:]
         var signalVerifiesIdentity = true
         var unsettled: Set<Int32> = []
+        var groupReads = 0
+        var groupFailure: (fromRead: Int, message: String)?
     }
 
     private let state = Mutex(State())
@@ -105,8 +108,18 @@ final class FakeProcessInspector: ProcessInspector {
         set { state.withLock { $0.unsettled = newValue } }
     }
 
+    func failGroupListing(fromRead read: Int, message: String) {
+        state.withLock { $0.groupFailure = (read, message) }
+    }
+
     func groupListing(_ pgid: Int32) throws -> ProcessListing {
-        state.withLock { state in Self.listing(in: state) { $0.pgid == pgid } }
+        try state.withLock { state in
+            state.groupReads += 1
+            if let failure = state.groupFailure, state.groupReads >= failure.fromRead {
+                throw RuntimeError.message(failure.message)
+            }
+            return Self.listing(in: state) { $0.pgid == pgid }
+        }
     }
 
     func descendantListing(of pid: Int32) throws -> ProcessListing {
@@ -161,7 +174,8 @@ final class FakeProcessInspector: ProcessInspector {
             state.signals.append((pid, signal))
             if signal == .terminate, let child = state.processes[pid]?.spawnsOnTerm {
                 let spawned = Process(
-                    pid: child, ignoresTerm: true, denySignalOnce: state.processes[pid]?.spawnedDeniesSignalOnce
+                    pid: child, ignoresTerm: true, denySignalOnce: state.processes[pid]?.spawnedDeniesSignalOnce,
+                    recycleInsideSignal: state.processes[pid]?.spawnedRecyclesInsideSignal == true
                 )
                 Self.insert(spawned, supervisorPID: supervisorPID, into: &state)
             }
