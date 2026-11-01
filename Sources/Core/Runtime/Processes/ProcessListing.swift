@@ -2,7 +2,7 @@ public struct ProcessListing: Sendable, Equatable {
     public let identities: [ProcessIdentity]
     public let unsettled: [Int32]
 
-    public init(identities: [ProcessIdentity], unsettled: [Int32] = []) {
+    public init(identities: [ProcessIdentity], unsettled: [Int32]) {
         self.identities = identities
         self.unsettled = unsettled
     }
