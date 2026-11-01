@@ -3,6 +3,7 @@ import Dispatch
 import Foundation
 
 public struct LoginShellRunner: LoginShellRunning {
+    private static let maximumOutputBytes = 4 * 1024 * 1024
     private static let pollIntervalMilliseconds: Int32 = 10
     private static let pollIntervalMicroseconds: UInt32 = 10_000
     private static let terminationGrace: Duration = .milliseconds(100)
@@ -99,6 +100,10 @@ public struct LoginShellRunner: LoginShellRunning {
                 let count = read(readFd, &buffer, buffer.count)
                 if count > 0 {
                     output.append(contentsOf: buffer[0..<count])
+                    if output.count > maximumOutputBytes {
+                        terminateGroup(pid)
+                        return nil
+                    }
                     continue
                 }
                 reachedEnd = count == 0
@@ -167,6 +172,6 @@ public struct LoginShellRunner: LoginShellRunning {
         guard count > 0 else {
             return []
         }
-        return Array(buffer.prefix(Int(count)))
+        return buffer.prefix(Int(count)).filter { $0 > 0 && $0 != getpid() }
     }
 }

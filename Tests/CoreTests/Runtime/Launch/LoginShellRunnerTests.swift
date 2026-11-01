@@ -38,6 +38,12 @@ struct LoginShellRunnerTests {
         #expect(output?.utf8.count == 1_048_576)
     }
 
+    @Test func outputAboveTheLimitReturnsNil() async {
+        let output = await LoginShellRunner().run(
+            shell: "/bin/sh", script: "head -c 8388608 /dev/zero | tr '\\0' a", timeout: .seconds(10))
+        #expect(output == nil)
+    }
+
     @Test func theTimeoutKillsTheWholeProcessGroup() async throws {
         let directory = try TemporaryDirectory()
         let pidFile = directory.path + "/grandchild.pid"
