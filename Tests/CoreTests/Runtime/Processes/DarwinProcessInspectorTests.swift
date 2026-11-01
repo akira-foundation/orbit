@@ -78,11 +78,25 @@ struct DarwinProcessInspectorTests {
         }
     }
 
-    @Test func execBetweenSnapshotsKeepsTheFirstCommand() throws {
-        let forked = KernelProcessSnapshot(pid: 4100, pgid: 4100, ppid: 1, startID: "100:000001", command: "sh")
-        let executed = KernelProcessSnapshot(pid: 4100, pgid: 4100, ppid: 1, startID: "100:000001", command: "sleep")
-        let reader = ScriptedKernelReader(snapshots: [forked, forked, executed])
-        #expect(try DarwinProcessInspector(reader: reader).identity(of: 4100).executable == "sh")
+    @Test func execBetweenSnapshotsTakesTheSettledCommandAndArguments() throws {
+        let reader = ScriptedKernelReader(
+            snapshots: [image("bash"), image("bash"), image("sleep"), image("sleep"), image("sleep")],
+            arguments: ["bash -c loop", "/bin/sleep 30"]
+        )
+        let identity = try DarwinProcessInspector(reader: reader).identity(of: 4100)
+        #expect(identity.executable == "sleep")
+        #expect(identity.arguments == "/bin/sleep 30")
+        #expect(reader.argumentReads == 2)
+    }
+
+    @Test func repeatedExecDuringEnrichmentIsAMismatch() {
+        let reader = ScriptedKernelReader(
+            snapshots: [image("bash"), image("bash"), image("sh"), image("sh"), image("sleep")]
+        )
+        #expect(throws: RuntimeError.identityMismatch("changed during enrichment")) {
+            try DarwinProcessInspector(reader: reader).identity(of: 4100)
+        }
+        #expect(reader.argumentReads == 2)
     }
 
     @Test func descendantsFailureNamesTheRoot() {
@@ -150,6 +164,15 @@ struct DarwinProcessInspectorTests {
         #expect(identity.executable == "top")
         #expect(try inspector.identity(of: child.pid) == identity)
         #expect(try inspector.descendants(of: getpid()).contains(identity))
+    }
+
+    @Test func ownProcessAlwaysHasItsRealArguments() throws {
+        let child = try SpawnedTestProcess.sleep()
+        defer { child.terminate() }
+        let inspector = DarwinProcessInspector()
+        for _ in 0..<50 {
+            #expect(try inspector.identity(of: child.pid).arguments == "/bin/sleep 30")
+        }
     }
 
     @Test func zombieIsProcessGoneAndLeavesTheListings() throws {
@@ -245,6 +268,10 @@ struct DarwinProcessInspectorTests {
 
     private func start(_ startID: String) -> KernelProcessSnapshot {
         KernelProcessSnapshot(pid: 4100, pgid: 4100, ppid: 1, startID: startID, command: "fixture")
+    }
+
+    private func image(_ command: String) -> KernelProcessSnapshot {
+        KernelProcessSnapshot(pid: 4100, pgid: 4100, ppid: 1, startID: "100:000001", command: command)
     }
 
     private func member(_ pid: Int32, parent: Int32) -> KernelProcessSnapshot {

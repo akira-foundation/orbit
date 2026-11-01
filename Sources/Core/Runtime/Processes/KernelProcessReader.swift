@@ -3,28 +3,18 @@ import Darwin
 public struct KernelProcessReader: KernelProcessReading {
     private static let attempts = 8
 
-    public init() {}
+    private let argumentSource: @Sendable (Int32, inout [UInt8], inout Int) -> Int32
+
+    public init() {
+        self.init(argumentSource: Self.readArguments)
+    }
+
+    init(argumentSource: @escaping @Sendable (Int32, inout [UInt8], inout Int) -> Int32) {
+        self.argumentSource = argumentSource
+    }
 
     public func snapshot(_ pid: Int32) throws -> KernelProcessSnapshot {
-        try Self.requireValid(pid)
-        var process = kinfo_proc()
-        var size = MemoryLayout<kinfo_proc>.stride
-        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
-        if sysctl(&mib, UInt32(mib.count), &process, &size, nil, 0) != 0 {
-            let code = errno
-            if Self.isGone(pid, code) { throw RuntimeError.processGone }
-            throw RuntimeError.message("inspect PID \(pid): \(Self.describe(code))")
-        }
-        guard size == MemoryLayout<kinfo_proc>.stride else {
-            if Self.isGone(pid, 0) { throw RuntimeError.processGone }
-            throw RuntimeError.message("inspect PID \(pid): incomplete kernel identity")
-        }
-        guard !Self.isExiting(process) else { throw RuntimeError.processGone }
-        let snapshot = Self.snapshot(of: process)
-        guard snapshot.pid == pid, snapshot.pgid > 0 else {
-            throw RuntimeError.message("inspect PID \(pid): incomplete kernel identity")
-        }
-        return snapshot
+        try Self.snapshot(of: Self.kernelProcess(pid))
     }
 
     public func group(_ pgid: Int32) throws -> [KernelProcessSnapshot] {
@@ -39,25 +29,48 @@ public struct KernelProcessReader: KernelProcessReading {
     }
 
     public func arguments(_ pid: Int32) throws -> String {
-        try Self.requireValid(pid)
-        let limit = try Self.argumentLimit(for: pid)
-        var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
+        guard try Self.kernelProcess(pid).kp_eproc.e_ucred.cr_uid == geteuid() else { return "" }
+        var buffer = [UInt8](repeating: 0, count: try Self.argumentLimit(for: pid))
         for _ in 0..<Self.attempts {
-            var buffer = [UInt8](repeating: 0, count: limit)
             var size = buffer.count
-            if sysctl(&mib, UInt32(mib.count), &buffer, &size, nil, 0) == 0 {
+            let code = argumentSource(pid, &buffer, &size)
+            if code == 0 {
                 return try ProcessArgumentsParser.parse(Array(buffer.prefix(size)))
             }
-            let code = errno
             if Self.isGone(pid, code) { throw RuntimeError.processGone }
             _ = try snapshot(pid)
-            if code == EINVAL || code == EPERM { return "" }
             guard code == EIO else {
                 throw RuntimeError.message("inspect arguments for PID \(pid): \(Self.describe(code))")
             }
             usleep(100)
         }
         throw RuntimeError.message("inspect arguments for PID \(pid): \(Self.describe(EIO))")
+    }
+
+    private static func kernelProcess(_ pid: Int32) throws -> kinfo_proc {
+        try requireValid(pid)
+        var process = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        if sysctl(&mib, UInt32(mib.count), &process, &size, nil, 0) != 0 {
+            let code = errno
+            if isGone(pid, code) { throw RuntimeError.processGone }
+            throw RuntimeError.message("inspect PID \(pid): \(describe(code))")
+        }
+        guard size == MemoryLayout<kinfo_proc>.stride else {
+            if isGone(pid, 0) { throw RuntimeError.processGone }
+            throw RuntimeError.message("inspect PID \(pid): incomplete kernel identity")
+        }
+        guard !isExiting(process) else { throw RuntimeError.processGone }
+        guard process.kp_proc.p_pid == pid, process.kp_eproc.e_pgid > 0 else {
+            throw RuntimeError.message("inspect PID \(pid): incomplete kernel identity")
+        }
+        return process
+    }
+
+    private static func readArguments(_ pid: Int32, _ buffer: inout [UInt8], _ size: inout Int) -> Int32 {
+        var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
+        return sysctl(&mib, UInt32(mib.count), &buffer, &size, nil, 0) == 0 ? 0 : errno
     }
 
     private static func argumentLimit(for pid: Int32) throws -> Int {

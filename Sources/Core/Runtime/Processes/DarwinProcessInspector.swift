@@ -69,19 +69,25 @@ public struct DarwinProcessInspector: ProcessInspector {
         }
     }
 
-    private func enrich(_ snapshot: KernelProcessSnapshot) throws -> ProcessIdentity {
-        guard try reader.snapshot(snapshot.pid).isSameProcess(as: snapshot) else {
+    private func enrich(_ snapshot: KernelProcessSnapshot, retryingExec: Bool = true) throws -> ProcessIdentity {
+        let before = try reader.snapshot(snapshot.pid)
+        guard before.isSameProcess(as: snapshot) else {
             throw RuntimeError.identityMismatch("changed before enrichment")
         }
         let arguments = try reader.arguments(snapshot.pid)
-        guard try reader.snapshot(snapshot.pid).isSameProcess(as: snapshot) else {
+        let settled = try reader.snapshot(snapshot.pid)
+        guard settled.isSameProcess(as: snapshot) else {
             throw RuntimeError.identityMismatch("changed during enrichment")
         }
+        guard settled.command == before.command else {
+            guard retryingExec else { throw RuntimeError.identityMismatch("changed during enrichment") }
+            return try enrich(settled, retryingExec: false)
+        }
         return ProcessIdentity(
-            pid: snapshot.pid,
-            pgid: snapshot.pgid,
-            startID: snapshot.startID,
-            executable: snapshot.command,
+            pid: settled.pid,
+            pgid: settled.pgid,
+            startID: settled.startID,
+            executable: settled.command,
             arguments: arguments
         )
     }

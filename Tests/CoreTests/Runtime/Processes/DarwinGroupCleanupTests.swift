@@ -25,18 +25,25 @@ struct DarwinGroupCleanupTests {
         let leader = try SpawnedTestProcess.spawn("/bin/sh", ["-c", Self.script])
         defer { leader.terminate() }
         let inspector = DarwinProcessInspector()
-        try await waitForMembers(of: leader.pid, count: 22, inspector: inspector)
+        try await waitUntilSettled(leader: leader.pid, inspector: inspector)
         let supervisor = try inspector.identity(of: leader.pid)
         try await OwnedMemberCleanup.run(supervisor: supervisor, inspector: inspector, grace: .milliseconds(50))
         #expect(try inspector.groupMembers(leader.pid) == [supervisor])
     }
 
-    private func waitForMembers(of pgid: Int32, count: Int, inspector: DarwinProcessInspector) async throws {
+    private func waitUntilSettled(leader: Int32, inspector: DarwinProcessInspector) async throws {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: .seconds(5))
-        while try inspector.groupMembers(pgid).count < count {
-            guard clock.now < deadline else { throw RuntimeError.message("group \(pgid) never reached \(count)") }
+        while !isSettled(leader: leader, inspector: inspector) {
+            guard clock.now < deadline else { throw RuntimeError.message("group \(leader) never settled") }
             try await clock.sleep(for: .milliseconds(5))
         }
+    }
+
+    private func isSettled(leader: Int32, inspector: DarwinProcessInspector) -> Bool {
+        guard (try? inspector.identity(of: leader).executable) == "sleep",
+            let members = try? inspector.groupMembers(leader)
+        else { return false }
+        return members.contains { $0.pid != leader && $0.executable == "sleep" && $0.arguments == "/bin/sleep 30" }
     }
 }

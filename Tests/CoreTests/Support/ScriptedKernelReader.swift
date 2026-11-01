@@ -5,6 +5,7 @@ import Synchronization
 final class ScriptedKernelReader: KernelProcessReading {
     private struct State {
         var snapshots: [KernelProcessSnapshot]
+        var arguments: [String]
         var argumentReads = 0
     }
 
@@ -15,9 +16,9 @@ final class ScriptedKernelReader: KernelProcessReading {
 
     init(
         snapshots: [KernelProcessSnapshot] = [], table: [KernelProcessSnapshot] = [], vanished: Set<Int32> = [],
-        tableFailure: String? = nil
+        tableFailure: String? = nil, arguments: [String] = []
     ) {
-        state = Mutex(State(snapshots: snapshots))
+        state = Mutex(State(snapshots: snapshots, arguments: arguments))
         self.table = table
         self.vanished = vanished
         self.tableFailure = tableFailure
@@ -47,7 +48,9 @@ final class ScriptedKernelReader: KernelProcessReading {
     }
 
     func arguments(_ pid: Int32) throws -> String {
-        state.withLock { $0.argumentReads += 1 }
-        return "fixture \(pid)"
+        state.withLock { state in
+            state.argumentReads += 1
+            return state.arguments.isEmpty ? "fixture \(pid)" : state.arguments.removeFirst()
+        }
     }
 }
