@@ -58,4 +58,50 @@ struct LoginPathResolverTests {
         #expect(result.entries == ["PATH=/custom/bin:/b:/a"])
         #expect(input.entries == ["PATH=/custom/bin:/b"])
     }
+
+    @Test func concurrentFirstCallsRunTheShellOnce() async {
+        let runner = StubShell(output: "__ORBIT_PATH__:/a:/b\n", delay: .milliseconds(50))
+        let resolver = LoginPathResolver(runner: runner, shell: "/bin/zsh", home: nil)
+        let paths = await withTaskGroup(of: String.self) { group in
+            for _ in 0..<10 {
+                group.addTask { await resolver.path() }
+            }
+            return await group.reduce(into: []) { $0.append($1) }
+        }
+        #expect(paths == Array(repeating: "/a:/b", count: 10))
+        #expect(runner.calls.count == 1)
+    }
+
+    @Test func outputWithoutAMarkerFallsBack() async {
+        let resolver = LoginPathResolver(runner: StubShell(output: "motd\nnothing here\n"), shell: nil, home: nil)
+        #expect(await resolver.path() == "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin")
+    }
+
+    @Test func crlfLineEndingsAreTolerated() async {
+        let resolver = LoginPathResolver(
+            runner: StubShell(output: "motd\r\n__ORBIT_PATH__:/a:/b\r\n"), shell: nil, home: nil)
+        #expect(await resolver.path() == "/a:/b")
+    }
+
+    @Test func emptyShellCountsAsAbsent() async {
+        let runner = StubShell(output: "__ORBIT_PATH__:/a\n")
+        let resolver = LoginPathResolver(runner: runner, shell: "", home: nil)
+        _ = await resolver.path()
+        #expect(runner.calls.map(\.shell) == ["/bin/zsh"])
+    }
+
+    @Test func emptyHomeCountsAsUnknown() async {
+        let resolver = LoginPathResolver(runner: StubShell(output: nil), shell: nil, home: "")
+        #expect(await resolver.path() == "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin")
+    }
+
+    @Test func homeTrailingSlashesAreCleaned() async throws {
+        let home = try TemporaryDirectory()
+        let resolver = LoginPathResolver(runner: StubShell(output: nil), shell: nil, home: home.path + "//")
+        let expected = [
+            "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin",
+            home.path + "/.bun/bin", home.path + "/.local/bin", home.path + "/.cargo/bin",
+        ].joined(separator: ":")
+        #expect(await resolver.path() == expected)
+    }
 }

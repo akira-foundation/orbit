@@ -7,21 +7,21 @@ public actor LoginPathResolver {
     private let runner: any LoginShellRunning
     private let shell: String
     private let fallback: LoginPathFallback
-    private var resolved: String?
+    private var pending: Task<String, Never>?
 
     public init(runner: any LoginShellRunning, shell: String?, home: String?, fileManager: FileManager = .default) {
         self.runner = runner
-        self.shell = shell ?? "/bin/zsh"
+        self.shell = shell.flatMap { $0.isEmpty ? nil : $0 } ?? "/bin/zsh"
         self.fallback = LoginPathFallback(home: home, fileManager: fileManager)
     }
 
     public func path() async -> String {
-        if let resolved {
-            return resolved
+        if let pending {
+            return await pending.value
         }
-        let value = await queryShell() ?? fallback.path()
-        resolved = value
-        return value
+        let task = Task { await self.queryShell() ?? self.fallback.path() }
+        pending = task
+        return await task.value
     }
 
     public func apply(to environment: EnvironmentList) async -> EnvironmentList {

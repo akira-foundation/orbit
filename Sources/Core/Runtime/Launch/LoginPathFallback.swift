@@ -1,8 +1,13 @@
 import Foundation
 
 struct LoginPathFallback {
-    let home: String?
-    let fileManager: FileManager
+    private let home: String?
+    private let fileManager: FileManager
+
+    init(home: String?, fileManager: FileManager) {
+        self.home = home.flatMap(Self.cleaned)
+        self.fileManager = fileManager
+    }
 
     func path() -> String {
         var entries = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
@@ -16,5 +21,13 @@ struct LoginPathFallback {
             }
         }
         return entries.joined(separator: ":")
+    }
+
+    private static func cleaned(_ home: String) -> String? {
+        let components = home.split(separator: "/")
+        if components.isEmpty {
+            return home.isEmpty ? nil : ""
+        }
+        return (home.hasPrefix("/") ? "/" : "") + components.joined(separator: "/")
     }
 }
