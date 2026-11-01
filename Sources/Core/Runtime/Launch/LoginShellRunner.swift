@@ -7,17 +7,29 @@ public struct LoginShellRunner: LoginShellRunning {
     private static let pollIntervalMicroseconds: UInt32 = 10_000
     private static let terminationGrace: Duration = .milliseconds(100)
 
-    public init() {}
+    private let onPollIteration: (@Sendable () -> Void)?
+
+    public init() {
+        onPollIteration = nil
+    }
+
+    init(onPollIteration: @escaping @Sendable () -> Void) {
+        self.onPollIteration = onPollIteration
+    }
 
     public func run(shell: String, script: String, timeout: Duration) async -> String? {
         await withCheckedContinuation { continuation in
             DispatchQueue.global().async {
-                continuation.resume(returning: Self.execute(shell: shell, script: script, timeout: timeout))
+                continuation.resume(
+                    returning: Self.execute(
+                        shell: shell, script: script, timeout: timeout, onPollIteration: onPollIteration))
             }
         }
     }
 
-    private static func execute(shell: String, script: String, timeout: Duration) -> String? {
+    private static func execute(
+        shell: String, script: String, timeout: Duration, onPollIteration: (@Sendable () -> Void)?
+    ) -> String? {
         var pipeFds: [Int32] = [0, 0]
         guard pipe(&pipeFds) == 0 else {
             return nil
@@ -32,7 +44,8 @@ public struct LoginShellRunner: LoginShellRunning {
         guard let pid = spawned else {
             return nil
         }
-        return collect(from: readFd, child: pid, deadline: ContinuousClock.now + timeout)
+        return collect(
+            from: readFd, child: pid, deadline: ContinuousClock.now + timeout, onPollIteration: onPollIteration)
     }
 
     private static func spawn(shell: String, arguments: [String], standardOutput: Int32) -> pid_t? {
@@ -63,12 +76,16 @@ public struct LoginShellRunner: LoginShellRunning {
         return pid
     }
 
-    private static func collect(from readFd: Int32, child pid: pid_t, deadline: ContinuousClock.Instant) -> String? {
+    private static func collect(
+        from readFd: Int32, child pid: pid_t, deadline: ContinuousClock.Instant,
+        onPollIteration: (@Sendable () -> Void)?
+    ) -> String? {
         var output = Data()
         var buffer = [UInt8](repeating: 0, count: 65536)
         var status: Int32 = 0
         var reachedEnd = false
         while ContinuousClock.now < deadline {
+            onPollIteration?()
             if reachedEnd {
                 usleep(pollIntervalMicroseconds)
             }

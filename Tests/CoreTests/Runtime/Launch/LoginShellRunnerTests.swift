@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 
 @testable import Core
@@ -52,19 +53,12 @@ struct LoginShellRunnerTests {
         #expect(await processDisappears(pid))
     }
 
-    @Test func aShellThatClosesStandardOutputDoesNotSpinTheCPU() async {
-        let before = processCPUTime()
-        let output = await LoginShellRunner().run(shell: "/bin/sh", script: "exec >&-; sleep 1", timeout: .seconds(5))
-        let used = processCPUTime() - before
+    @Test func aShellThatClosesStandardOutputIsPolledAtTheSleepIntervalNotInATightLoop() async {
+        let iterations = Mutex(0)
+        let runner = LoginShellRunner(onPollIteration: { iterations.withLock { $0 += 1 } })
+        let output = await runner.run(shell: "/bin/sh", script: "exec >&-; sleep 1", timeout: .seconds(5))
         #expect(output == "")
-        #expect(used < .milliseconds(400))
-    }
-
-    private func processCPUTime() -> Duration {
-        var usage = rusage()
-        getrusage(RUSAGE_SELF, &usage)
-        let micros = [usage.ru_utime, usage.ru_stime].reduce(0) { $0 + Int($1.tv_sec) * 1_000_000 + Int($1.tv_usec) }
-        return .microseconds(micros)
+        #expect(iterations.withLock { $0 } < 300)
     }
 
     private func processDisappears(_ pid: pid_t) async -> Bool {
