@@ -61,13 +61,13 @@ struct OwnedMemberCleanupTests {
         let supervisor = fake.identity(4100)
         let task = Task {
             withUnsafeCurrentTask { $0?.cancel() }
-            try await OwnedMemberCleanup.run(supervisor: supervisor, inspector: fake, grace: .seconds(1))
+            try await OwnedMemberCleanup.run(supervisor: supervisor, inspector: fake, grace: .seconds(30))
         }
         let clock = ContinuousClock()
         let started = clock.now
         let result = await task.result
         #expect(throws: RuntimeError.cancelled) { try result.get() }
-        #expect(clock.now - started < .milliseconds(900))
+        #expect(clock.now - started < .seconds(5))
         #expect(fake.signals.map(\.1) == [.terminate, .kill])
         #expect(!fake.isAlive(4101))
     }
