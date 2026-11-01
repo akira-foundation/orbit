@@ -53,6 +53,9 @@ public struct KernelProcessReader: KernelProcessReading {
             lastCode = code
             usleep(100)
         }
+        guard lastCode != EINVAL else {
+            throw RuntimeError.identityMismatch("arguments of PID \(pid) stayed unreadable")
+        }
         throw RuntimeError.message("inspect arguments for PID \(pid): \(Self.describe(lastCode))")
     }
 

@@ -35,7 +35,7 @@ struct KernelProcessReaderTests {
     @Test func argumentsOfOwnProcessGiveUpOnPersistentInvalidArgument() {
         let source = ScriptedArgumentSource(failures: Array(repeating: EINVAL, count: 9))
         let reader = KernelProcessReader(argumentSource: source.read)
-        #expect(throws: RuntimeError.message("inspect arguments for PID \(getpid()): Invalid argument")) {
+        #expect(throws: RuntimeError.identityMismatch("arguments of PID \(getpid()) stayed unreadable")) {
             try reader.arguments(getpid())
         }
         #expect(source.calls == 8)
