@@ -15,6 +15,7 @@ trap 'rm -rf "$mirror"' EXIT INT TERM HUP
 
 mkdir -p "$mirror/Sources" "$mirror/Tests"
 ln -s "$root/Sources/Core" "$mirror/Sources/Core"
+ln -s "$root/Sources/orbit-runtime-fixture" "$mirror/Sources/orbit-runtime-fixture"
 ln -s "$root/Tests/CoreTests" "$mirror/Tests/CoreTests"
 
 cat > "$mirror/Package.swift" <<'MANIFEST'
@@ -26,7 +27,11 @@ let package = Package(
     platforms: [.macOS("27.0")],
     targets: [
         .target(name: "Core", swiftSettings: [.swiftLanguageMode(.v6)]),
-        .testTarget(name: "CoreTests", dependencies: ["Core"], swiftSettings: [.swiftLanguageMode(.v6)]),
+        .executableTarget(
+            name: "orbit-runtime-fixture", dependencies: ["Core"], swiftSettings: [.swiftLanguageMode(.v6)]),
+        .testTarget(
+            name: "CoreTests", dependencies: ["Core", "orbit-runtime-fixture"],
+            swiftSettings: [.swiftLanguageMode(.v6)]),
     ]
 )
 MANIFEST
