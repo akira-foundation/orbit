@@ -2,6 +2,7 @@ import Darwin
 
 public struct KernelProcessReader: KernelProcessReading {
     private static let attempts = 8
+    private static let transientCodes: Set<Int32> = [EIO, EINVAL]
 
     private let argumentSource: @Sendable (Int32, inout [UInt8], inout Int) -> Int32
     private let ownerSource: @Sendable (Int32) throws -> uid_t
@@ -36,6 +37,7 @@ public struct KernelProcessReader: KernelProcessReading {
     public func arguments(_ pid: Int32) throws -> String {
         guard try ownerSource(pid) == geteuid() else { return "" }
         var buffer = [UInt8](repeating: 0, count: try Self.argumentLimit(for: pid))
+        var lastCode = EIO
         for _ in 0..<Self.attempts {
             var size = buffer.count
             let code = argumentSource(pid, &buffer, &size)
@@ -45,12 +47,13 @@ public struct KernelProcessReader: KernelProcessReading {
             if Self.isGone(pid, code) { throw RuntimeError.processGone }
             let owner = try ownerSource(pid)
             if (code == EINVAL || code == EPERM) && owner != geteuid() { return "" }
-            guard code == EIO else {
+            guard Self.transientCodes.contains(code) else {
                 throw RuntimeError.message("inspect arguments for PID \(pid): \(Self.describe(code))")
             }
+            lastCode = code
             usleep(100)
         }
-        throw RuntimeError.message("inspect arguments for PID \(pid): \(Self.describe(EIO))")
+        throw RuntimeError.message("inspect arguments for PID \(pid): \(Self.describe(lastCode))")
     }
 
     private static func owner(_ pid: Int32) throws -> uid_t {

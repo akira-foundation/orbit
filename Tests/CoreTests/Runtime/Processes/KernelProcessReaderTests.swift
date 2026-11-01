@@ -25,12 +25,20 @@ struct KernelProcessReaderTests {
         #expect(source.calls == 8)
     }
 
-    @Test func argumentsOfOwnProcessDoNotHideInvalidArgument() {
-        let source = ScriptedArgumentSource(failures: [EINVAL])
+    @Test func argumentsOfOwnProcessRetryTransientInvalidArgument() throws {
+        let source = ScriptedArgumentSource(failures: [EINVAL, EINVAL])
+        let reader = KernelProcessReader(argumentSource: source.read)
+        #expect(try reader.arguments(getpid()) == "sh -c echo ready")
+        #expect(source.calls == 3)
+    }
+
+    @Test func argumentsOfOwnProcessGiveUpOnPersistentInvalidArgument() {
+        let source = ScriptedArgumentSource(failures: Array(repeating: EINVAL, count: 9))
         let reader = KernelProcessReader(argumentSource: source.read)
         #expect(throws: RuntimeError.message("inspect arguments for PID \(getpid()): Invalid argument")) {
             try reader.arguments(getpid())
         }
+        #expect(source.calls == 8)
     }
 
     @Test(arguments: [EINVAL, EPERM])

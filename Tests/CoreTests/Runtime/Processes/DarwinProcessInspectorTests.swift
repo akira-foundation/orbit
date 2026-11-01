@@ -87,10 +87,16 @@ struct DarwinProcessInspectorTests {
         #expect(members.map(\.startID) == ["5:000001"])
     }
 
-    @Test func listingGivesUpOnAMemberThatKeepsChanging() {
-        let reader = ScriptedKernelReader(snapshots: (2...8).map(moved), table: [moved(1)])
+    @Test func listingSkipsAMemberThatNeverSettlesAndKeepsTheOthers() throws {
+        let reader = ScriptedKernelReader(table: [member(10, parent: 1), member(12, parent: 10)], unsettled: [12])
+        let members = try DarwinProcessInspector(reader: reader).groupMembers(10)
+        #expect(members.map(\.pid) == [10])
+    }
+
+    @Test func identityOfAProcessThatNeverSettlesIsStillAMismatch() {
+        let reader = ScriptedKernelReader(table: [member(12, parent: 10)], unsettled: [12])
         #expect(throws: RuntimeError.identityMismatch("changed before enrichment")) {
-            try DarwinProcessInspector(reader: reader).groupMembers(10)
+            try DarwinProcessInspector(reader: reader).identity(of: 12)
         }
     }
 

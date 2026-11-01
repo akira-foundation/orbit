@@ -1,7 +1,8 @@
 import Darwin
 
 public struct DarwinProcessInspector: ProcessInspector {
-    private static let rereads = 3
+    private static let rereads = 10
+    private static let rereadPause: useconds_t = 1000
 
     private let reader: any KernelProcessReading
     private let lsof: LsofRunner
@@ -94,16 +95,18 @@ public struct DarwinProcessInspector: ProcessInspector {
         )
     }
 
-    private func settledIdentity(listed: KernelProcessSnapshot) throws -> ProcessIdentity {
+    private func settledIdentity(listed: KernelProcessSnapshot) throws -> ProcessIdentity? {
         var snapshot = listed
-        for _ in 0..<Self.rereads {
+        for attempt in 0...Self.rereads {
             do {
                 return try enrich(snapshot)
             } catch let error as RuntimeError where error.matches(.identityMismatch("")) {
+                guard attempt < Self.rereads else { return nil }
+                usleep(Self.rereadPause)
                 snapshot = try reader.snapshot(listed.pid)
             }
         }
-        return try enrich(snapshot)
+        return nil
     }
 
     private func identities(_ snapshots: [KernelProcessSnapshot]) throws -> [ProcessIdentity] {
@@ -112,7 +115,8 @@ public struct DarwinProcessInspector: ProcessInspector {
         for snapshot in snapshots.sorted(by: { $0.pid < $1.pid }) where snapshot.pid > 0 && snapshot.pid != prior {
             prior = snapshot.pid
             do {
-                try identities.append(settledIdentity(listed: snapshot))
+                guard let identity = try settledIdentity(listed: snapshot) else { continue }
+                identities.append(identity)
             } catch RuntimeError.processGone {
                 continue
             }
