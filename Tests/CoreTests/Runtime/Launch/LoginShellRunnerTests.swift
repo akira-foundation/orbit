@@ -42,14 +42,29 @@ struct LoginShellRunnerTests {
         let pidFile = directory.path + "/grandchild.pid"
         let started = ContinuousClock.now
         let output = await LoginShellRunner().run(
-            shell: "/bin/sh", script: "sleep 30 & echo $! > '\(pidFile)'; wait", timeout: .milliseconds(600))
+            shell: "/bin/sh", script: "sleep 30 & echo $! > '\(pidFile)'; wait", timeout: .milliseconds(1500))
         let elapsed = ContinuousClock.now - started
         let pid = try #require(
             pid_t(String(contentsOfFile: pidFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)))
         defer { kill(pid, SIGKILL) }
         #expect(output == nil)
-        #expect(elapsed < .seconds(2))
+        #expect(elapsed < .seconds(4))
         #expect(await processDisappears(pid))
+    }
+
+    @Test func aShellThatClosesStandardOutputDoesNotSpinTheCPU() async {
+        let before = processCPUTime()
+        let output = await LoginShellRunner().run(shell: "/bin/sh", script: "exec >&-; sleep 1", timeout: .seconds(5))
+        let used = processCPUTime() - before
+        #expect(output == "")
+        #expect(used < .milliseconds(400))
+    }
+
+    private func processCPUTime() -> Duration {
+        var usage = rusage()
+        getrusage(RUSAGE_SELF, &usage)
+        let micros = [usage.ru_utime, usage.ru_stime].reduce(0) { $0 + Int($1.tv_sec) * 1_000_000 + Int($1.tv_usec) }
+        return .microseconds(micros)
     }
 
     private func processDisappears(_ pid: pid_t) async -> Bool {

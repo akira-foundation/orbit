@@ -3,7 +3,8 @@ import Dispatch
 import Foundation
 
 public struct LoginShellRunner: LoginShellRunning {
-    private static let pollSlice: Duration = .milliseconds(10)
+    private static let pollIntervalMilliseconds: Int32 = 10
+    private static let pollIntervalMicroseconds: UInt32 = 10_000
     private static let terminationGrace: Duration = .milliseconds(100)
 
     public init() {}
@@ -66,14 +67,18 @@ public struct LoginShellRunner: LoginShellRunning {
         var output = Data()
         var buffer = [UInt8](repeating: 0, count: 65536)
         var status: Int32 = 0
+        var reachedEnd = false
         while ContinuousClock.now < deadline {
-            let readable = waitReadable(readFd, milliseconds: 10)
-            if readable {
+            if reachedEnd {
+                usleep(pollIntervalMicroseconds)
+            }
+            if !reachedEnd, waitReadable(readFd, milliseconds: pollIntervalMilliseconds) {
                 let count = read(readFd, &buffer, buffer.count)
                 if count > 0 {
                     output.append(contentsOf: buffer[0..<count])
                     continue
                 }
+                reachedEnd = count == 0
             }
             if waitpid(pid, &status, WNOHANG) == pid {
                 drain(readFd, into: &output, buffer: &buffer)
