@@ -88,7 +88,11 @@ struct EventLogTests {
         for index in 0..<EventLog.batchSize {
             log.push(record(projectID, "in flight \(index)"))
         }
-        try await Task.sleep(for: .milliseconds(50))
+        let deadline = ContinuousClock.now + .seconds(5)
+        while await log.received < EventLog.batchSize && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        #expect(await log.received == EventLog.batchSize)
         for index in 0..<(EventLog.bufferSize + 50) {
             log.push(record(projectID, "\(index)"))
         }

@@ -253,6 +253,13 @@ struct RuntimeSessionTests {
         #expect(decoded == [fractional, whole])
     }
 
+    @Test func logLineRejectsLettersInTheFraction() {
+        let json = #"{"timestamp":"2027-01-15T08:00:00.5e3Z","stream":"stdout","text":"a"}"#
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(LogLine.self, from: Data(json.utf8))
+        }
+    }
+
     @Test func snapshotRoundTripsThroughJSON() throws {
         let clock = TestClock()
         let session = session(clock)

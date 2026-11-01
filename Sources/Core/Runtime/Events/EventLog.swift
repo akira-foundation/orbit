@@ -10,7 +10,7 @@ public actor EventLog {
     private let clock: any RuntimeClock
     private let continuation: AsyncStream<EventRecord>.Continuation?
     private let enqueued = Atomic<Int>(0)
-    private var received = 0
+    private(set) var received = 0
     private var pending: [EventRecord] = []
     private var finished = false
     private var drainWaiters: [(target: Int, continuation: CheckedContinuation<Void, Never>)] = []

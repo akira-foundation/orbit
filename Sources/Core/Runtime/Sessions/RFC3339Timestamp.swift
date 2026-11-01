@@ -21,7 +21,7 @@ enum RFC3339Timestamp {
             return try? Date(text, strategy: .iso8601)
         }
         let digits = text[text.index(after: dot)..<text.index(before: text.endIndex)]
-        guard !digits.isEmpty, digits.allSatisfy(\.isASCII), let fraction = Double("0.\(digits)"),
+        guard !digits.isEmpty, digits.allSatisfy(("0"..."9").contains), let fraction = Double("0.\(digits)"),
             let whole = try? Date(text[..<dot] + "Z", strategy: .iso8601)
         else { return nil }
         return whole.addingTimeInterval(fraction)
