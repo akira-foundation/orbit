@@ -71,8 +71,24 @@ struct DarwinProcessInspectorTests {
         #expect(try DarwinProcessInspector(reader: reader).descendants(of: 10).map(\.pid) == [12])
     }
 
-    @Test func listingsStillAbortOnAChangedMember() {
-        let reader = ScriptedKernelReader(snapshots: [start("1:000001")], table: [member(10, parent: 1)])
+    @Test func listingsStillAbortOnOtherErrors() {
+        let reader = ScriptedKernelReader(table: [member(10, parent: 1)], argumentFailure: "unreadable")
+        #expect(throws: RuntimeError.message("unreadable")) {
+            try DarwinProcessInspector(reader: reader).groupMembers(10)
+        }
+    }
+
+    @Test func listingRereadsAMemberThatChangesTwiceAndThenSettles() throws {
+        let reader = ScriptedKernelReader(
+            snapshots: [moved(2), moved(3), moved(4), moved(5), moved(5), moved(5)],
+            table: [moved(1)]
+        )
+        let members = try DarwinProcessInspector(reader: reader).groupMembers(10)
+        #expect(members.map(\.startID) == ["5:000001"])
+    }
+
+    @Test func listingGivesUpOnAMemberThatKeepsChanging() {
+        let reader = ScriptedKernelReader(snapshots: (2...8).map(moved), table: [moved(1)])
         #expect(throws: RuntimeError.identityMismatch("changed before enrichment")) {
             try DarwinProcessInspector(reader: reader).groupMembers(10)
         }
@@ -259,6 +275,10 @@ struct DarwinProcessInspectorTests {
 
     private func start(_ startID: String) -> KernelProcessSnapshot {
         KernelProcessSnapshot(pid: 4100, pgid: 4100, ppid: 1, startID: startID, command: "fixture")
+    }
+
+    private func moved(_ generation: Int) -> KernelProcessSnapshot {
+        KernelProcessSnapshot(pid: 12, pgid: 10, ppid: 10, startID: "\(generation):000001", command: "fixture")
     }
 
     private func image(_ command: String) -> KernelProcessSnapshot {
