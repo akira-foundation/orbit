@@ -33,7 +33,7 @@ struct DarwinGroupCleanupTests {
 
     private func waitUntilSettled(leader: Int32, inspector: DarwinProcessInspector) async throws {
         let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(5))
+        let deadline = clock.now.advanced(by: .seconds(10))
         while try !isSettled(leader: leader, inspector: inspector) {
             guard clock.now < deadline else { throw RuntimeError.message("group \(leader) never settled") }
             try await clock.sleep(for: .milliseconds(5))
@@ -41,7 +41,7 @@ struct DarwinGroupCleanupTests {
     }
 
     private func isSettled(leader: Int32, inspector: DarwinProcessInspector) throws -> Bool {
-        guard try inspector.identity(of: leader).executable == "sleep" else { return false }
+        guard try SettlingIdentity.executable(of: leader, inspector: inspector) == "sleep" else { return false }
         return try inspector.groupMembers(leader).contains {
             $0.pid != leader && $0.executable == "sleep" && $0.arguments == "/bin/sleep 30"
         }

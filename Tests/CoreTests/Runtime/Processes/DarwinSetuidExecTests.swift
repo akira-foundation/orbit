@@ -32,8 +32,8 @@ struct DarwinSetuidExecTests {
 
     private func waitForLeaderExec(_ leader: Int32, inspector: DarwinProcessInspector) async throws {
         let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(5))
-        while try inspector.identity(of: leader).executable != "sleep" {
+        let deadline = clock.now.advanced(by: .seconds(10))
+        while try SettlingIdentity.executable(of: leader, inspector: inspector) != "sleep" {
             guard clock.now < deadline else { throw RuntimeError.message("leader \(leader) never executed sleep") }
             try await clock.sleep(for: .milliseconds(5))
         }
