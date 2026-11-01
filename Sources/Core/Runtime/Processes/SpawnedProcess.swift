@@ -4,7 +4,7 @@ public final class SpawnedProcess: Sendable {
     public let pid: Int32
     public let stdout: FileHandle?
     public let stderr: FileHandle?
-    private let reaper: ProcessReaper
+    let reaper: ProcessReaper
 
     init(pid: Int32, stdout: FileHandle?, stderr: FileHandle?) {
         self.pid = pid
@@ -13,7 +13,7 @@ public final class SpawnedProcess: Sendable {
         reaper = ProcessReaper(pid: pid)
     }
 
-    public func exitStatus() async -> ExitStatus {
-        await reaper.exitStatus()
+    public func exitStatus() async throws -> ExitStatus {
+        try await reaper.exitStatus()
     }
 }

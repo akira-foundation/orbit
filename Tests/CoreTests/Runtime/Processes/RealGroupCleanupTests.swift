@@ -29,7 +29,7 @@ struct RealGroupCleanupTests {
 
         close(input.write)
         writeEnd = nil
-        #expect(await leader.exitStatus() == .exited(0))
+        #expect(try await leader.exitStatus() == .exited(0))
         #expect(try inspector.groupMembers(leader.pid).isEmpty)
     }
 

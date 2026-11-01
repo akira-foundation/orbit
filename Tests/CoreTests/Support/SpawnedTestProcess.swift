@@ -8,18 +8,18 @@ struct SpawnedTestProcess {
 
     let pid: pid_t
     private let output: FileHandle?
-    private let reapedByCore: Bool
+    private let adopted: SpawnedProcess?
 
     init(pid: pid_t) {
         self.pid = pid
         output = nil
-        reapedByCore = false
+        adopted = nil
     }
 
     init(adopting process: SpawnedProcess) {
         pid = process.pid
         output = process.stdout
-        reapedByCore = true
+        adopted = process
     }
 
     static func sleep() throws -> SpawnedTestProcess {
@@ -30,8 +30,11 @@ struct SpawnedTestProcess {
         var attributes: posix_spawnattr_t?
         posix_spawnattr_init(&attributes)
         defer { posix_spawnattr_destroy(&attributes) }
-        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT))
+        posix_spawnattr_setflags(
+            &attributes, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGDEF))
         posix_spawnattr_setpgroup(&attributes, 0)
+        var defaults: sigset_t = 1 << (SIGTERM - 1) | 1 << (SIGINT - 1)
+        posix_spawnattr_setsigdefault(&attributes, &defaults)
         var actions: posix_spawn_file_actions_t?
         posix_spawn_file_actions_init(&actions)
         defer { posix_spawn_file_actions_destroy(&actions) }
@@ -48,11 +51,19 @@ struct SpawnedTestProcess {
     }
 
     func terminate() {
+        if let adopted {
+            guard adopted.reaper.reapedStatus() == nil || hasGroupMembers() else { return }
+            Darwin.kill(-pid, SIGKILL)
+            return
+        }
         Darwin.kill(-pid, SIGKILL)
-        guard !reapedByCore else { return }
         Darwin.kill(pid, SIGKILL)
         var status: Int32 = 0
         while waitpid(pid, &status, 0) == -1 && errno == EINTR {}
+    }
+
+    private func hasGroupMembers() -> Bool {
+        (try? KernelProcessReader().group(pid))?.isEmpty == false
     }
 
     func waitForLine(_ expected: String) throws {

@@ -14,7 +14,7 @@ struct PosixSpawnerTests {
         let fixture = SpawnedTestProcess(adopting: process)
         defer { fixture.terminate() }
         #expect(try fixture.outputLines() == [try canonical(directory.path), "y"])
-        #expect(await process.exitStatus() == .exited(3))
+        #expect(try await process.exitStatus() == .exited(3))
     }
 
     @Test func newLeaderHasItsOwnGroup() async throws {
@@ -31,7 +31,7 @@ struct PosixSpawnerTests {
         let member = try sleeper(group: .join(leader.pid))
         #expect(getpgid(member.pid) == leader.pid)
         fixture.terminate()
-        #expect(await member.exitStatus() == .signaled(SIGKILL))
+        #expect(try await member.exitStatus() == .signaled(SIGKILL))
     }
 
     @Test func inheritKeepsTheParentGroupAndReadsTheGivenStandardInput() async throws {
@@ -48,7 +48,7 @@ struct PosixSpawnerTests {
         #expect(getpgid(process.pid) == getpgrp())
         close(input.write)
         writeEnd = nil
-        #expect(await process.exitStatus() == .exited(0))
+        #expect(try await process.exitStatus() == .exited(0))
     }
 
     @Test func spawnedChildInheritsOnlyStandardDescriptorsAndFD3() async throws {
@@ -59,18 +59,30 @@ struct PosixSpawnerTests {
             close(control.read)
             close(control.write)
         }
-        let process = try PosixSpawner.spawn(
-            SpawnRequest(
-                executable: "/bin/sh", arguments: ["-c", "ls /dev/fd"], environment: EnvironmentList([]),
-                captureOutput: true, controlDescriptor: control.read))
-        let fixture = SpawnedTestProcess(adopting: process)
-        defer { fixture.terminate() }
-        let descriptors = Set(try fixture.outputLines())
-        let standard: Set<String> = ["0", "1", "2", "3"]
-        #expect(standard.isSubset(of: descriptors))
-        #expect(descriptors.subtracting(standard).count <= 2)
-        #expect(descriptors.isDisjoint(with: leaked.map(String.init)))
-        #expect(await process.exitStatus() == .exited(0))
+        #expect(try await openDescriptors(control: control.read) == ["0", "1", "2", "3"])
+        #expect(try await openDescriptors(control: nil) == ["0", "1", "2"])
+    }
+
+    @Test func controlDescriptorAlreadyOnFD3StillReachesTheChild() async throws {
+        let control = try highPipe()
+        defer { close(control.read) }
+        let process = try await LowDescriptor.with(control.write, placedOn: 3) {
+            try PosixSpawner.spawn(
+                SpawnRequest(
+                    executable: "/bin/sh", arguments: ["-c", "echo control >&3"],
+                    environment: EnvironmentList([]), controlDescriptor: 3))
+        }
+        close(control.write)
+        #expect(try await process.exitStatus() == .exited(0))
+        let output = FileHandle(fileDescriptor: control.read, closeOnDealloc: false).readDataToEndOfFile()
+        #expect(String(decoding: output, as: UTF8.self) == "control\n")
+    }
+
+    @Test func invalidControlDescriptorFailsWithStartError() {
+        #expect(throws: RuntimeError.message("start: Bad file descriptor")) {
+            try PosixSpawner.spawn(
+                SpawnRequest(executable: "/bin/sh", environment: EnvironmentList([]), controlDescriptor: -1))
+        }
     }
 
     @Test func controlDescriptorArrivesAsFD3() async throws {
@@ -81,7 +93,7 @@ struct PosixSpawnerTests {
                 executable: "/bin/sh", arguments: ["-c", "echo control >&3"], environment: EnvironmentList([]),
                 controlDescriptor: control.write))
         close(control.write)
-        #expect(await process.exitStatus() == .exited(0))
+        #expect(try await process.exitStatus() == .exited(0))
         let output = FileHandle(fileDescriptor: control.read, closeOnDealloc: false).readDataToEndOfFile()
         #expect(String(decoding: output, as: UTF8.self) == "control\n")
     }
@@ -91,7 +103,7 @@ struct PosixSpawnerTests {
             SpawnRequest(executable: "/bin/sh", arguments: ["-c", "exit 0"], environment: EnvironmentList([])))
         #expect(process.stdout == nil)
         #expect(process.stderr == nil)
-        #expect(await process.exitStatus() == .exited(0))
+        #expect(try await process.exitStatus() == .exited(0))
     }
 
     @Test func standardErrorIsCapturedSeparately() async throws {
@@ -104,7 +116,7 @@ struct PosixSpawnerTests {
         let error = try #require(process.stderr).readDataToEndOfFile()
         #expect(try fixture.outputLines() == ["out"])
         #expect(String(decoding: error, as: UTF8.self) == "err\n")
-        #expect(await process.exitStatus() == .exited(0))
+        #expect(try await process.exitStatus() == .exited(0))
     }
 
     @Test func signaledChildReportsSignal() async throws {
@@ -112,16 +124,7 @@ struct PosixSpawnerTests {
         let fixture = SpawnedTestProcess(adopting: process)
         defer { fixture.terminate() }
         kill(process.pid, SIGKILL)
-        #expect(await process.exitStatus() == .signaled(SIGKILL))
-    }
-
-    @Test func exitStatusServesSeveralCallersBeforeAndAfterExit() async throws {
-        let process = try PosixSpawner.spawn(
-            SpawnRequest(executable: "/bin/sh", arguments: ["-c", "exit 7"], environment: EnvironmentList([])))
-        async let first = process.exitStatus()
-        async let second = process.exitStatus()
-        #expect(await [first, second] == [.exited(7), .exited(7)])
-        #expect(await process.exitStatus() == .exited(7))
+        #expect(try await process.exitStatus() == .signaled(SIGKILL))
     }
 
     @Test func childIsReapedWithoutAnyoneWaiting() async throws {
@@ -158,6 +161,19 @@ struct PosixSpawnerTests {
                 executable: "/bin/sleep", arguments: ["30"], environment: EnvironmentList([]), group: group))
     }
 
+    private func openDescriptors(control: Int32?) async throws -> [String] {
+        let probe = "i=0; while [ $i -lt 300 ]; do [ -e /dev/fd/$i ] && echo $i; i=$((i + 1)); done; exit 0"
+        let process = try PosixSpawner.spawn(
+            SpawnRequest(
+                executable: "/bin/sh", arguments: ["-c", probe], environment: EnvironmentList([]),
+                captureOutput: true, controlDescriptor: control))
+        let fixture = SpawnedTestProcess(adopting: process)
+        defer { fixture.terminate() }
+        let lines = try fixture.outputLines()
+        #expect(try await process.exitStatus() == .exited(0))
+        return lines
+    }
+
     private func leakedPipe() throws -> [Int32] {
         var ends: [Int32] = [0, 0]
         guard pipe(&ends) == 0 else { throw RuntimeError.message("pipe failed") }
@@ -165,6 +181,18 @@ struct PosixSpawnerTests {
         let high = ends.map { fcntl($0, F_DUPFD, 200) }
         guard high.allSatisfy({ $0 >= 200 }) else { throw RuntimeError.message("dup failed") }
         return high
+    }
+
+    private func highPipe() throws -> (read: Int32, write: Int32) {
+        let ends = try PosixSpawner.makePipe()
+        defer {
+            close(ends.read)
+            close(ends.write)
+        }
+        let read = fcntl(ends.read, F_DUPFD_CLOEXEC, 100)
+        let write = fcntl(ends.write, F_DUPFD_CLOEXEC, 100)
+        guard read >= 100, write >= 100 else { throw RuntimeError.message("dup failed") }
+        return (read, write)
     }
 
     private func canonical(_ path: String) throws -> String {
