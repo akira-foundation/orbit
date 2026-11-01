@@ -137,4 +137,49 @@ struct OwnedMemberCleanupTests {
         #expect(fake.signals.map(\.1) == [.terminate])
         #expect(fake.isAlive(4101))
     }
+
+    @Test func memberAppearingAfterTermReceivesTermAndThenKill() async throws {
+        let fake = FakeProcessInspector.supervised(members: [.init(pid: 4101, spawnsOnTerm: 4102)])
+        try await OwnedMemberCleanup.run(supervisor: fake.identity(4100), inspector: fake, grace: .milliseconds(10))
+        #expect(fake.signals.map(\.0) == [4101, 4102, 4102])
+        #expect(fake.signals.map(\.1) == [.terminate, .terminate, .kill])
+        #expect(fake.isAlive(4100) && !fake.isAlive(4101) && !fake.isAlive(4102))
+    }
+
+    @Test func memberAppearingDuringTheFinalWaitReceivesKill() async throws {
+        let fake = FakeProcessInspector.supervised(members: [
+            .init(pid: 4101, ignoresTerm: true, spawnsOnKill: 4102)
+        ])
+        try await OwnedMemberCleanup.run(supervisor: fake.identity(4100), inspector: fake, grace: .milliseconds(10))
+        #expect(fake.signals.map(\.0) == [4101, 4101, 4102])
+        #expect(fake.signals.map(\.1) == [.terminate, .kill, .kill])
+        #expect(!fake.isAlive(4102))
+    }
+
+    @Test func everyPIDReceivesEachSignalAtMostOnce() async throws {
+        let fake = FakeProcessInspector.supervised(members: [
+            .init(pid: 4101, ignoresTerm: true, spawnsOnTerm: 4103),
+            .init(pid: 4102, ignoresTerm: true, survivesKillForReads: 20, spawnsOnKill: 4104),
+        ])
+        try await OwnedMemberCleanup.run(supervisor: fake.identity(4100), inspector: fake, grace: .milliseconds(20))
+        let pairs = fake.signals.map { "\($0.0):\($0.1)" }
+        #expect(pairs.count == Set(pairs).count)
+        #expect(
+            Set(pairs) == [
+                "4101:terminate", "4102:terminate", "4103:terminate", "4101:kill", "4102:kill", "4103:kill",
+                "4104:kill",
+            ])
+        #expect(!fake.signals.contains { $0.0 == 4100 })
+    }
+
+    @Test func signalErrorOfALateMemberSurvivesTheTermPhase() async {
+        let fake = FakeProcessInspector.supervised(members: [
+            .init(pid: 4101, ignoresTerm: true, spawnsOnTerm: 4102, spawnedDeniesSignalOnce: "late signal denied")
+        ])
+        let error = await #expect(throws: (any Error).self) {
+            try await OwnedMemberCleanup.run(supervisor: fake.identity(4100), inspector: fake, grace: .milliseconds(10))
+        }
+        #expect(error.map { "\($0)" } == "late signal denied")
+        #expect(!fake.isAlive(4101) && !fake.isAlive(4102))
+    }
 }

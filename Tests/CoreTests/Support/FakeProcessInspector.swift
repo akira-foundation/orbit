@@ -14,6 +14,9 @@ final class FakeProcessInspector: ProcessInspector {
         var changeGroupAfterTerm: Int32?
         var exitBeforeSignal = false
         var survivesKillForReads = 0
+        var spawnsOnTerm: Int32?
+        var spawnsOnKill: Int32?
+        var spawnedDeniesSignalOnce: String?
     }
 
     private struct State {
@@ -45,21 +48,7 @@ final class FakeProcessInspector: ProcessInspector {
     }
 
     func add(_ process: Process) {
-        let pgid = process.pgid ?? supervisorPID
-        let ppid = process.ppid ?? (process.pid == pgid ? 0 : pgid)
-        let identity = ProcessIdentity(
-            pid: process.pid,
-            pgid: pgid,
-            startID: process.startID ?? "start-\(process.pid)",
-            executable: "/fixture/process",
-            arguments: "fixture \(process.pid)"
-        )
-        state.withLock { state in
-            state.identities[process.pid] = identity
-            state.parents[process.pid] = ppid
-            state.processes[process.pid] = process
-            state.alive.insert(process.pid)
-        }
+        state.withLock { Self.insert(process, supervisorPID: supervisorPID, into: &$0) }
     }
 
     func identity(_ pid: Int32) -> ProcessIdentity {
@@ -160,6 +149,15 @@ final class FakeProcessInspector: ProcessInspector {
                 throw RuntimeError.message(message)
             }
             state.signals.append((pid, signal))
+            if signal == .terminate, let child = state.processes[pid]?.spawnsOnTerm {
+                let spawned = Process(
+                    pid: child, ignoresTerm: true, denySignalOnce: state.processes[pid]?.spawnedDeniesSignalOnce
+                )
+                Self.insert(spawned, supervisorPID: supervisorPID, into: &state)
+            }
+            if signal == .kill, let child = state.processes[pid]?.spawnsOnKill {
+                Self.insert(Process(pid: child), supervisorPID: supervisorPID, into: &state)
+            }
             if signal == .terminate, let group = state.processes[pid]?.changeGroupAfterTerm {
                 state.identities[pid] = Self.replacing(expected, pgid: group)
                 state.parents[pid] = 0
@@ -173,6 +171,20 @@ final class FakeProcessInspector: ProcessInspector {
                 state.alive.remove(pid)
             }
         }
+    }
+
+    private static func insert(_ process: Process, supervisorPID: Int32, into state: inout State) {
+        let pgid = process.pgid ?? supervisorPID
+        state.identities[process.pid] = ProcessIdentity(
+            pid: process.pid,
+            pgid: pgid,
+            startID: process.startID ?? "start-\(process.pid)",
+            executable: "/fixture/process",
+            arguments: "fixture \(process.pid)"
+        )
+        state.parents[process.pid] = process.ppid ?? (process.pid == pgid ? 0 : pgid)
+        state.processes[process.pid] = process
+        state.alive.insert(process.pid)
     }
 
     private static func identity(of pid: Int32, in state: State) throws -> ProcessIdentity {

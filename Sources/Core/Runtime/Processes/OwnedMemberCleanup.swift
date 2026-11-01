@@ -6,8 +6,13 @@ public enum OwnedMemberCleanup {
         supervisor: ProcessIdentity, inspector: any ProcessInspector, grace: Duration
     ) async throws {
         var members = try KnownRuntimeMembers(supervisor: supervisor, inspector: inspector)
-        let termError = signal(members.ordered, except: supervisor.pid, with: .terminate, inspector: inspector)
-        let waitError = await waitOnlySupervisor(supervisor, &members, inspector: inspector, limit: grace)
+        var terminated: Set<Int32> = []
+        let termError = signal(
+            members.ordered, except: supervisor.pid, with: .terminate, signalled: &terminated, inspector: inspector
+        )
+        let waitError = await drainUntilOnlySupervisor(
+            supervisor, &members, phase: .terminate, signalled: &terminated, inspector: inspector, limit: grace
+        )
         guard let waitError else {
             if let termError { throw termError }
             return
@@ -16,24 +21,33 @@ public enum OwnedMemberCleanup {
             if let error = RuntimeErrors.join([termError, waitError]) { throw error }
             return
         }
-        let killError = signal(members.ordered, except: supervisor.pid, with: .kill, inspector: inspector)
-        let killed = members
+        var killed: Set<Int32> = []
+        let killError = signal(
+            members.ordered, except: supervisor.pid, with: .kill, signalled: &killed, inspector: inspector
+        )
+        let survivors = members
+        let alreadyKilled = killed
         let finalWaitError = await Task.detached {
-            var remaining = killed
-            return await waitOnlySupervisor(supervisor, &remaining, inspector: inspector, limit: killWait)
+            var remaining = survivors
+            var signalled = alreadyKilled
+            return await drainUntilOnlySupervisor(
+                supervisor, &remaining, phase: .kill, signalled: &signalled, inspector: inspector, limit: killWait
+            )
         }.value
-        let retainedWaitError: (any Error)? = waitError.contains(.groupNotEmpty) ? nil : waitError
-        if let error = RuntimeErrors.join([termError, retainedWaitError, killError, finalWaitError]) {
+        let retainedWaitErrors = ((waitError as? RuntimeErrors)?.errors ?? [waitError]).filter {
+            !$0.contains(.groupNotEmpty)
+        }
+        if let error = RuntimeErrors.join([termError] + retainedWaitErrors + [killError, finalWaitError]) {
             throw error
         }
     }
 
     private static func signal(
         _ members: [ProcessIdentity], except supervisorPID: Int32, with signal: ProcessSignal,
-        inspector: any ProcessInspector
+        signalled: inout Set<Int32>, inspector: any ProcessInspector
     ) -> (any Error)? {
         var errors: [(any Error)?] = []
-        for member in members where member.pid != supervisorPID {
+        for member in members where member.pid != supervisorPID && signalled.insert(member.pid).inserted {
             do {
                 try inspector.verifyIdentity(member)
                 try inspector.signal(member, signal)
@@ -46,31 +60,36 @@ public enum OwnedMemberCleanup {
         return RuntimeErrors.join(errors)
     }
 
-    private static func waitOnlySupervisor(
-        _ supervisor: ProcessIdentity, _ members: inout KnownRuntimeMembers, inspector: any ProcessInspector,
-        limit: Duration
+    private static func drainUntilOnlySupervisor(
+        _ supervisor: ProcessIdentity, _ members: inout KnownRuntimeMembers, phase: ProcessSignal,
+        signalled: inout Set<Int32>, inspector: any ProcessInspector, limit: Duration
     ) async -> (any Error)? {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: limit)
+        var lateErrors: [(any Error)?] = []
         while true {
             do {
                 try members.refresh(supervisor: supervisor, inspector: inspector)
             } catch {
-                return error
+                return RuntimeErrors.join(lateErrors + [error])
             }
+            lateErrors.append(
+                signal(
+                    members.ordered, except: supervisor.pid, with: phase, signalled: &signalled, inspector: inspector)
+            )
             if members.containsOnly(supervisor.pid) {
-                return nil
+                return RuntimeErrors.join(lateErrors)
             }
             if Task.isCancelled {
-                return RuntimeError.cancelled
+                return RuntimeErrors.join(lateErrors + [RuntimeError.cancelled])
             }
             if clock.now >= deadline {
-                return RuntimeError.groupNotEmpty
+                return RuntimeErrors.join(lateErrors + [RuntimeError.groupNotEmpty])
             }
             do {
                 try await clock.sleep(for: pollInterval)
             } catch {
-                return RuntimeError.cancelled
+                return RuntimeErrors.join(lateErrors + [RuntimeError.cancelled])
             }
         }
     }
