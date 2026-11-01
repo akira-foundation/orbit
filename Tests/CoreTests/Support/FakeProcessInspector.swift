@@ -18,6 +18,7 @@ final class FakeProcessInspector: ProcessInspector {
         var spawnsOnKill: Int32?
         var spawnedDeniesSignalOnce: String?
         var spawnedRecyclesInsideSignal = false
+        var unsettledForListings = 0
     }
 
     private struct State {
@@ -31,6 +32,7 @@ final class FakeProcessInspector: ProcessInspector {
         var pendingDeathReads: [Int32: Int] = [:]
         var signalVerifiesIdentity = true
         var unsettled: Set<Int32> = []
+        var unsettledListings: [Int32: Int] = [:]
         var groupReads = 0
         var groupFailure: (fromRead: Int, message: String)?
     }
@@ -118,7 +120,7 @@ final class FakeProcessInspector: ProcessInspector {
             if let failure = state.groupFailure, state.groupReads >= failure.fromRead {
                 throw RuntimeError.message(failure.message)
             }
-            return Self.listing(in: state) { $0.pgid == pgid }
+            return Self.listing(in: &state) { $0.pgid == pgid }
         }
     }
 
@@ -134,7 +136,7 @@ final class FakeProcessInspector: ProcessInspector {
                     changed = true
                 }
             }
-            return Self.listing(in: state) { $0.pid != pid && known.contains($0.pid) }
+            return Self.listing(in: &state) { $0.pid != pid && known.contains($0.pid) }
         }
     }
 
@@ -143,7 +145,7 @@ final class FakeProcessInspector: ProcessInspector {
             if let message = state.listenerError {
                 throw RuntimeError.message(message)
             }
-            guard !state.listenerReads.isEmpty else { return ProcessListing(identities: []) }
+            guard !state.listenerReads.isEmpty else { return ProcessListing(identities: [], unsettled: []) }
             let pids = state.listenerReads.removeFirst()
             return ProcessListing(
                 identities: pids.filter { !state.unsettled.contains($0) }.compactMap { state.identities[$0] },
@@ -209,6 +211,9 @@ final class FakeProcessInspector: ProcessInspector {
         state.parents[process.pid] = process.ppid ?? (process.pid == pgid ? 0 : pgid)
         state.processes[process.pid] = process
         state.alive.insert(process.pid)
+        if process.unsettledForListings > 0 {
+            state.unsettledListings[process.pid] = process.unsettledForListings
+        }
     }
 
     private static func identity(of pid: Int32, in state: State) throws -> ProcessIdentity {
@@ -218,11 +223,18 @@ final class FakeProcessInspector: ProcessInspector {
         return identity
     }
 
-    private static func listing(in state: State, where include: (ProcessIdentity) -> Bool) -> ProcessListing {
+    private static func listing(in state: inout State, where include: (ProcessIdentity) -> Bool) -> ProcessListing {
         let matching = state.alive.compactMap { state.identities[$0] }.filter(include).sorted { $0.pid < $1.pid }
+        let unsettled = matching.map(\.pid).filter {
+            state.unsettled.contains($0) || state.unsettledListings[$0] != nil
+        }
+        for pid in unsettled {
+            guard let remaining = state.unsettledListings[pid] else { continue }
+            state.unsettledListings[pid] = remaining > 1 ? remaining - 1 : nil
+        }
         return ProcessListing(
-            identities: matching.filter { !state.unsettled.contains($0.pid) },
-            unsettled: matching.map(\.pid).filter { state.unsettled.contains($0) }
+            identities: matching.filter { !unsettled.contains($0.pid) },
+            unsettled: unsettled
         )
     }
 

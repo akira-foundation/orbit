@@ -205,4 +205,13 @@ struct OwnedMemberCleanupTests {
         #expect(error.map { "\($0)" }?.contains("group listing failed") == true)
         #expect(!fake.signals.contains { $0.1 == .kill })
     }
+
+    @Test func memberUnsettledAtTheTermDeadlineDoesNotFailACleanKillPhase() async throws {
+        let fake = FakeProcessInspector.supervised(members: [
+            .init(pid: 4101, ignoresTerm: true), .init(pid: 4102, ignoresTerm: true, unsettledForListings: 4),
+        ])
+        try await OwnedMemberCleanup.run(supervisor: fake.identity(4100), inspector: fake, grace: .zero)
+        #expect(fake.signals.map { "\($0.0):\($0.1)" } == ["4101:terminate", "4101:kill", "4102:kill"])
+        #expect(!fake.isAlive(4101) && !fake.isAlive(4102))
+    }
 }

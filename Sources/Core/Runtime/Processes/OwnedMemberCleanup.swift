@@ -82,7 +82,7 @@ public enum OwnedMemberCleanup {
                 return (RuntimeErrors.join(lateErrors), RuntimeError.cancelled)
             }
             if clock.now >= deadline {
-                return (RuntimeErrors.join(lateErrors), deadlineError(members))
+                return (RuntimeErrors.join(lateErrors), deadlineError(members, phase: phase))
             }
             do {
                 try await clock.sleep(for: pollInterval)
@@ -92,8 +92,8 @@ public enum OwnedMemberCleanup {
         }
     }
 
-    private static func deadlineError(_ members: KnownRuntimeMembers) -> RuntimeError {
-        guard members.unsettled.isEmpty else {
+    private static func deadlineError(_ members: KnownRuntimeMembers, phase: ProcessSignal) -> RuntimeError {
+        guard phase == .terminate || members.unsettled.isEmpty else {
             let pids = members.unsettled.sorted().map(String.init).joined(separator: ", ")
             return RuntimeError.identityMismatch("members did not settle: \(pids)")
         }
