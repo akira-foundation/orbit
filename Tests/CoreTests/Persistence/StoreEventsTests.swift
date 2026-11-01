@@ -37,6 +37,19 @@ struct StoreEventsTests {
         #expect(try await store.events(projectID: ids[0], since: 0, limit: 10).map(\.text) == ["before", "after"])
     }
 
+    @Test func failureOtherThanAConstraintAbortsTheBatch() async throws {
+        let (store, ids) = try await store(with: "p")
+        try store.db.execute(
+            """
+            CREATE TRIGGER overflow BEFORE INSERT ON events WHEN NEW.text = 'bad'
+            BEGIN SELECT abs(-9223372036854775807 - 1); END;
+            """)
+        await #expect(throws: SQLiteError.self) {
+            try await store.appendEvents([record(ids[0], "good"), record(ids[0], "bad")])
+        }
+        #expect(try await store.events(projectID: ids[0], since: 0, limit: 10).isEmpty)
+    }
+
     @Test func historyClampsTheLimit() async throws {
         let (store, ids) = try await store(with: "p")
         try await store.appendEvents((0..<1200).map { record(ids[0], "\($0)", at: Int64($0)) })

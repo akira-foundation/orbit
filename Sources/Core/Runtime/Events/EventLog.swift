@@ -15,6 +15,8 @@ public actor EventLog {
     private var finished = false
     private var drainWaiters: [(target: Int, continuation: CheckedContinuation<Void, Never>)] = []
     private var closeWaiters: [CheckedContinuation<Void, Never>] = []
+    private var lastWrite: Task<Void, Never>?
+    public private(set) var lastWriteError: (any Error)?
 
     public init(store: Store?, clock: any RuntimeClock) {
         self.store = store
@@ -91,9 +93,19 @@ public actor EventLog {
     }
 
     private func writePending() async {
-        guard let store, !pending.isEmpty else { return }
-        let batch = pending
-        pending.removeAll(keepingCapacity: true)
-        try? await store.appendEvents(batch)
+        if let store, !pending.isEmpty {
+            let batch = pending
+            pending.removeAll(keepingCapacity: true)
+            let previous = lastWrite
+            lastWrite = Task {
+                await previous?.value
+                do {
+                    try await store.appendEvents(batch)
+                } catch {
+                    lastWriteError = error
+                }
+            }
+        }
+        await lastWrite?.value
     }
 }

@@ -51,12 +51,54 @@ struct RuntimeSessionTests {
         #expect(released.load(ordering: .relaxed) == true)
     }
 
-    @Test func stopSignalWaiterReturnsWhenCancelled() async {
+    @Test func stopSignalWaiterReturnsWhenCancelled() async throws {
         let session = session()
-        let waiter = Task { await session.stopSignal() }
+        let released = Atomic<Bool>(false)
+        let waiter = Task {
+            await session.stopSignal()
+            released.store(true, ordering: .relaxed)
+        }
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(released.load(ordering: .relaxed) == false)
+
         waiter.cancel()
-        await waiter.value
+        let deadline = ContinuousClock.now + .seconds(2)
+        while !released.load(ordering: .relaxed) && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(released.load(ordering: .relaxed) == true)
         #expect(!session.shutdownRequested)
+    }
+
+    @Test func stopRequestReleasesEveryWaiter() async throws {
+        let session = session()
+        let released = Atomic<Int>(0)
+        let waiters = (0..<3).map { _ in
+            Task {
+                await session.stopSignal()
+                released.add(1, ordering: .relaxed)
+            }
+        }
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(released.load(ordering: .relaxed) == 0)
+
+        session.requestStop()
+        for waiter in waiters { await waiter.value }
+        #expect(released.load(ordering: .relaxed) == 3)
+    }
+
+    @Test func firedStopCallbackIsReleased() throws {
+        let session = session()
+        weak var observed: TemporaryDirectory?
+        do {
+            let captured = try TemporaryDirectory()
+            observed = captured
+            session.installStopCallback { _ = captured.path }
+        }
+        #expect(observed != nil)
+
+        session.requestShutdown()
+        #expect(observed == nil)
     }
 
     @Test func callbackInstalledAfterShutdownFiresImmediately() {
@@ -165,8 +207,56 @@ struct RuntimeSessionTests {
         #expect(object["attempts"] == nil)
     }
 
-    @Test func snapshotRoundTripsThroughJSON() throws {
+    @Test func snapshotOmitsZeroStartupAndEmptyError() throws {
         let session = session()
+        session.setStatus(.running)
+        session.setError("")
+
+        let data = try JSONEncoder().encode(session.snapshot(conns: 0))
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        #expect(object["readyAt"] as? String == "2027-01-15T08:00:00Z")
+        #expect(object["startupMs"] == nil)
+        #expect(object["error"] == nil)
+    }
+
+    @Test func snapshotDecodesAnExplicitNullReadyAt() throws {
+        let json = """
+            {"projectId":"p","status":"stopped","pid":0,"port":0,"startedAt":"2027-01-15T08:00:00Z","readyAt":null,
+            "uptimeMs":0,"conns":0,"lastActivity":"2027-01-15T08:00:00Z"}
+            """
+        let snapshot = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
+        #expect(snapshot.readyAt == nil)
+        #expect(snapshot.status == .stopped)
+    }
+
+    @Test func snapshotDecodesAMissingReadyAt() throws {
+        let json = """
+            {"projectId":"p","status":"starting","pid":0,"port":0,"startedAt":"2027-01-15T08:00:00Z",
+            "uptimeMs":0,"conns":0,"lastActivity":"2027-01-15T08:00:00Z"}
+            """
+        let snapshot = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
+        #expect(snapshot.readyAt == nil)
+    }
+
+    @Test func logLineEncodesAnRFC3339NanoTimestamp() throws {
+        let fractional = LogLine(timestamp: Date(timeIntervalSince1970: 1_800_000_000.25), stream: .stdout, text: "a")
+        let whole = LogLine(timestamp: Date(timeIntervalSince1970: 1_800_000_000), stream: .stderr, text: "b")
+
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: JSONEncoder().encode([fractional, whole])) as? [[String: Any]])
+
+        #expect(object[0]["timestamp"] as? String == "2027-01-15T08:00:00.25Z")
+        #expect(object[1]["timestamp"] as? String == "2027-01-15T08:00:00Z")
+        #expect(object[0]["stream"] as? String == "stdout")
+        let decoded = try JSONDecoder().decode([LogLine].self, from: JSONEncoder().encode([fractional, whole]))
+        #expect(decoded == [fractional, whole])
+    }
+
+    @Test func snapshotRoundTripsThroughJSON() throws {
+        let clock = TestClock()
+        let session = session(clock)
+        clock.advance(by: 2)
         session.setStatus(.running)
         let snapshot = session.snapshot(conns: 0)
         let decoded = try JSONDecoder().decode(SessionSnapshot.self, from: JSONEncoder().encode(snapshot))

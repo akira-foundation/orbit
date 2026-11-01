@@ -5,16 +5,20 @@ extension Store {
         try db.transaction {
             for record in records {
                 let projectID = record.projectID.flatMap { $0.isEmpty ? nil : $0 }
-                _ = try? db.run(
-                    """
-                    INSERT INTO events (project_id, session_id, ts, stream, text, level, source)
-                    VALUES (?, ?, ?, ?, ?, ?, ?);
-                    """,
-                    [
-                        .optional(projectID), .text(record.sessionID ?? ""), .int(record.timestamp),
-                        .text(record.stream?.rawValue ?? ""), .text(record.text), .text(record.level.rawValue),
-                        .text(record.source.rawValue),
-                    ])
+                do {
+                    try db.run(
+                        """
+                        INSERT INTO events (project_id, session_id, ts, stream, text, level, source)
+                        VALUES (?, ?, ?, ?, ?, ?, ?);
+                        """,
+                        [
+                            .optional(projectID), .text(record.sessionID ?? ""), .int(record.timestamp),
+                            .text(record.stream?.rawValue ?? ""), .text(record.text), .text(record.level.rawValue),
+                            .text(record.source.rawValue),
+                        ])
+                } catch let error as SQLiteError where error.isConstraintViolation {
+                    continue
+                }
             }
         }
     }

@@ -40,9 +40,10 @@ struct SessionState {
     }
 
     mutating func invokeStopCallback() {
-        guard shutdownRequested, let stopCallback, !stopCallbackInvoked else { return }
+        guard shutdownRequested, let callback = stopCallback, !stopCallbackInvoked else { return }
         stopCallbackInvoked = true
-        stopCallback()
+        stopCallback = nil
+        callback()
     }
 
     mutating func releaseStop() -> [CheckedContinuation<Void, Never>] {

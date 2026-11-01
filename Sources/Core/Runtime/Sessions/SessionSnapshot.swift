@@ -47,13 +47,15 @@ public struct SessionSnapshot: Sendable, Equatable, Codable {
         phase = try container.decodeIfPresent(String.self, forKey: .phase)
         pid = try container.decode(Int32.self, forKey: .pid)
         port = try container.decode(Int.self, forKey: .port)
-        startedAt = try Self.date(container, .startedAt)
-        readyAt = try container.contains(.readyAt) ? Self.date(container, .readyAt) : nil
+        startedAt = try RFC3339Timestamp.decode(container, .startedAt)
+        readyAt =
+            try container.contains(.readyAt) && !container.decodeNil(forKey: .readyAt)
+            ? RFC3339Timestamp.decode(container, .readyAt) : nil
         uptimeMs = try container.decode(Int64.self, forKey: .uptimeMs)
         startupMs = try container.decodeIfPresent(Int64.self, forKey: .startupMs)
         attempts = try container.decodeIfPresent(Int.self, forKey: .attempts)
         conns = try container.decode(Int.self, forKey: .conns)
-        lastActivity = try Self.date(container, .lastActivity)
+        lastActivity = try RFC3339Timestamp.decode(container, .lastActivity)
         error = try container.decodeIfPresent(String.self, forKey: .error)
     }
 
@@ -61,25 +63,16 @@ public struct SessionSnapshot: Sendable, Equatable, Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(projectID, forKey: .projectID)
         try container.encode(status, forKey: .status)
-        try container.encodeIfPresent(phase, forKey: .phase)
+        try container.encodeIfPresent(phase.flatMap { $0.isEmpty ? nil : $0 }, forKey: .phase)
         try container.encode(pid, forKey: .pid)
         try container.encode(port, forKey: .port)
-        try container.encode(startedAt.formatted(.iso8601), forKey: .startedAt)
-        try container.encodeIfPresent(readyAt?.formatted(.iso8601), forKey: .readyAt)
+        try container.encode(RFC3339Timestamp.seconds(startedAt), forKey: .startedAt)
+        try container.encodeIfPresent(readyAt.map(RFC3339Timestamp.seconds), forKey: .readyAt)
         try container.encode(uptimeMs, forKey: .uptimeMs)
-        try container.encodeIfPresent(startupMs, forKey: .startupMs)
-        try container.encodeIfPresent(attempts, forKey: .attempts)
+        try container.encodeIfPresent(startupMs.flatMap { $0 == 0 ? nil : $0 }, forKey: .startupMs)
+        try container.encodeIfPresent(attempts.flatMap { $0 == 0 ? nil : $0 }, forKey: .attempts)
         try container.encode(conns, forKey: .conns)
-        try container.encode(lastActivity.formatted(.iso8601), forKey: .lastActivity)
-        try container.encodeIfPresent(error, forKey: .error)
-    }
-
-    private static func date(_ container: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) throws -> Date {
-        let text = try container.decode(String.self, forKey: key)
-        guard let date = try? Date(text, strategy: .iso8601) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: key, in: container, debugDescription: "expected an RFC 3339 date, got \(text)")
-        }
-        return date
+        try container.encode(RFC3339Timestamp.seconds(lastActivity), forKey: .lastActivity)
+        try container.encodeIfPresent(error.flatMap { $0.isEmpty ? nil : $0 }, forKey: .error)
     }
 }
