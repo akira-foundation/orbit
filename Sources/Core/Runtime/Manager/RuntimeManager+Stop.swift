@@ -6,6 +6,7 @@ extension RuntimeManager {
             return
         }
         session.requestStop()
+        await launchFinished(session)
         var polls = Int((Self.stopGrace + .seconds(1)) / Self.stopPoll)
         while polls > 0 && session.status != .stopped && session.status != .error {
             polls -= 1
@@ -48,18 +49,18 @@ extension RuntimeManager {
             await group.next()
             group.cancelAll()
         }
-        for session in live where session.status.isLive {
+        for session in supervising.values {
             guard let supervisor = session.supervisor else { continue }
             try? inspector.signal(supervisor, .terminate)
         }
     }
 
     public func close() async {
-        await stopAll()
-        for task in Array(restarts.values) + Array(watchdogs.values) {
-            task.cancel()
-        }
+        closing = true
+        restarts.values.forEach { $0.cancel() }
         restarts.removeAll()
+        await stopAll()
+        watchdogs.values.forEach { $0.cancel() }
         watchdogs.removeAll()
     }
 }

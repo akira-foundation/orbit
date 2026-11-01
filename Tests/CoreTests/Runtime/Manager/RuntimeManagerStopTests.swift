@@ -64,6 +64,35 @@ struct RuntimeManagerStopTests {
         stubborn.exit()
     }
 
+    @Test func closeCancelsPendingRestartsBeforeStoppingTheRest() async throws {
+        let harness = try await ManagerHarness(
+            projects: ["p1", "p2"], stopIgnoredAt: [1], inspector: .supervised(supervisor: 4101))
+        try await harness.manager.start("p1")
+        let crashing = try await harness.startRunning(0, "p1")
+        try await harness.manager.start("p2")
+        let stubborn = try await harness.startRunning(1, "p2")
+        crashing.exit()
+        #expect(await harness.clock.waitForPending(.seconds(1)))
+
+        let close = Task { await harness.manager.close() }
+        #expect(await harness.clock.waitForPending(RuntimeManager.stopAllTimeout))
+        let restartsDuringClose = await harness.manager.restarts.count
+        harness.clock.advance(by: 3)
+        await close.value
+        let refused: String?
+        do {
+            try await harness.manager.start("p1")
+            refused = nil
+        } catch {
+            refused = String(describing: error)
+        }
+
+        #expect(restartsDuringClose == 0)
+        #expect(harness.launcher.handles.count == 2)
+        #expect(refused == "runtime: manager is closed")
+        stubborn.exit()
+    }
+
     @Test func connectionCountsIgnoreEmptyIDsAndDropAtZero() async throws {
         let harness = try await ManagerHarness()
         try await harness.manager.start(ManagerHarness.projectID)

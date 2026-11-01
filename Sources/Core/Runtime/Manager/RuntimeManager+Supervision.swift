@@ -2,6 +2,7 @@ import Foundation
 
 extension RuntimeManager {
     func supervise(_ session: RuntimeSession, _ handle: any SupervisorHandle) {
+        supervising[session.sessionID] = session
         session.installStopCallback { try? handle.stop() }
         for (stream, output) in [(LogStream.stdout, handle.stdout), (.stderr, handle.stderr)] {
             if let output {
@@ -12,38 +13,29 @@ extension RuntimeManager {
         Task { await self.awaitExit(session, handle) }
     }
 
-    func received(_ text: String, _ stream: LogStream, _ session: RuntimeSession) async {
-        log(LogLine(timestamp: clock.now, stream: stream, text: text), session)
-        guard session.status == .starting, ReadinessDetector.looksReady(text) else { return }
-        session.setStatus(.running)
-        guard isCurrent(session) else { return }
+    func received(_ lines: [String], _ stream: LogStream, _ session: RuntimeSession) async {
+        var becameReady = false
+        for text in lines {
+            log(LogLine(timestamp: clock.now, stream: stream, text: text), session)
+            if session.status == .starting && ReadinessDetector.looksReady(text) {
+                session.setStatus(.running)
+                becameReady = true
+            }
+        }
+        guard becameReady, isCurrent(session) else { return }
         publish(.running, session)
         await persist(.running, session)
     }
 
     private nonisolated func read(_ output: FileHandle, _ stream: LogStream, _ session: RuntimeSession) {
-        let chunks = AsyncStream<Data> { continuation in
-            output.readabilityHandler = { readable in
-                let data = readable.availableData
-                guard !data.isEmpty else {
-                    readable.readabilityHandler = nil
-                    continuation.finish()
-                    return
-                }
-                continuation.yield(data)
-            }
-        }
+        let reader = PipeLineReader(output)
         Task.detached { [weak self] in
-            var scanner = LineScanner()
-            for await chunk in chunks {
-                for line in scanner.feed(chunk) {
-                    await self?.received(line, stream, session)
-                }
-            }
-            for line in scanner.finish() {
-                await self?.received(line, stream, session)
+            for await lines in reader.batches {
+                await self?.received(lines, stream, session)
+                reader.acknowledge()
             }
         }
+        reader.start()
     }
 
     private func awaitExit(_ session: RuntimeSession, _ handle: any SupervisorHandle) async {
@@ -69,7 +61,7 @@ extension RuntimeManager {
             session.setShutdownError(failure)
         }
         await finalize(session, failure, requested: requested)
-        handles.removeValue(forKey: session.sessionID)
+        supervising.removeValue(forKey: session.sessionID)
     }
 
     private func finalize(_ session: RuntimeSession, _ failure: (any Error)?, requested: Bool) async {
@@ -81,9 +73,8 @@ extension RuntimeManager {
             return
         }
         publish(.error, session)
-        if !requested {
-            let message = failure.map { "process exited: \($0)" } ?? "process exited before becoming ready"
-            log(LogLine(timestamp: clock.now, stream: .system, text: message), session)
+        if !requested, let failure {
+            log(LogLine(timestamp: clock.now, stream: .system, text: "process exited: \(failure)"), session)
             if session.wasRunning {
                 scheduleRestart(session)
             } else {
@@ -109,7 +100,7 @@ extension RuntimeManager {
             text: "self-heal restart attempt \(attempt) scheduled in \(Self.text(delay))")
         restarts[projectID]?.cancel()
         restarts[projectID] = Task {
-            guard await Self.elapses(delay, on: clock, before: session), isCurrent(session) else { return }
+            guard await Self.elapses(delay, on: clock, before: session), !closing, isCurrent(session) else { return }
             try? await launch(projectID, automatic: true)
         }
     }

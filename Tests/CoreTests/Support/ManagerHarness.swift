@@ -19,14 +19,14 @@ struct ManagerHarness {
 
     init(
         devCommand: String? = "/bin/echo ready", projects: [String] = [projectID], base: [String] = [],
-        serviceEnvironment: [String: String] = [:], stopIgnoredAt: Set<Int> = [],
+        serviceEnvironment: [String: String] = [:], holdServices: Bool = false, stopIgnoredAt: Set<Int> = [],
         inspector: FakeProcessInspector = .supervised()
     ) async throws {
         store = try Store.inMemory()
         directory = try TemporaryDirectory()
         launcher = FakeLauncher(stopIgnoredAt: stopIgnoredAt)
         self.inspector = inspector
-        services = RecordingServices(environment: serviceEnvironment)
+        services = RecordingServices(environment: serviceEnvironment, holdStarts: holdServices)
         events = EventLog(store: store, clock: clock)
         manager = RuntimeManager(
             store: store, launcher: launcher, inspector: inspector, endpoints: FixedEndpoint(endpoint: Self.endpoint),
@@ -67,6 +67,10 @@ struct ManagerHarness {
 
     func history(_ id: String = projectID) async throws -> [String] {
         try await manager.history(id, since: 0, limit: 0).map(\.text)
+    }
+
+    func exitAll() {
+        launcher.handles.forEach { $0.exit() }
     }
 
     func startRunning(_ index: Int, _ id: String = projectID) async throws -> ScriptedHandle {

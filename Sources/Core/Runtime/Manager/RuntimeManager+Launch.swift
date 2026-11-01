@@ -1,12 +1,15 @@
 import Foundation
 
 extension RuntimeManager {
+    private static let closed = RuntimeError.message("runtime: manager is closed")
+
     public func start(_ projectID: String) async throws {
         try await launch(projectID, automatic: false)
     }
 
     func launch(_ projectID: String, automatic: Bool) async throws {
         let session = try admit(projectID, automatic: automatic)
+        defer { finishLaunching(session) }
         let project: Project
         do {
             guard let found = try await store.project(id: projectID) else {
@@ -16,11 +19,13 @@ extension RuntimeManager {
         } catch {
             throw await fail(session, "\(error)", reported: "runtime: load project: \(error)")
         }
+        try proceed(session)
         let command = CommandLineSplitter.split(project.devCommand ?? "")
         guard let devCommand = project.devCommand, let program = command.first else {
             throw await fail(session, "runtime: project has no dev command")
         }
         let serviceEnvironment = await startServices(project)
+        try proceed(session)
         let endpoint: Endpoint
         do {
             endpoint = try endpoints.reserve()
@@ -32,6 +37,7 @@ extension RuntimeManager {
             projectID: projectID, level: .info, source: .system,
             text: "starting runtime (cmd=\(Self.quoted(devCommand)) port=\(endpoint.port))")
         let environment = await childEnvironment(project, services: serviceEnvironment, endpoint: endpoint)
+        try proceed(session)
         let executable = ExecutableLookup.resolve(program, searchPath: PathList.value(in: environment))
         guard executable.contains("/") else {
             let error = "exec: \(Self.quoted(program)): executable file not found in $PATH"
@@ -46,14 +52,35 @@ extension RuntimeManager {
         } catch {
             throw await fail(session, "\(error)", reported: "runtime: spawn: \(error)")
         }
-        handles[session.sessionID] = handle
+        if closing {
+            session.requestStop()
+        }
         session.setSupervisor(handle.identity)
         publish(.starting, session)
         await persist(.starting, session)
         supervise(session, handle)
     }
 
+    func launchFinished(_ session: RuntimeSession) async {
+        guard launching[session.sessionID] != nil else { return }
+        await withCheckedContinuation { launching[session.sessionID]?.append($0) }
+    }
+
+    private func finishLaunching(_ session: RuntimeSession) {
+        launching.removeValue(forKey: session.sessionID)?.forEach { $0.resume() }
+    }
+
+    private func proceed(_ session: RuntimeSession) throws {
+        guard closing || session.shutdownRequested || !isCurrent(session) else { return }
+        session.markStopped()
+        if isCurrent(session) {
+            publish(.stopped, session)
+        }
+        throw closing ? Self.closed : RuntimeError.message("runtime: start cancelled")
+    }
+
     private func admit(_ projectID: String, automatic: Bool) throws -> RuntimeSession {
+        guard !closing else { throw Self.closed }
         if let existing = sessions[projectID] {
             let status = existing.status
             if status.isLive {
@@ -70,6 +97,7 @@ extension RuntimeManager {
         }
         let session = RuntimeSession(projectID: projectID, sessionID: OwnershipIdentifiers.sessionID(), clock: clock)
         sessions[projectID] = session
+        launching[session.sessionID] = []
         return session
     }
 

@@ -49,8 +49,9 @@ struct RuntimeManagerSupervisionTests {
         try await harness.manager.start(ManagerHarness.projectID)
         let current = try await harness.startRunning(1)
         let emittedBefore = harness.emitted().count
+        let oldSession = harness.launcher.specs[0].sessionID
         old.exit()
-        try await Task.sleep(for: .milliseconds(200))
+        #expect(await Poll.until { await harness.manager.supervising[oldSession] == nil })
 
         #expect(await harness.status() == .running)
         #expect(try await harness.persisted() == .running)
@@ -93,8 +94,8 @@ struct RuntimeManagerSupervisionTests {
 
         #expect(await harness.reaches(.error))
         #expect(await Poll.until { harness.emitted().last == .crash })
-        try await Task.sleep(for: .milliseconds(200))
-        #expect(harness.clock.requested.allSatisfy { $0 == RuntimeManager.readinessTimeout })
+        #expect(await Poll.until { await harness.manager.supervising.isEmpty })
+        #expect(await harness.manager.restarts.isEmpty)
         #expect(harness.launcher.handles.count == 1)
     }
 }

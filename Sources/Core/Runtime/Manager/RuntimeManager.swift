@@ -20,7 +20,10 @@ public actor RuntimeManager {
     let clock: any RuntimeClock
     let baseEnvironment: EnvironmentList
     var sessions: [String: RuntimeSession] = [:]
-    var handles: [String: any SupervisorHandle] = [:]
+    let statusWrites = StatusWrites()
+    var supervising: [String: RuntimeSession] = [:]
+    var launching: [String: [CheckedContinuation<Void, Never>]] = [:]
+    var closing = false
     var watchdogs: [String: Task<Void, Never>] = [:]
     var restarts: [String: Task<Void, Never>] = [:]
     var attempts: [String: Int] = [:]
@@ -104,7 +107,8 @@ public actor RuntimeManager {
     }
 
     func persist(_ status: ProjectStatus, projectID: String) async {
-        _ = try? await store.update(projectID: projectID) { $0.status = status }
+        let ticket = statusWrites.ticket(for: projectID)
+        await statusWrites.write(status, projectID: projectID, ticket: ticket, to: store)
     }
 
     func log(_ line: LogLine, _ session: RuntimeSession) {

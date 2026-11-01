@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 
 @testable import Core
@@ -162,7 +163,8 @@ struct RuntimeManagerLaunchTests {
         #expect(await Poll.until { harness.launcher.heldLaunches == 1 })
 
         let stop = Task { try await harness.manager.stop(ManagerHarness.projectID) }
-        try await Task.sleep(for: .milliseconds(100))
+        #expect(
+            await Poll.until { await harness.manager.sessions[ManagerHarness.projectID]?.shutdownRequested == true })
         harness.launcher.releaseLaunches()
         try await start.value
         try await stop.value
@@ -186,5 +188,56 @@ struct RuntimeManagerLaunchTests {
         #expect(refused == "runtime: cooling down after recent failure")
         #expect(accepted == nil)
         #expect(harness.launcher.specs.count == 1)
+    }
+
+    @Test func servicesOnlyFillKeysTheBaseLacks() async throws {
+        let harness = try await ManagerHarness(base: ["A=base"], serviceEnvironment: ["A": "svc", "B": "svc"])
+
+        try await harness.manager.start(ManagerHarness.projectID)
+
+        let environment = try #require(harness.launcher.specs.first?.environment)
+        #expect(environment.value(of: "A") == "base")
+        #expect(environment.value(of: "B") == "svc")
+        harness.exitAll()
+    }
+
+    @Test func stopWhileServicesStartAbortsBeforeTheSpawn() async throws {
+        let harness = try await ManagerHarness(holdServices: true)
+        let start = Task { try await harness.manager.start(ManagerHarness.projectID) }
+        #expect(await Poll.until { harness.services.heldStarts == 1 })
+        let stop = Task { try await harness.manager.stop(ManagerHarness.projectID) }
+        #expect(
+            await Poll.until { await harness.manager.sessions[ManagerHarness.projectID]?.shutdownRequested == true })
+
+        harness.services.releaseStarts()
+        let message = await failure { try await start.value }
+        try await stop.value
+
+        #expect(message == "runtime: start cancelled")
+        #expect(harness.launcher.specs.isEmpty)
+        #expect(harness.services.calls == ["starting p1", "started p1", "stopped p1"])
+        #expect(await harness.status() == .stopped)
+        #expect(try await harness.persisted() == .stopped)
+        try await harness.manager.start(ManagerHarness.projectID)
+        #expect(harness.launcher.specs.count == 1)
+        harness.exitAll()
+    }
+
+    @Test func outputPastAnOverlongLineIsDrainedUntilExit() async throws {
+        let harness = try await ManagerHarness()
+        try await harness.manager.start(ManagerHarness.projectID)
+        let handle = try await harness.launcher.handle(0)
+        let written = Mutex(false)
+
+        Thread.detachNewThread {
+            handle.write(String(repeating: "a", count: LineScanner.maximumLineLength + 4096))
+            handle.write("  VITE ready in 300 ms")
+            written.withLock { $0 = true }
+        }
+
+        #expect(await Poll.until { written.withLock { $0 } })
+        handle.exit()
+        #expect(await harness.reaches(.error))
+        #expect(await harness.manager.logs(ManagerHarness.projectID).allSatisfy { $0.stream == .system })
     }
 }
