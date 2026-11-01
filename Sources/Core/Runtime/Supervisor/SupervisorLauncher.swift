@@ -11,7 +11,7 @@ public struct SupervisorLauncher: Sendable {
         self.inspector = inspector
     }
 
-    public func launch(_ spec: SupervisorSpec) throws -> any SupervisorHandle {
+    public func launch(_ spec: SupervisorSpec) async throws -> any SupervisorHandle {
         let arguments = SupervisorArguments.make(
             SupervisorInvocation(
                 sessionID: spec.sessionID, token: spec.token, controlDescriptor: Self.controlDescriptor,
@@ -37,20 +37,22 @@ public struct SupervisorLauncher: Sendable {
         }
         close(control.read)
         do {
+            let identity = try await startedIdentity(process.pid)
             return LaunchedSupervisor(
-                process: process, control: control.write, identity: try startedIdentity(process.pid),
-                inspector: inspector)
+                process: process, control: control.write, identity: identity, inspector: inspector)
         } catch {
             close(control.write)
-            _ = process.reaper.waitUntilReaped()
+            _ = try? await process.exitStatus()
             throw error
         }
     }
 
-    private func startedIdentity(_ pid: Int32) throws -> ProcessIdentity {
+    private func startedIdentity(_ pid: Int32) async throws -> ProcessIdentity {
         let identity: ProcessIdentity
         do {
-            identity = try inspector.identity(of: pid)
+            identity = try await inspector.leaderIdentity(of: pid)
+        } catch let error where error.contains(.identityMismatch("")) || error.contains(.cancelled) {
+            throw error
         } catch {
             throw RuntimeError.message("runtime: inspect started supervisor: \(error)")
         }

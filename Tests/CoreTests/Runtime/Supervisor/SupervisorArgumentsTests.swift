@@ -66,7 +66,6 @@ struct SupervisorArgumentsTests {
             argv(replacing: ["--session", "", "--token", token, "--control-fd", "3", "--cwd", "/tmp"]),
             #"runtime: duplicate or empty supervisor option "--session""#
         ),
-        (argv(command: ["sleep", "1"]), "runtime: supervisor command must be an absolute path"),
     ])
     func parseRejectsMalformedInvocation(arguments: [String], message: String) {
         #expect(throws: RuntimeError.message(message)) {

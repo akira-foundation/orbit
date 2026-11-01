@@ -20,7 +20,7 @@ public enum RuntimeSupervisor {
             }
         }
         guard let error = outcome.wait() else { return 0 }
-        FileHandle.standardError.write(Data("\(error)\n".utf8))
+        try? FileHandle.standardError.write(contentsOf: Data("\(error)\n".utf8))
         return 1
     }
 
@@ -34,12 +34,13 @@ public enum RuntimeSupervisor {
             throw RuntimeError.message("runtime: supervisor control descriptor unavailable")
         }
         let inspector = DarwinProcessInspector()
-        let identity = try ownIdentity(inspector)
+        let identity = try await ownIdentity(inspector)
         let child: SpawnedProcess
         do {
             child = try PosixSpawner.spawn(
                 SpawnRequest(
-                    executable: invocation.command[0], arguments: Array(invocation.command.dropFirst()),
+                    executable: executable(invocation.command[0], in: invocation.directory),
+                    arguments: Array(invocation.command.dropFirst()),
                     environment: .process(), directory: invocation.directory, group: .join(identity.pgid)))
         } catch {
             throw RuntimeError.message("runtime: start supervised command: \(error)")
@@ -55,13 +56,20 @@ public enum RuntimeSupervisor {
         defer { watchers.forEach { $0.cancel() } }
         var pending = triggers.makeAsyncIterator()
         let trigger = await pending.next() ?? .stopRequested
-        try await shutdown(trigger, child: child, identity: identity, inspector: inspector)
+        let grace = SupervisorGrace.parse(ProcessInfo.processInfo.environment[SupervisorGrace.variable])
+        try await shutdown(trigger, child: child, identity: identity, inspector: inspector, grace: grace)
     }
 
-    private static func ownIdentity(_ inspector: some ProcessInspector) throws -> ProcessIdentity {
+    private static func executable(_ command: String, in directory: String) -> String {
+        guard command.contains("/"), !command.hasPrefix("/") else { return command }
+        return URL(filePath: directory, directoryHint: .isDirectory).appending(path: command).path(
+            percentEncoded: false)
+    }
+
+    private static func ownIdentity(_ inspector: some ProcessInspector) async throws -> ProcessIdentity {
         let identity: ProcessIdentity
         do {
-            identity = try inspector.identity(of: getpid())
+            identity = try await inspector.leaderIdentity(of: getpid())
         } catch {
             throw RuntimeError.message("runtime: inspect supervisor identity: \(error)")
         }
@@ -73,25 +81,37 @@ public enum RuntimeSupervisor {
 
     private static func shutdown(
         _ trigger: SupervisorTrigger, child: SpawnedProcess, identity: ProcessIdentity,
-        inspector: some ProcessInspector
+        inspector: some ProcessInspector, grace: Duration
     ) async throws {
         var cleanupError: (any Error)?
         do {
-            let grace = SupervisorGrace.parse(ProcessInfo.processInfo.environment[SupervisorGrace.variable])
             try await OwnedMemberCleanup.run(supervisor: identity, inspector: inspector, grace: grace)
         } catch {
             cleanupError = error
         }
         switch trigger {
         case .childExited(let status):
-            if let error = RuntimeErrors.join([cleanupError, status.failure("runtime: supervised command")]) {
+            if let error = RuntimeErrors.join([cleanupError, status.failure()]) {
                 throw error
             }
         case .stopRequested:
-            _ = try await child.exitStatus()
-            if let cleanupError {
-                throw cleanupError
+            guard let cleanupError else {
+                _ = try await child.exitStatus()
+                return
             }
+            if child.reaper.reapedStatus() == nil {
+                kill(child.pid, SIGKILL)
+                await awaitReaping(child, within: OwnedMemberCleanup.killWait)
+            }
+            throw cleanupError
+        }
+    }
+
+    private static func awaitReaping(_ child: SpawnedProcess, within limit: Duration) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: limit)
+        while child.reaper.reapedStatus() == nil, clock.now < deadline {
+            try? await clock.sleep(for: OwnedMemberCleanup.pollInterval)
         }
     }
 

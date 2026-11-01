@@ -26,12 +26,9 @@ public enum SupervisorArguments {
         guard isHex(sessionID, length: 16), isHex(token, length: 32) else {
             throw RuntimeError.message("runtime: invalid supervisor ownership identifiers")
         }
-        let command = Array(arguments[(end + 1)...])
-        guard command[0].hasPrefix("/") else {
-            throw RuntimeError.message("runtime: supervisor command must be an absolute path")
-        }
         return SupervisorInvocation(
-            sessionID: sessionID, token: token, controlDescriptor: descriptor, directory: directory, command: command)
+            sessionID: sessionID, token: token, controlDescriptor: descriptor, directory: directory,
+            command: Array(arguments[(end + 1)...]))
     }
 
     private static func values(_ pairs: [String]) throws -> [String: String] {

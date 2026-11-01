@@ -62,7 +62,8 @@ struct SupervisorLifecycleTests {
     }
 
     @Test func runtimeThatKeepsDefaultTermDiesWithoutWaitingForTheGrace() async throws {
-        let handle = try SupervisedRuntime.launch(SupervisedRuntime.spec(["/bin/sleep", "600"], grace: .seconds(30)))
+        let handle = try await SupervisedRuntime.launch(
+            SupervisedRuntime.spec(["/bin/sleep", "600"], grace: .seconds(30)))
         defer { SupervisedRuntime.killGroup(handle.identity.pgid) }
         try await SupervisedRuntime.waitForMember("/bin/sleep 600", in: handle.identity.pgid)
         let clock = ContinuousClock()
@@ -104,20 +105,20 @@ struct SupervisorLifecycleTests {
     }
 
     @Test func runnerFailureFailsTheSupervisor() async throws {
-        let handle = try SupervisedRuntime.launch(
-            SupervisedRuntime.spec(["/bin/sh", "-c", "exit 3"], grace: .milliseconds(20)))
+        let handle = try await SupervisedRuntime.launch(
+            SupervisedRuntime.spec(["/bin/sh", "-c", "/bin/sleep 0.5; exit 3"], grace: .milliseconds(20)))
         defer { SupervisedRuntime.killGroup(handle.identity.pgid) }
 
         await #expect(throws: RuntimeError.message("supervisor exit status 1")) { try await handle.wait() }
         let stderr = try handle.stderr?.readToEnd().map { String(decoding: $0, as: UTF8.self) }
-        #expect(stderr == "runtime: supervised command exit status 3\n")
+        #expect(stderr == "exit status 3\n")
     }
 
     @Test func supervisorPassesItsEnvironmentWithTheGrace() async throws {
         let environment = EnvironmentList(["A=b", "ORBIT_RUNTIME_SUPERVISOR_GRACE_MS=1"])
-        let handle = try SupervisedRuntime.launch(
+        let handle = try await SupervisedRuntime.launch(
             SupervisedRuntime.spec(
-                [ProcessFixture.runtimeFixturePath, "--print-environment"], grace: .milliseconds(20),
+                ["/bin/sh", "-c", "/bin/sleep 0.5; exec /usr/bin/env"], grace: .milliseconds(20),
                 environment: environment))
         defer { SupervisedRuntime.killGroup(handle.identity.pgid) }
 
@@ -132,18 +133,18 @@ struct SupervisorLifecycleTests {
             ])
     }
 
-    @Test func launchRejectsAnInvalidSpecBeforeSpawning() {
+    @Test func launchRejectsAnInvalidSpecBeforeSpawning() async {
         var spec = SupervisedRuntime.spec(["/bin/sleep", "600"], grace: .milliseconds(20))
         spec.directory = "relative"
-        #expect(throws: RuntimeError.message("runtime: supervisor cwd must be absolute")) {
-            try SupervisedRuntime.launch(spec)
+        await #expect(throws: RuntimeError.message("runtime: supervisor cwd must be absolute")) {
+            try await SupervisedRuntime.launch(spec)
         }
     }
 
-    @Test func launchFailsWhenTheExecutableIsMissing() {
+    @Test func launchFailsWhenTheExecutableIsMissing() async {
         let launcher = SupervisorLauncher(executable: "/nonexistent/orbit", inspector: DarwinProcessInspector())
-        #expect(throws: RuntimeError.self) {
-            try launcher.launch(SupervisedRuntime.spec(["/bin/sleep", "600"], grace: .milliseconds(20)))
+        await #expect(throws: RuntimeError.self) {
+            try await launcher.launch(SupervisedRuntime.spec(["/bin/sleep", "600"], grace: .milliseconds(20)))
         }
     }
 }

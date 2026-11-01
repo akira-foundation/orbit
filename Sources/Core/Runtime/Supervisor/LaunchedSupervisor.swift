@@ -18,6 +18,10 @@ final class LaunchedSupervisor: SupervisorHandle {
         self.inspector = inspector
     }
 
+    deinit {
+        _ = try? stop()
+    }
+
     var stdout: FileHandle? { process.stdout }
     var stderr: FileHandle? { process.stderr }
 
@@ -44,7 +48,7 @@ final class LaunchedSupervisor: SupervisorHandle {
     func verifyEmpty(within limit: Duration) async throws {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: limit)
-        while try !inspector.groupMembers(identity.pgid).isEmpty {
+        while try !Self.isEmpty(inspector.groupListing(identity.pgid)) {
             let notEmpty = RuntimeErrors(errors: [RuntimeError.groupNotEmpty, RuntimeError.cancelled])
             guard clock.now < deadline else { throw notEmpty }
             do {
@@ -53,5 +57,9 @@ final class LaunchedSupervisor: SupervisorHandle {
                 throw notEmpty
             }
         }
+    }
+
+    private static func isEmpty(_ listing: ProcessListing) -> Bool {
+        listing.identities.isEmpty && listing.unsettled.isEmpty
     }
 }

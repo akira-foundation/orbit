@@ -1,12 +1,13 @@
 import Darwin
 
 extension ExitStatus {
-    func failure(_ subject: String) -> RuntimeError? {
+    func failure(_ subject: String? = nil) -> RuntimeError? {
+        let prefix = subject.map { "\($0) " } ?? ""
         switch self {
-        case .exited(0): nil
-        case .exited(let code): .message("\(subject) exit status \(code)")
-        case .signaled(let signal): .message("\(subject) terminated by signal \(signal)")
-        case .unknown(let code): .message("\(subject) wait: \(String(cString: strerror(code)))")
+        case .exited(0): return nil
+        case .exited(let code): return .message("\(prefix)exit status \(code)")
+        case .signaled(let signal): return .message("\(prefix)terminated by signal \(signal)")
+        case .unknown(let code): return .message("\(prefix)wait: \(String(cString: strerror(code)))")
         }
     }
 }
