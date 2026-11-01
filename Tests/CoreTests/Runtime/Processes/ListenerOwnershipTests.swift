@@ -23,6 +23,16 @@ struct ListenerOwnershipTests {
         }
     }
 
+    @Test func verifyRejectsAnUnsettledOwner() {
+        let fake = FakeProcessInspector.supervised()
+        fake.add(.init(pid: 9000, pgid: 9000))
+        fake.unsettled = [9000]
+        fake.listenerReads = [[4100, 9000], [4100, 9000]]
+        #expect(throws: RuntimeError.unownedEndpoint("listener owner did not settle during inspection")) {
+            try ListenerOwnership.verify(supervisor: fake.identity(4100), endpoint: endpoint, inspector: fake)
+        }
+    }
+
     @Test func verifyRejectsNoOwners() {
         let fake = FakeProcessInspector.supervised()
         #expect(throws: RuntimeError.unownedEndpoint(nil)) {

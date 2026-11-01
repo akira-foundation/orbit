@@ -1,9 +1,11 @@
 struct KnownRuntimeMembers: Sendable {
     private(set) var members: [Int32: ProcessIdentity]
+    private(set) var unsettled: Set<Int32>
 
     init(supervisor: ProcessIdentity, inspector: any ProcessInspector) throws {
         let owned = try Self.owned(by: supervisor, inspector: inspector)
-        members = Dictionary(uniqueKeysWithValues: owned.map { ($0.pid, $0) })
+        members = Dictionary(uniqueKeysWithValues: owned.identities.map { ($0.pid, $0) })
+        unsettled = Set(owned.unsettled)
     }
 
     var ordered: [ProcessIdentity] {
@@ -11,11 +13,13 @@ struct KnownRuntimeMembers: Sendable {
     }
 
     func containsOnly(_ pid: Int32) -> Bool {
-        members.count == 1 && members[pid] != nil
+        members.count == 1 && members[pid] != nil && unsettled.isEmpty
     }
 
     mutating func refresh(supervisor: ProcessIdentity, inspector: any ProcessInspector) throws {
-        for identity in try Self.owned(by: supervisor, inspector: inspector) {
+        let owned = try Self.owned(by: supervisor, inspector: inspector)
+        unsettled = Set(owned.unsettled)
+        for identity in owned.identities {
             if let prior = members[identity.pid], prior != identity {
                 throw RuntimeError.identityMismatch("PID \(identity.pid) changed while cleaning up")
             }
@@ -32,11 +36,14 @@ struct KnownRuntimeMembers: Sendable {
         }
     }
 
-    static func owned(by supervisor: ProcessIdentity, inspector: any ProcessInspector) throws -> [ProcessIdentity] {
+    static func owned(by supervisor: ProcessIdentity, inspector: any ProcessInspector) throws -> ProcessListing {
         try inspector.verifyIdentity(supervisor)
-        let group = try inspector.groupMembers(supervisor.pgid)
-        let descendants = try inspector.descendants(of: supervisor.pid)
-        return try combine(group + descendants)
+        let group = try inspector.groupListing(supervisor.pgid)
+        let descendants = try inspector.descendantListing(of: supervisor.pid)
+        return try ProcessListing(
+            identities: combine(group.identities + descendants.identities),
+            unsettled: (group.unsettled + descendants.unsettled).filter { $0 != supervisor.pid }
+        )
     }
 
     static func combine(_ identities: [ProcessIdentity]) throws -> [ProcessIdentity] {

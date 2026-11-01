@@ -182,4 +182,14 @@ struct OwnedMemberCleanupTests {
         #expect(error.map { "\($0)" } == "late signal denied")
         #expect(!fake.isAlive(4101) && !fake.isAlive(4102))
     }
+
+    @Test func cleanupNeverSucceedsWhileAMemberIsUnsettled() async {
+        let fake = FakeProcessInspector.supervised(members: [.init(pid: 4101)])
+        fake.unsettled = [4101]
+        let error = await #expect(throws: (any Error).self) {
+            try await OwnedMemberCleanup.run(supervisor: fake.identity(4100), inspector: fake, grace: .milliseconds(10))
+        }
+        #expect(error?.contains(.identityMismatch("")) == true)
+        #expect(fake.signals.isEmpty)
+    }
 }

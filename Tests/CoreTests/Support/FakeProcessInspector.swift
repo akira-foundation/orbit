@@ -29,6 +29,7 @@ final class FakeProcessInspector: ProcessInspector {
         var listenerError: String?
         var pendingDeathReads: [Int32: Int] = [:]
         var signalVerifiesIdentity = true
+        var unsettled: Set<Int32> = []
     }
 
     private let state = Mutex(State())
@@ -99,11 +100,16 @@ final class FakeProcessInspector: ProcessInspector {
         }
     }
 
-    func groupMembers(_ pgid: Int32) throws -> [ProcessIdentity] {
-        state.withLock { state in Self.members(in: state) { $0.pgid == pgid } }
+    var unsettled: Set<Int32> {
+        get { state.withLock { $0.unsettled } }
+        set { state.withLock { $0.unsettled = newValue } }
     }
 
-    func descendants(of pid: Int32) throws -> [ProcessIdentity] {
+    func groupListing(_ pgid: Int32) throws -> ProcessListing {
+        state.withLock { state in Self.listing(in: state) { $0.pgid == pgid } }
+    }
+
+    func descendantListing(of pid: Int32) throws -> ProcessListing {
         state.withLock { state in
             var known: Set<Int32> = [pid]
             var changed = true
@@ -115,17 +121,21 @@ final class FakeProcessInspector: ProcessInspector {
                     changed = true
                 }
             }
-            return Self.members(in: state) { $0.pid != pid && known.contains($0.pid) }
+            return Self.listing(in: state) { $0.pid != pid && known.contains($0.pid) }
         }
     }
 
-    func listenerOwners(_ endpoint: Endpoint) throws -> [ProcessIdentity] {
+    func listenerListing(_ endpoint: Endpoint) throws -> ProcessListing {
         try state.withLock { state in
             if let message = state.listenerError {
                 throw RuntimeError.message(message)
             }
-            guard !state.listenerReads.isEmpty else { return [] }
-            return state.listenerReads.removeFirst().compactMap { state.identities[$0] }
+            guard !state.listenerReads.isEmpty else { return ProcessListing(identities: []) }
+            let pids = state.listenerReads.removeFirst()
+            return ProcessListing(
+                identities: pids.filter { !state.unsettled.contains($0) }.compactMap { state.identities[$0] },
+                unsettled: pids.filter { state.unsettled.contains($0) }
+            )
         }
     }
 
@@ -194,8 +204,12 @@ final class FakeProcessInspector: ProcessInspector {
         return identity
     }
 
-    private static func members(in state: State, where include: (ProcessIdentity) -> Bool) -> [ProcessIdentity] {
-        state.alive.compactMap { state.identities[$0] }.filter(include).sorted { $0.pid < $1.pid }
+    private static func listing(in state: State, where include: (ProcessIdentity) -> Bool) -> ProcessListing {
+        let matching = state.alive.compactMap { state.identities[$0] }.filter(include).sorted { $0.pid < $1.pid }
+        return ProcessListing(
+            identities: matching.filter { !state.unsettled.contains($0.pid) },
+            unsettled: matching.map(\.pid).filter { state.unsettled.contains($0) }
+        )
     }
 
     private static func replacing(

@@ -84,7 +84,7 @@ public enum OwnedMemberCleanup {
                 return RuntimeErrors.join(lateErrors + [RuntimeError.cancelled])
             }
             if clock.now >= deadline {
-                return RuntimeErrors.join(lateErrors + [RuntimeError.groupNotEmpty])
+                return RuntimeErrors.join(lateErrors + [deadlineError(members)])
             }
             do {
                 try await clock.sleep(for: pollInterval)
@@ -92,6 +92,14 @@ public enum OwnedMemberCleanup {
                 return RuntimeErrors.join(lateErrors + [RuntimeError.cancelled])
             }
         }
+    }
+
+    private static func deadlineError(_ members: KnownRuntimeMembers) -> RuntimeError {
+        guard members.unsettled.isEmpty else {
+            let pids = members.unsettled.sorted().map(String.init).joined(separator: ", ")
+            return RuntimeError.identityMismatch("members did not settle: \(pids)")
+        }
+        return RuntimeError.groupNotEmpty
     }
 
     private static func shouldEscalate(_ error: any Error) -> Bool {

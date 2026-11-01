@@ -22,7 +22,7 @@ struct DarwinSetuidExecTests {
         var failures: [String] = []
         for _ in 0..<500 {
             do {
-                _ = try inspector.groupMembers(leader.pid)
+                _ = try inspector.groupListing(leader.pid)
             } catch {
                 failures.append("\(error)")
             }

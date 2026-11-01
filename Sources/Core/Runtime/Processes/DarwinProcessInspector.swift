@@ -16,11 +16,11 @@ public struct DarwinProcessInspector: ProcessInspector {
         try enrich(reader.snapshot(pid))
     }
 
-    public func groupMembers(_ pgid: Int32) throws -> [ProcessIdentity] {
-        try identities(reader.group(pgid))
+    public func groupListing(_ pgid: Int32) throws -> ProcessListing {
+        try listing(reader.group(pgid))
     }
 
-    public func descendants(of pid: Int32) throws -> [ProcessIdentity] {
+    public func descendantListing(of pid: Int32) throws -> ProcessListing {
         let processes: [KernelProcessSnapshot]
         do {
             processes = try reader.all()
@@ -39,10 +39,10 @@ public struct DarwinProcessInspector: ProcessInspector {
                 changed = true
             }
         }
-        return try identities(descendants)
+        return try listing(descendants)
     }
 
-    public func listenerOwners(_ endpoint: Endpoint) throws -> [ProcessIdentity] {
+    public func listenerListing(_ endpoint: Endpoint) throws -> ProcessListing {
         guard let host = Self.normalizedIPv4(endpoint.host), (1...65535).contains(endpoint.port) else {
             throw RuntimeError.message("inspect listener: invalid IPv4 endpoint \(endpoint.host):\(endpoint.port)")
         }
@@ -60,7 +60,7 @@ public struct DarwinProcessInspector: ProcessInspector {
                 return nil
             }
         }
-        return try identities(snapshots)
+        return try listing(snapshots)
     }
 
     public func signal(_ expected: ProcessIdentity, _ signal: ProcessSignal) throws {
@@ -109,19 +109,23 @@ public struct DarwinProcessInspector: ProcessInspector {
         return nil
     }
 
-    private func identities(_ snapshots: [KernelProcessSnapshot]) throws -> [ProcessIdentity] {
+    private func listing(_ snapshots: [KernelProcessSnapshot]) throws -> ProcessListing {
         var identities: [ProcessIdentity] = []
+        var unsettled: [Int32] = []
         var prior: Int32 = 0
         for snapshot in snapshots.sorted(by: { $0.pid < $1.pid }) where snapshot.pid > 0 && snapshot.pid != prior {
             prior = snapshot.pid
             do {
-                guard let identity = try settledIdentity(listed: snapshot) else { continue }
+                guard let identity = try settledIdentity(listed: snapshot) else {
+                    unsettled.append(snapshot.pid)
+                    continue
+                }
                 identities.append(identity)
             } catch RuntimeError.processGone {
                 continue
             }
         }
-        return identities
+        return ProcessListing(identities: identities, unsettled: unsettled)
     }
 
     private static func normalizedIPv4(_ host: String) -> String? {

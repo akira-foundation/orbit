@@ -42,7 +42,7 @@ struct DarwinGroupCleanupTests {
 
     private func isSettled(leader: Int32, inspector: DarwinProcessInspector) throws -> Bool {
         guard try SettlingIdentity.executable(of: leader, inspector: inspector) == "sleep" else { return false }
-        return try inspector.groupMembers(leader).contains {
+        return try inspector.groupListing(leader).identities.contains {
             $0.pid != leader && $0.executable == "sleep" && $0.arguments == "/bin/sleep 30"
         }
     }

@@ -1,5 +1,4 @@
 import Darwin
-import Foundation
 import Testing
 
 @testable import Core
@@ -87,10 +86,18 @@ struct DarwinProcessInspectorTests {
         #expect(members.map(\.startID) == ["5:000001"])
     }
 
-    @Test func listingSkipsAMemberThatNeverSettlesAndKeepsTheOthers() throws {
+    @Test func listingReportsAMemberThatNeverSettlesAndKeepsTheOthers() throws {
         let reader = ScriptedKernelReader(table: [member(10, parent: 1), member(12, parent: 10)], unsettled: [12])
-        let members = try DarwinProcessInspector(reader: reader).groupMembers(10)
-        #expect(members.map(\.pid) == [10])
+        let listing = try DarwinProcessInspector(reader: reader).groupListing(10)
+        #expect(listing.identities.map(\.pid) == [10])
+        #expect(listing.unsettled == [12])
+    }
+
+    @Test func groupMembersRejectsAMemberThatNeverSettles() {
+        let reader = ScriptedKernelReader(table: [member(10, parent: 1), member(12, parent: 10)], unsettled: [12])
+        #expect(throws: RuntimeError.identityMismatch("PID 12 did not settle")) {
+            try DarwinProcessInspector(reader: reader).groupMembers(10)
+        }
     }
 
     @Test func identityOfAProcessThatNeverSettlesIsStillAMismatch() {
@@ -232,51 +239,6 @@ struct DarwinProcessInspectorTests {
             try inspector.signal(stale, .kill)
         }
         #expect(kill(child.pid, 0) == 0)
-    }
-
-    @Test(arguments: [Endpoint(host: "::1", port: 80), Endpoint(host: "127.0.0.1", port: 0)])
-    func listenerOwnersRejectsNonIPv4(endpoint: Endpoint) {
-        let expected = RuntimeError.message(
-            "inspect listener: invalid IPv4 endpoint \(endpoint.host):\(endpoint.port)"
-        )
-        #expect(throws: expected) {
-            try DarwinProcessInspector().listenerOwners(endpoint)
-        }
-    }
-
-    @Test func listenerOwnersFindsTheListeningProcess() throws {
-        let listener = try TestListener.open()
-        defer { listener.close() }
-        let inspector = DarwinProcessInspector()
-        let owners = try inspector.listenerOwners(Endpoint(host: "127.0.0.1", port: listener.port))
-        #expect(owners == [try inspector.identity(of: getpid())])
-    }
-
-    @Test func listenerOwnersAcceptsAnIPv4MappedAddress() throws {
-        let listener = try TestListener.open()
-        defer { listener.close() }
-        let inspector = DarwinProcessInspector()
-        let owners = try inspector.listenerOwners(Endpoint(host: "::ffff:127.0.0.1", port: listener.port))
-        #expect(owners == [try inspector.identity(of: getpid())])
-    }
-
-    @Test func listenerOwnersSkipAnOwnerThatVanished() throws {
-        let directory = try TemporaryDirectory()
-        try directory.write("#!/bin/sh\nprintf 'p10\\np12\\n'\n", to: "lsof")
-        let path = directory.path + "/lsof"
-        #expect(chmod(path, 0o755) == 0)
-        let inspector = DarwinProcessInspector(
-            reader: ScriptedKernelReader(table: [member(10, parent: 1)]),
-            lsof: LsofRunner(executable: URL(fileURLWithPath: path))
-        )
-        #expect(try inspector.listenerOwners(Endpoint(host: "127.0.0.1", port: 80)).map(\.pid) == [10])
-    }
-
-    @Test func listenerOwnersOfAClosedPortIsEmpty() throws {
-        let listener = try TestListener.open()
-        listener.close()
-        let owners = try DarwinProcessInspector().listenerOwners(Endpoint(host: "127.0.0.1", port: listener.port))
-        #expect(owners == [])
     }
 
     private func start(_ startID: String) -> KernelProcessSnapshot {
