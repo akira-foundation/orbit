@@ -10,6 +10,11 @@ struct CommandLineSplitterTests {
         ("a \"\" b", ["a", "b"]),
         ("a\tb", ["a\tb"]),
         ("", []),
+        ("\tvite", ["vite"]),
+        ("vite \t", ["vite"]),
+        ("\t", []),
+        ("a\"b c\"d", ["ab cd"]),
+        ("a \"b c", ["a", "b c"]),
     ])
     func splitCases(line: String, expected: [String]) {
         #expect(CommandLineSplitter.split(line) == expected)

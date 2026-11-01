@@ -21,7 +21,7 @@ public struct EnvironmentList: Sendable, Equatable {
 
     public mutating func set(_ key: String, _ value: String) {
         let entry = "\(key)=\(value)"
-        if let index = entries.firstIndex(where: { $0.hasPrefix(key + "=") }) {
+        if let index = entries.lastIndex(where: { $0.hasPrefix(key + "=") }) {
             entries[index] = entry
         } else {
             entries.append(entry)

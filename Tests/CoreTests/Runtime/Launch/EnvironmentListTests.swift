@@ -40,6 +40,12 @@ struct EnvironmentListTests {
         #expect(env.entries == ["A=5", "B=2", "Z=7"])
     }
 
+    @Test func setReplacesTheLastDuplicate() {
+        var env = EnvironmentList(["A=1", "B=2", "A=3"])
+        env.set("A", "9")
+        #expect(env.entries == ["A=1", "B=2", "A=9"])
+    }
+
     @Test func valueReturnsFirstMatchOrNil() {
         let env = EnvironmentList(["A=1", "A=2", "B=x=y"])
         #expect(env.value(of: "A") == "1")

@@ -15,11 +15,10 @@ public enum ExecutableLookup {
     }
 
     private static func isExecutableFile(_ path: String) -> Bool {
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), !isDirectory.boolValue else {
+        var status = stat()
+        guard stat(path, &status) == 0, status.st_mode & S_IFMT != S_IFDIR else {
             return false
         }
-        let permissions = try? FileManager.default.attributesOfItem(atPath: path)[.posixPermissions] as? Int
-        return (permissions ?? 0) & 0o111 != 0
+        return status.st_mode & 0o111 != 0
     }
 }
