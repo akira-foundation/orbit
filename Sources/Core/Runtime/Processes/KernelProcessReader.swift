@@ -4,13 +4,18 @@ public struct KernelProcessReader: KernelProcessReading {
     private static let attempts = 8
 
     private let argumentSource: @Sendable (Int32, inout [UInt8], inout Int) -> Int32
+    private let ownerSource: @Sendable (Int32) throws -> uid_t
 
     public init() {
         self.init(argumentSource: Self.readArguments)
     }
 
-    init(argumentSource: @escaping @Sendable (Int32, inout [UInt8], inout Int) -> Int32) {
+    init(
+        argumentSource: @escaping @Sendable (Int32, inout [UInt8], inout Int) -> Int32,
+        ownerSource: @escaping @Sendable (Int32) throws -> uid_t = Self.owner
+    ) {
         self.argumentSource = argumentSource
+        self.ownerSource = ownerSource
     }
 
     public func snapshot(_ pid: Int32) throws -> KernelProcessSnapshot {
@@ -29,7 +34,7 @@ public struct KernelProcessReader: KernelProcessReading {
     }
 
     public func arguments(_ pid: Int32) throws -> String {
-        guard try Self.kernelProcess(pid).kp_eproc.e_ucred.cr_uid == geteuid() else { return "" }
+        guard try ownerSource(pid) == geteuid() else { return "" }
         var buffer = [UInt8](repeating: 0, count: try Self.argumentLimit(for: pid))
         for _ in 0..<Self.attempts {
             var size = buffer.count
@@ -38,13 +43,18 @@ public struct KernelProcessReader: KernelProcessReading {
                 return try ProcessArgumentsParser.parse(Array(buffer.prefix(size)))
             }
             if Self.isGone(pid, code) { throw RuntimeError.processGone }
-            _ = try snapshot(pid)
+            let owner = try ownerSource(pid)
+            if (code == EINVAL || code == EPERM) && owner != geteuid() { return "" }
             guard code == EIO else {
                 throw RuntimeError.message("inspect arguments for PID \(pid): \(Self.describe(code))")
             }
             usleep(100)
         }
         throw RuntimeError.message("inspect arguments for PID \(pid): \(Self.describe(EIO))")
+    }
+
+    private static func owner(_ pid: Int32) throws -> uid_t {
+        try kernelProcess(pid).kp_eproc.e_ucred.cr_uid
     }
 
     private static func kernelProcess(_ pid: Int32) throws -> kinfo_proc {

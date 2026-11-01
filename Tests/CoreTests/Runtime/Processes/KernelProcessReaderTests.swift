@@ -33,6 +33,24 @@ struct KernelProcessReaderTests {
         }
     }
 
+    @Test(arguments: [EINVAL, EPERM])
+    func argumentsOfAProcessThatBecameForeignAreEmpty(code: Int32) throws {
+        let source = ScriptedArgumentSource(failures: [code])
+        let owners = ScriptedOwnerSource(owners: [geteuid(), 0])
+        let reader = KernelProcessReader(argumentSource: source.read, ownerSource: owners.read)
+        #expect(try reader.arguments(getpid()) == "")
+        #expect(source.calls == 1)
+    }
+
+    @Test func argumentsOfAProcessStillOursKeepTheError() {
+        let source = ScriptedArgumentSource(failures: [EPERM])
+        let owners = ScriptedOwnerSource(owners: [geteuid()])
+        let reader = KernelProcessReader(argumentSource: source.read, ownerSource: owners.read)
+        #expect(throws: RuntimeError.message("inspect arguments for PID \(getpid()): Operation not permitted")) {
+            try reader.arguments(getpid())
+        }
+    }
+
     @Test func argumentsOfAnotherOwnerAreEmptyWithoutReading() throws {
         let child = try SpawnedTestProcess.spawn("/usr/bin/top", ["-l", "0", "-s", "1"])
         defer { child.terminate() }

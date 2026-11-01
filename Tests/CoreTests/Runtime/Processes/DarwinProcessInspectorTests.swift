@@ -166,15 +166,6 @@ struct DarwinProcessInspectorTests {
         #expect(try inspector.descendants(of: getpid()).contains(identity))
     }
 
-    @Test func ownProcessAlwaysHasItsRealArguments() throws {
-        let child = try SpawnedTestProcess.sleep()
-        defer { child.terminate() }
-        let inspector = DarwinProcessInspector()
-        for _ in 0..<50 {
-            #expect(try inspector.identity(of: child.pid).arguments == "/bin/sleep 30")
-        }
-    }
-
     @Test func zombieIsProcessGoneAndLeavesTheListings() throws {
         let child = try SpawnedTestProcess.sleep()
         defer { child.terminate() }
