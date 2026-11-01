@@ -115,7 +115,7 @@ public final class RuntimeSession: Sendable {
     public func snapshot(conns: Int) -> SessionSnapshot {
         let now = clock.now
         return state.withLock { state in
-            let live = state.status == .running || state.status == .starting
+            let live = state.status.isLive
             return SessionSnapshot(
                 projectID: projectID,
                 status: state.status,

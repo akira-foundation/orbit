@@ -1,6 +1,6 @@
 import Darwin
 
-public struct SupervisorLauncher: Sendable {
+public struct SupervisorLauncher: SupervisorLaunching {
     private static let controlDescriptor: Int32 = 3
 
     public let executable: String
