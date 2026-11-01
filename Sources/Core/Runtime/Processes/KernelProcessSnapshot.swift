@@ -14,6 +14,6 @@ public struct KernelProcessSnapshot: Sendable, Equatable {
     }
 
     func isSameProcess(as other: KernelProcessSnapshot) -> Bool {
-        pid == other.pid && pgid == other.pgid && startID == other.startID && command == other.command
+        pid == other.pid && pgid == other.pgid && startID == other.startID
     }
 }

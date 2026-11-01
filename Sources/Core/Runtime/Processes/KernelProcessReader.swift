@@ -29,55 +29,70 @@ public struct KernelProcessReader: KernelProcessReading {
 
     public func group(_ pgid: Int32) throws -> [KernelProcessSnapshot] {
         guard pgid > 0 else { throw RuntimeError.message("inspect process group: invalid PGID \(pgid)") }
-        return try Self.list([CTL_KERN, KERN_PROC, KERN_PROC_PGRP, pgid], context: "inspect process group \(pgid)")
+        return try Self.list(
+            [CTL_KERN, KERN_PROC, KERN_PROC_PGRP, pgid], context: "inspect process group \(pgid)"
+        )
     }
 
     public func all() throws -> [KernelProcessSnapshot] {
-        try Self.list([CTL_KERN, KERN_PROC, KERN_PROC_ALL], context: "inspect process table")
+        try Self.list([CTL_KERN, KERN_PROC, KERN_PROC_ALL], context: nil)
     }
 
     public func arguments(_ pid: Int32) throws -> String {
         try Self.requireValid(pid)
-        var limit: Int32 = 0
-        var limitSize = MemoryLayout<Int32>.size
-        var limitMIB: [Int32] = [CTL_KERN, KERN_ARGMAX]
-        guard sysctl(&limitMIB, UInt32(limitMIB.count), &limit, &limitSize, nil, 0) == 0, limit > 0 else {
-            throw RuntimeError.message("inspect arguments for PID \(pid): \(Self.describe(errno))")
-        }
-        var buffer = [UInt8](repeating: 0, count: Int(limit))
-        var size = buffer.count
+        let limit = try Self.argumentLimit(for: pid)
         var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
-        if sysctl(&mib, UInt32(mib.count), &buffer, &size, nil, 0) != 0 {
+        for _ in 0..<Self.attempts {
+            var buffer = [UInt8](repeating: 0, count: limit)
+            var size = buffer.count
+            if sysctl(&mib, UInt32(mib.count), &buffer, &size, nil, 0) == 0 {
+                return try ProcessArgumentsParser.parse(Array(buffer.prefix(size)))
+            }
             let code = errno
             if Self.isGone(pid, code) { throw RuntimeError.processGone }
             _ = try snapshot(pid)
-            throw RuntimeError.message("inspect arguments for PID \(pid): \(Self.describe(code))")
+            if code == EINVAL || code == EPERM { return "" }
+            guard code == EIO else {
+                throw RuntimeError.message("inspect arguments for PID \(pid): \(Self.describe(code))")
+            }
+            usleep(100)
         }
-        return try ProcessArgumentsParser.parse(Array(buffer.prefix(size)))
+        throw RuntimeError.message("inspect arguments for PID \(pid): \(Self.describe(EIO))")
     }
 
-    private static func list(_ mib: [Int32], context: String) throws -> [KernelProcessSnapshot] {
+    private static func argumentLimit(for pid: Int32) throws -> Int {
+        var limit: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        var mib: [Int32] = [CTL_KERN, KERN_ARGMAX]
+        guard sysctl(&mib, UInt32(mib.count), &limit, &size, nil, 0) == 0 else {
+            throw RuntimeError.message("inspect arguments for PID \(pid): \(describe(errno))")
+        }
+        guard limit > 0 else {
+            throw RuntimeError.message("inspect arguments for PID \(pid): invalid argument size limit \(limit)")
+        }
+        return Int(limit)
+    }
+
+    private static func list(_ mib: [Int32], context: String?) throws -> [KernelProcessSnapshot] {
         var mib = mib
         let stride = MemoryLayout<kinfo_proc>.stride
         for _ in 0..<attempts {
             var size = 0
             guard sysctl(&mib, UInt32(mib.count), nil, &size, nil, 0) == 0 else {
-                throw RuntimeError.message("\(context): \(describe(errno))")
+                throw failure(context, errno)
             }
             var processes = [kinfo_proc](repeating: kinfo_proc(), count: size / stride + size / stride / 8 + 1)
             size = processes.count * stride
             if sysctl(&mib, UInt32(mib.count), &processes, &size, nil, 0) != 0 {
-                guard errno == ENOMEM else { throw RuntimeError.message("\(context): \(describe(errno))") }
+                guard errno == ENOMEM else { throw failure(context, errno) }
                 continue
             }
             return processes.prefix(size / stride).filter { !isExiting($0) }.map(snapshot(of:))
         }
-        throw RuntimeError.message("\(context): \(describe(ENOMEM))")
+        throw failure(context, ENOMEM)
     }
 
     private static func snapshot(of process: kinfo_proc) -> KernelProcessSnapshot {
-        let start = process.kp_proc.p_un.__p_starttime
-        let micros = String(start.tv_usec)
         let command = withUnsafeBytes(of: process.kp_proc.p_comm) { bytes in
             String(decoding: bytes.prefix { $0 != 0 }, as: UTF8.self)
         }
@@ -85,13 +100,23 @@ public struct KernelProcessReader: KernelProcessReading {
             pid: process.kp_proc.p_pid,
             pgid: process.kp_eproc.e_pgid,
             ppid: process.kp_eproc.e_ppid,
-            startID: "\(start.tv_sec):" + String(repeating: "0", count: max(0, 6 - micros.count)) + micros,
+            startID: startID(process.kp_proc.p_un.__p_starttime),
             command: command
         )
     }
 
     private static func requireValid(_ pid: Int32) throws {
         guard pid > 0 else { throw RuntimeError.message("inspect process: invalid PID \(pid)") }
+    }
+
+    private static func failure(_ context: String?, _ code: Int32) -> RuntimeError {
+        guard let context else { return RuntimeError.message(describe(code)) }
+        return RuntimeError.message("\(context): \(describe(code))")
+    }
+
+    static func startID(_ start: timeval) -> String {
+        let micros = String(start.tv_usec)
+        return "\(start.tv_sec):" + String(repeating: "0", count: max(0, 6 - micros.count)) + micros
     }
 
     private static func isExiting(_ process: kinfo_proc) -> Bool {

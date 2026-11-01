@@ -2,15 +2,22 @@ import Foundation
 import Synchronization
 
 public struct LsofRunner: Sendable {
-    static let executable = URL(fileURLWithPath: "/usr/sbin/lsof")
     static let environment = ["LC_ALL": "C", "LANG": "C", "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]
 
-    public init() {}
+    private let executable: URL
+
+    public init() {
+        self.init(executable: URL(fileURLWithPath: "/usr/sbin/lsof"))
+    }
+
+    init(executable: URL) {
+        self.executable = executable
+    }
 
     public func run(host: String, port: Int) throws -> String {
         let address = "\(host):\(port)"
         let process = Process()
-        process.executableURL = Self.executable
+        process.executableURL = executable
         process.arguments = ["-nP", "-a", "-iTCP@\(address)", "-sTCP:LISTEN", "-Fp"]
         process.environment = Self.environment
         let output = Pipe()

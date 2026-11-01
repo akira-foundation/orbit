@@ -18,7 +18,12 @@ public struct DarwinProcessInspector: ProcessInspector {
     }
 
     public func descendants(of pid: Int32) throws -> [ProcessIdentity] {
-        let processes = try reader.all()
+        let processes: [KernelProcessSnapshot]
+        do {
+            processes = try reader.all()
+        } catch {
+            throw RuntimeError.message("inspect descendants of PID \(pid): \(error)")
+        }
         var known: Set<Int32> = [pid]
         var descendants: [KernelProcessSnapshot] = []
         var changed = true
@@ -45,7 +50,14 @@ public struct DarwinProcessInspector: ProcessInspector {
         } catch {
             throw RuntimeError.message("inspect listener \(host):\(endpoint.port): \(error)")
         }
-        return try identities(pids.map(reader.snapshot))
+        let snapshots = try pids.compactMap { pid -> KernelProcessSnapshot? in
+            do {
+                return try reader.snapshot(pid)
+            } catch RuntimeError.processGone {
+                return nil
+            }
+        }
+        return try identities(snapshots)
     }
 
     public func signal(_ expected: ProcessIdentity, _ signal: ProcessSignal) throws {
@@ -78,17 +90,29 @@ public struct DarwinProcessInspector: ProcessInspector {
         var identities: [ProcessIdentity] = []
         var prior: Int32 = 0
         for snapshot in snapshots.sorted(by: { $0.pid < $1.pid }) where snapshot.pid > 0 && snapshot.pid != prior {
-            identities.append(try enrich(snapshot))
             prior = snapshot.pid
+            do {
+                identities.append(try enrich(snapshot))
+            } catch RuntimeError.processGone {
+                continue
+            }
         }
         return identities
     }
 
     private static func normalizedIPv4(_ host: String) -> String? {
         var address = in_addr()
-        guard inet_pton(AF_INET, host, &address) == 1 else { return nil }
+        guard inet_pton(AF_INET, host, &address) == 1 else { return mappedIPv4(host) }
         var buffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
         guard inet_ntop(AF_INET, &address, &buffer, socklen_t(buffer.count)) != nil else { return nil }
         return String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+    }
+
+    private static func mappedIPv4(_ host: String) -> String? {
+        var address = in6_addr()
+        guard inet_pton(AF_INET6, host, &address) == 1 else { return nil }
+        let bytes = withUnsafeBytes(of: address) { Array($0) }
+        guard bytes[0..<10].allSatisfy({ $0 == 0 }), bytes[10] == 0xff, bytes[11] == 0xff else { return nil }
+        return bytes[12...].map(String.init).joined(separator: ".")
     }
 }

@@ -1,4 +1,5 @@
 import Darwin
+import Foundation
 import Testing
 
 @testable import Core
@@ -58,6 +59,39 @@ struct DarwinProcessInspectorTests {
         #expect(members.map(\.pid) == [10, 12])
     }
 
+    @Test func groupMembersSkipsAMemberThatVanishedAfterListing() throws {
+        let reader = ScriptedKernelReader(table: [member(10, parent: 1), member(12, parent: 10)], vanished: [12])
+        #expect(try DarwinProcessInspector(reader: reader).groupMembers(10).map(\.pid) == [10])
+    }
+
+    @Test func descendantsSkipAMemberThatVanishedAfterListing() throws {
+        let reader = ScriptedKernelReader(
+            table: [member(10, parent: 1), member(11, parent: 10), member(12, parent: 10)], vanished: [11]
+        )
+        #expect(try DarwinProcessInspector(reader: reader).descendants(of: 10).map(\.pid) == [12])
+    }
+
+    @Test func listingsStillAbortOnAChangedMember() {
+        let reader = ScriptedKernelReader(snapshots: [start("1:000001")], table: [member(10, parent: 1)])
+        #expect(throws: RuntimeError.identityMismatch("changed before enrichment")) {
+            try DarwinProcessInspector(reader: reader).groupMembers(10)
+        }
+    }
+
+    @Test func execBetweenSnapshotsKeepsTheFirstCommand() throws {
+        let forked = KernelProcessSnapshot(pid: 4100, pgid: 4100, ppid: 1, startID: "100:000001", command: "sh")
+        let executed = KernelProcessSnapshot(pid: 4100, pgid: 4100, ppid: 1, startID: "100:000001", command: "sleep")
+        let reader = ScriptedKernelReader(snapshots: [forked, forked, executed])
+        #expect(try DarwinProcessInspector(reader: reader).identity(of: 4100).executable == "sh")
+    }
+
+    @Test func descendantsFailureNamesTheRoot() {
+        let reader = ScriptedKernelReader(tableFailure: "Cannot allocate memory")
+        #expect(throws: RuntimeError.message("inspect descendants of PID 10: Cannot allocate memory")) {
+            try DarwinProcessInspector(reader: reader).descendants(of: 10)
+        }
+    }
+
     @Test func identityRejectsNonPositivePID() {
         #expect(throws: RuntimeError.message("inspect process: invalid PID 0")) {
             try DarwinProcessInspector().identity(of: 0)
@@ -104,6 +138,17 @@ struct DarwinProcessInspectorTests {
         #expect(identity.executable == "sleep")
         #expect(identity.arguments == "/bin/sleep 30")
         #expect(try inspector.groupMembers(child.pid) == [identity])
+        #expect(try inspector.descendants(of: getpid()).contains(identity))
+    }
+
+    @Test func setuidChildHasEmptyArgumentsAndAStableIdentity() throws {
+        let child = try SpawnedTestProcess.spawn("/usr/bin/top", ["-l", "0", "-s", "1"])
+        defer { child.terminate() }
+        let inspector = DarwinProcessInspector()
+        let identity = try inspector.identity(of: child.pid)
+        #expect(identity.arguments == "")
+        #expect(identity.executable == "top")
+        #expect(try inspector.identity(of: child.pid) == identity)
         #expect(try inspector.descendants(of: getpid()).contains(identity))
     }
 
@@ -169,6 +214,26 @@ struct DarwinProcessInspectorTests {
         let inspector = DarwinProcessInspector()
         let owners = try inspector.listenerOwners(Endpoint(host: "127.0.0.1", port: listener.port))
         #expect(owners == [try inspector.identity(of: getpid())])
+    }
+
+    @Test func listenerOwnersAcceptsAnIPv4MappedAddress() throws {
+        let listener = try TestListener.open()
+        defer { listener.close() }
+        let inspector = DarwinProcessInspector()
+        let owners = try inspector.listenerOwners(Endpoint(host: "::ffff:127.0.0.1", port: listener.port))
+        #expect(owners == [try inspector.identity(of: getpid())])
+    }
+
+    @Test func listenerOwnersSkipAnOwnerThatVanished() throws {
+        let directory = try TemporaryDirectory()
+        try directory.write("#!/bin/sh\nprintf 'p10\\np12\\n'\n", to: "lsof")
+        let path = directory.path + "/lsof"
+        #expect(chmod(path, 0o755) == 0)
+        let inspector = DarwinProcessInspector(
+            reader: ScriptedKernelReader(table: [member(10, parent: 1)]),
+            lsof: LsofRunner(executable: URL(fileURLWithPath: path))
+        )
+        #expect(try inspector.listenerOwners(Endpoint(host: "127.0.0.1", port: 80)).map(\.pid) == [10])
     }
 
     @Test func listenerOwnersOfAClosedPortIsEmpty() throws {

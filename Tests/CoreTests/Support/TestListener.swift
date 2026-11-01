@@ -9,6 +9,7 @@ struct TestListener {
     static func open() throws -> TestListener {
         let descriptor = socket(AF_INET, SOCK_STREAM, 0)
         guard descriptor >= 0 else { throw RuntimeError.message("socket: \(errno)") }
+        _ = fcntl(descriptor, F_SETFD, FD_CLOEXEC)
         var address = sockaddr_in()
         address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
         address.sin_family = sa_family_t(AF_INET)

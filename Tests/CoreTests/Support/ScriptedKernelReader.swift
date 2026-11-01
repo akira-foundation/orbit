@@ -10,10 +10,17 @@ final class ScriptedKernelReader: KernelProcessReading {
 
     private let state: Mutex<State>
     private let table: [KernelProcessSnapshot]
+    private let vanished: Set<Int32>
+    private let tableFailure: String?
 
-    init(snapshots: [KernelProcessSnapshot] = [], table: [KernelProcessSnapshot] = []) {
+    init(
+        snapshots: [KernelProcessSnapshot] = [], table: [KernelProcessSnapshot] = [], vanished: Set<Int32> = [],
+        tableFailure: String? = nil
+    ) {
         state = Mutex(State(snapshots: snapshots))
         self.table = table
+        self.vanished = vanished
+        self.tableFailure = tableFailure
     }
 
     var argumentReads: Int {
@@ -24,7 +31,9 @@ final class ScriptedKernelReader: KernelProcessReading {
         if let scripted = state.withLock({ $0.snapshots.isEmpty ? nil : $0.snapshots.removeFirst() }) {
             return scripted
         }
-        guard let listed = table.first(where: { $0.pid == pid }) else { throw RuntimeError.processGone }
+        guard !vanished.contains(pid), let listed = table.first(where: { $0.pid == pid }) else {
+            throw RuntimeError.processGone
+        }
         return listed
     }
 
@@ -33,7 +42,8 @@ final class ScriptedKernelReader: KernelProcessReading {
     }
 
     func all() throws -> [KernelProcessSnapshot] {
-        table
+        if let tableFailure { throw RuntimeError.message(tableFailure) }
+        return table
     }
 
     func arguments(_ pid: Int32) throws -> String {
