@@ -1,0 +1,72 @@
+import Darwin
+import Foundation
+import Testing
+
+@testable import Core
+
+struct PipeLineReaderTests {
+    @Test func deliversEveryLineAndFinishesAtEndOfFile() async throws {
+        let pipe = Pipe()
+        let reader = PipeLineReader(pipe.fileHandleForReading)
+        reader.start()
+
+        try pipe.fileHandleForWriting.write(contentsOf: Data("one\ntwo\r\nthree".utf8))
+        try pipe.fileHandleForWriting.close()
+        var lines: [String] = []
+        for await batch in reader.batches {
+            lines += batch
+            reader.acknowledge()
+        }
+
+        #expect(lines == ["one", "two", "three"])
+    }
+
+    @Test func writerBlocksWhileABatchIsUnacknowledged() async throws {
+        let pipe = Pipe()
+        let reader = PipeLineReader(pipe.fileHandleForReading)
+        reader.start()
+        let writer = pipe.fileHandleForWriting.fileDescriptor
+        _ = fcntl(writer, F_SETFL, fcntl(writer, F_GETFL) | O_NONBLOCK)
+        let chunk = [UInt8](repeating: 0x0A, count: 4096)
+        let limit = 64 * 1024 * 1024
+        let bound = 1024 * 1024
+
+        var written = 0
+        var settledReads = 0
+        while written < limit && settledReads < 200 {
+            let count = chunk.withUnsafeBytes { Darwin.write(writer, $0.baseAddress, $0.count) }
+            if count > 0 {
+                written += count
+                settledReads = 0
+            } else {
+                settledReads += 1
+                try await Task.sleep(for: .milliseconds(1))
+            }
+        }
+
+        #expect(written < bound)
+        try pipe.fileHandleForWriting.close()
+        for await _ in reader.batches {
+            reader.acknowledge()
+        }
+    }
+
+    @Test func keepsDrainingAfterAnOverlongLine() async throws {
+        let pipe = Pipe()
+        let reader = PipeLineReader(pipe.fileHandleForReading)
+        reader.start()
+        let payload = Data(repeating: 0x61, count: LineScanner.maximumLineLength + 4096) + Data("\nlate\n".utf8)
+
+        Thread.detachNewThread {
+            try? pipe.fileHandleForWriting.write(contentsOf: payload)
+            try? pipe.fileHandleForWriting.close()
+        }
+        var lines: [String] = []
+        for await batch in reader.batches {
+            lines += batch
+            reader.acknowledge()
+        }
+
+        #expect(lines.isEmpty)
+    }
+}
