@@ -37,7 +37,7 @@ public enum OwnedMemberCleanup {
             do {
                 try inspector.verifyIdentity(member)
                 try inspector.signal(member, signal)
-            } catch  where !error.contains(.processGone) {
+            } catch let error where !error.contains(.processGone) {
                 errors.append(error)
             } catch {
                 continue

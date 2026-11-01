@@ -13,6 +13,7 @@ final class FakeProcessInspector: ProcessInspector {
         var recycleInsideSignal = false
         var changeGroupAfterTerm: Int32?
         var exitBeforeSignal = false
+        var survivesKillForReads = 0
     }
 
     private struct State {
@@ -23,6 +24,8 @@ final class FakeProcessInspector: ProcessInspector {
         var signals: [(Int32, ProcessSignal)] = []
         var listenerReads: [[Int32]] = []
         var listenerError: String?
+        var pendingDeathReads: [Int32: Int] = [:]
+        var signalVerifiesIdentity = true
     }
 
     private let state = Mutex(State())
@@ -90,8 +93,21 @@ final class FakeProcessInspector: ProcessInspector {
         set { state.withLock { $0.listenerError = newValue } }
     }
 
+    var signalVerifiesIdentity: Bool {
+        get { state.withLock { $0.signalVerifiesIdentity } }
+        set { state.withLock { $0.signalVerifiesIdentity = newValue } }
+    }
+
     func identity(of pid: Int32) throws -> ProcessIdentity {
-        try state.withLock { try Self.identity(of: pid, in: $0) }
+        try state.withLock { state in
+            if let remaining = state.pendingDeathReads[pid] {
+                state.pendingDeathReads[pid] = remaining > 1 ? remaining - 1 : nil
+                if remaining <= 1 {
+                    state.alive.remove(pid)
+                }
+            }
+            return try Self.identity(of: pid, in: state)
+        }
     }
 
     func groupMembers(_ pgid: Int32) throws -> [ProcessIdentity] {
@@ -135,7 +151,8 @@ final class FakeProcessInspector: ProcessInspector {
                 state.alive.remove(pid)
                 state.processes[pid]?.exitBeforeSignal = false
             }
-            guard try Self.identity(of: pid, in: state) == expected else {
+            let actual = try Self.identity(of: pid, in: state)
+            guard !state.signalVerifiesIdentity || actual == expected else {
                 throw RuntimeError.identityMismatch("PID \(pid)")
             }
             if let message = state.processes[pid]?.denySignalOnce {
@@ -147,6 +164,10 @@ final class FakeProcessInspector: ProcessInspector {
                 state.identities[pid] = Self.replacing(expected, pgid: group)
                 state.parents[pid] = 0
                 state.processes[pid]?.changeGroupAfterTerm = nil
+            }
+            if signal == .kill, let reads = state.processes[pid]?.survivesKillForReads, reads > 0 {
+                state.pendingDeathReads[pid] = reads
+                return
             }
             if signal == .kill || state.processes[pid]?.ignoresTerm != true {
                 state.alive.remove(pid)
