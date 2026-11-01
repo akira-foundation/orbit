@@ -61,6 +61,16 @@ struct LoginShellRunnerTests {
         #expect(iterations.withLock { $0 } < 300)
     }
 
+    @Test(.disabled(if: ThreadSanitizer.isLoaded, ThreadSanitizer.exitTestsUnsupported))
+    func signalIgnoredByTheParentIsDefaultInTheShell() async {
+        await #expect(processExitsWith: .success) {
+            signal(SIGTERM, SIG_IGN)
+            let output = await LoginShellRunner().run(
+                shell: "/bin/sh", script: "/bin/sh -c 'kill -TERM $$; echo survived'", timeout: .seconds(5))
+            exit(output?.contains("survived") == true ? EXIT_FAILURE : EXIT_SUCCESS)
+        }
+    }
+
     private func processDisappears(_ pid: pid_t) async -> Bool {
         for _ in 0..<100 {
             if kill(pid, 0) == -1 && errno == ESRCH {

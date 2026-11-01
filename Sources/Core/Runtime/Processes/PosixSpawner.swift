@@ -4,9 +4,6 @@ import Foundation
 public enum PosixSpawner {
     private static let controlTarget: Int32 = 3
     private static let highDescriptorFloor: Int32 = 10
-    private static let catchableSignals: sigset_t = (1..<NSIG)
-        .filter { $0 != SIGKILL && $0 != SIGSTOP }
-        .reduce(sigset_t(0)) { $0 | (1 << ($1 - 1)) }
 
     public static func spawn(_ request: SpawnRequest) throws -> SpawnedProcess {
         var opened: [Int32] = []
@@ -100,7 +97,7 @@ public enum PosixSpawner {
         case .inherit:
             break
         }
-        var defaults = catchableSignals
+        var defaults = CatchableSignals.all
         var mask = sigset_t()
         try check(posix_spawnattr_setsigdefault(&attributes, &defaults))
         try check(posix_spawnattr_setsigmask(&attributes, &mask))

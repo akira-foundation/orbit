@@ -57,8 +57,14 @@ public struct LoginShellRunner: LoginShellRunning {
             posix_spawnattr_destroy(&attributes)
             posix_spawn_file_actions_destroy(&actions)
         }
-        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT))
+        posix_spawnattr_setflags(
+            &attributes,
+            Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK))
         posix_spawnattr_setpgroup(&attributes, 0)
+        var defaults = CatchableSignals.all
+        var mask = sigset_t()
+        posix_spawnattr_setsigdefault(&attributes, &defaults)
+        posix_spawnattr_setsigmask(&attributes, &mask)
         posix_spawn_file_actions_addopen(&actions, 0, "/dev/null", O_RDONLY, 0)
         posix_spawn_file_actions_adddup2(&actions, standardOutput, 1)
         posix_spawn_file_actions_addopen(&actions, 2, "/dev/null", O_WRONLY, 0)

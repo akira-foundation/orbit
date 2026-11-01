@@ -52,7 +52,7 @@ struct SpawnedTestProcess {
 
     func terminate() {
         if let adopted {
-            guard adopted.reaper.reapedStatus() == nil || hasGroupMembers() else { return }
+            guard adopted.reaper.reapedStatus() == nil || groupOutlivesItsLeader() else { return }
             Darwin.kill(-pid, SIGKILL)
             return
         }
@@ -62,8 +62,9 @@ struct SpawnedTestProcess {
         while waitpid(pid, &status, 0) == -1 && errno == EINTR {}
     }
 
-    private func hasGroupMembers() -> Bool {
-        (try? KernelProcessReader().group(pid))?.isEmpty == false
+    private func groupOutlivesItsLeader() -> Bool {
+        guard let members = try? KernelProcessReader().group(pid), !members.isEmpty else { return false }
+        return !members.contains { $0.pid == pid }
     }
 
     func waitForLine(_ expected: String) throws {

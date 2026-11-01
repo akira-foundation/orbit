@@ -78,6 +78,24 @@ struct PosixSpawnerTests {
         #expect(String(decoding: output, as: UTF8.self) == "control\n")
     }
 
+    @Test func controlFromAStandardDescriptorIsNotOverwrittenByTheRedirectedInput() async throws {
+        let input = try PosixSpawner.makePipe()
+        var writeEnd: Int32? = input.write
+        defer {
+            close(input.read)
+            if let writeEnd { close(writeEnd) }
+        }
+        let probe = "read line; [ \"$line\" = in ] || exit 2; [ /dev/fd/0 -ef /dev/fd/3 ] && exit 3; exit 0"
+        let process = try PosixSpawner.spawn(
+            SpawnRequest(
+                executable: "/bin/sh", arguments: ["-c", probe], environment: EnvironmentList([]),
+                controlDescriptor: STDIN_FILENO, standardInput: input.read))
+        _ = "in\n".withCString { write(input.write, $0, 3) }
+        close(input.write)
+        writeEnd = nil
+        #expect(try await process.exitStatus() == .exited(0))
+    }
+
     @Test func invalidControlDescriptorFailsWithStartError() {
         #expect(throws: RuntimeError.message("start: Bad file descriptor")) {
             try PosixSpawner.spawn(
