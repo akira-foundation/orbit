@@ -42,6 +42,22 @@ struct PortDetectorTests {
         #expect(PortDetector.port(in: line) == DetectedPort(port: 8080, strong: false))
     }
 
+    @Test(arguments: [
+        "export 80", "Sport: 80", "port 80_", "port 123456", "port 12a", "port \u{0668}\u{0660}\u{0668}\u{0660}",
+    ])
+    func extractPortRejectsFlagsWithoutAnASCIIWordBoundary(line: String) {
+        #expect(PortDetector.port(in: line) == nil)
+    }
+
+    @Test func extractPortSkipsARejectedFlagAndAcceptsALaterOne() {
+        #expect(PortDetector.port(in: "export 80 port 90") == DetectedPort(port: 90, strong: false))
+    }
+
+    @Test func extractPortReadsAnIPv6LoopbackSurroundedByANSI() {
+        let line = "\u{1B}[36m[::1]:8080\u{1B}[39m"
+        #expect(PortDetector.port(in: line) == DetectedPort(port: 8080, strong: true))
+    }
+
     @Test func extractPortPrefersTheHostPortOverThePortFlag() {
         #expect(PortDetector.port(in: "localhost:5173 port=4000") == DetectedPort(port: 5173, strong: true))
     }
