@@ -17,7 +17,7 @@ public struct LineScanner: Sendable {
                 lines.append(takeLine())
             } else {
                 pending.append(byte)
-                if pending.count > Self.maximumLineLength {
+                if pending.count >= Self.maximumLineLength {
                     overflowed = true
                     pending = []
                 }

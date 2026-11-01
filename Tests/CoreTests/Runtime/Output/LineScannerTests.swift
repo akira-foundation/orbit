@@ -24,11 +24,53 @@ struct LineScannerTests {
         #expect(scanner.finish() == [])
     }
 
-    @Test func scannerKeepsALineOfExactlyTheMaximum() {
+    @Test func scannerAcceptsALineWhoseTerminatorFitsTheMaximum() {
         var scanner = LineScanner()
-        let line = String(repeating: "a", count: LineScanner.maximumLineLength)
+        let line = String(repeating: "a", count: LineScanner.maximumLineLength - 1)
         #expect(scanner.feed(Array((line + "\n").utf8)) == [line])
         #expect(!scanner.overflowed)
+    }
+
+    @Test func scannerRejectsALineWhoseTerminatorDoesNotFitTheMaximum() {
+        var scanner = LineScanner()
+        let bytes = [UInt8](repeating: 0x61, count: LineScanner.maximumLineLength) + [0x0A]
+        #expect(scanner.feed(bytes) == [])
+        #expect(scanner.overflowed)
+    }
+
+    @Test func scannerCountsTheCarriageReturnAgainstTheMaximum() {
+        var scanner = LineScanner()
+        let bytes = [UInt8](repeating: 0x61, count: LineScanner.maximumLineLength - 1) + [0x0D, 0x0A]
+        #expect(scanner.feed(bytes) == [])
+        #expect(scanner.overflowed)
+    }
+
+    @Test func scannerRejectsAnUnterminatedLastLineOfTheMaximum() {
+        var scanner = LineScanner()
+        #expect(scanner.feed([UInt8](repeating: 0x61, count: LineScanner.maximumLineLength)) == [])
+        #expect(scanner.finish() == [])
+        #expect(scanner.overflowed)
+    }
+
+    @Test func scannerAcceptsAnUnterminatedLastLineJustBelowTheMaximum() {
+        var scanner = LineScanner()
+        let line = String(repeating: "a", count: LineScanner.maximumLineLength - 1)
+        #expect(scanner.feed(Array(line.utf8)) == [])
+        #expect(scanner.finish() == [line])
+    }
+
+    @Test func scannerJoinsACarriageReturnLineFeedSplitAcrossFeeds() {
+        var scanner = LineScanner()
+        #expect(scanner.feed(Array("a\r".utf8)) == [])
+        #expect(scanner.feed(Array("\nb\n".utf8)) == ["a", "b"])
+    }
+
+    @Test func scannerStripsALoneTrailingCarriageReturnOnFinish() {
+        var scanner = LineScanner()
+        #expect(scanner.feed(Array("x\r".utf8)) == [])
+        #expect(scanner.finish() == ["x"])
+        #expect(scanner.feed([0x0D]) == [])
+        #expect(scanner.finish() == [""])
     }
 
     @Test func scannerDeliversLinesBeforeTheOverflow() {

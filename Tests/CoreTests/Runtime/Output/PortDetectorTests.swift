@@ -33,6 +33,31 @@ struct PortDetectorTests {
         #expect(PortDetector.port(in: "localhost:99999 port=4000") == DetectedPort(port: 4000, strong: false))
     }
 
+    @Test func extractPortReadsDigitsBeforeACombiningMark() {
+        #expect(PortDetector.port(in: "localhost:5173\u{301}") == DetectedPort(port: 5173, strong: true))
+    }
+
+    @Test(arguments: ["éport 8080", "port 8080é"])
+    func extractPortTreatsNonASCIILettersAsWordBoundaries(line: String) {
+        #expect(PortDetector.port(in: line) == DetectedPort(port: 8080, strong: false))
+    }
+
+    @Test func extractPortPrefersTheHostPortOverThePortFlag() {
+        #expect(PortDetector.port(in: "localhost:5173 port=4000") == DetectedPort(port: 5173, strong: true))
+    }
+
+    @Test func httpEndpointKeepsMultiLabelHosts() {
+        #expect(
+            PortDetector.httpEndpoint(in: "see http://API.dev.example.com:8080/x")
+                == HTTPEndpoint(scheme: "http", host: "api.dev.example.com", port: 8080))
+    }
+
+    @Test func httpEndpointLowercasesUppercaseIPv6() {
+        #expect(
+            PortDetector.httpEndpoint(in: "HTTPS://[FE80::1]:443/")
+                == HTTPEndpoint(scheme: "https", host: "fe80::1", port: 443))
+    }
+
     @Test func extractPortIgnoresPlainOutput() {
         #expect(PortDetector.port(in: "compiling...") == nil)
         #expect(PortDetector.port(in: "") == nil)

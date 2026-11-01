@@ -14,6 +14,10 @@ struct ReadinessDetectorTests {
         #expect(ReadinessDetector.looksReady("  ->  " + phrase + " extra"))
     }
 
+    @Test func readinessSurvivesACombiningMarkAfterThePhrase() {
+        #expect(ReadinessDetector.looksReady("local:\u{301}"))
+    }
+
     @Test func plainOutputIsNotReady() {
         #expect(!ReadinessDetector.looksReady("compiling..."))
         #expect(!ReadinessDetector.looksReady(""))
