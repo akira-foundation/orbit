@@ -10,10 +10,12 @@ final class RecordingServices: ServiceCoordinating {
     }
 
     private let environment: [String: String]
+    private let honoursCancellation: Bool
     private let state: Mutex<State>
 
-    init(environment: [String: String] = [:], holdStarts: Bool = false) {
+    init(environment: [String: String] = [:], holdStarts: Bool = false, honoursCancellation: Bool = false) {
         self.environment = environment
+        self.honoursCancellation = honoursCancellation
         state = Mutex(State(holding: holdStarts))
     }
 
@@ -35,6 +37,24 @@ final class RecordingServices: ServiceCoordinating {
     }
 
     func projectStarting(id: String, path: String, slug: String) async throws -> [String: String] {
+        if honoursCancellation {
+            await withTaskCancellationHandler {
+                await passGate(id)
+            } onCancel: {
+                releaseStarts()
+            }
+            if Task.isCancelled {
+                state.withLock { $0.calls.append("cancelled \(id)") }
+                throw CancellationError()
+            }
+        } else {
+            await passGate(id)
+        }
+        state.withLock { $0.calls.append("started \(id)") }
+        return environment
+    }
+
+    private func passGate(_ id: String) async {
         await withCheckedContinuation { continuation in
             let holding = state.withLock { state in
                 state.calls.append("starting \(id)")
@@ -46,8 +66,6 @@ final class RecordingServices: ServiceCoordinating {
                 continuation.resume()
             }
         }
-        state.withLock { $0.calls.append("started \(id)") }
-        return environment
     }
 
     func projectStopped(id: String) async {

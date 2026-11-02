@@ -6,9 +6,8 @@ extension RuntimeManager {
             return
         }
         session.requestStop()
-        await launchFinished(session)
         var polls = Int((Self.stopGrace + .seconds(1)) / Self.stopPoll)
-        while polls > 0 && session.status != .stopped && session.status != .error {
+        while polls > 0 && !isSettled(session) {
             polls -= 1
             do {
                 try await clock.sleep(for: Self.stopPoll)
@@ -16,15 +15,27 @@ extension RuntimeManager {
                 break
             }
         }
+        guard !launching.contains(session.sessionID) else {
+            abandonedLaunches.insert(session.sessionID)
+            return
+        }
         if let error = session.shutdownError {
             await persist(.error, session)
             await services.projectStopped(id: projectID)
             throw error
         }
+        await settleStop(session)
+    }
+
+    func settleStop(_ session: RuntimeSession) async {
         if session.status == .stopped {
             await persist(.stopped, session)
         }
-        await services.projectStopped(id: projectID)
+        await services.projectStopped(id: session.projectID)
+    }
+
+    private func isSettled(_ session: RuntimeSession) -> Bool {
+        !launching.contains(session.sessionID) && (session.status == .stopped || session.status == .error)
     }
 
     public func restart(_ projectID: String) async throws {

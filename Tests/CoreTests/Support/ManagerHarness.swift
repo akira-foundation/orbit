@@ -19,14 +19,16 @@ struct ManagerHarness {
 
     init(
         devCommand: String? = "/bin/echo ready", projects: [String] = [projectID], base: [String] = [],
-        serviceEnvironment: [String: String] = [:], holdServices: Bool = false, stopIgnoredAt: Set<Int> = [],
+        serviceEnvironment: [String: String] = [:], holdServices: Bool = false,
+        servicesHonourCancellation: Bool = false, stopIgnoredAt: Set<Int> = [],
         inspector: FakeProcessInspector = .supervised()
     ) async throws {
         store = try Store.inMemory()
         directory = try TemporaryDirectory()
         launcher = FakeLauncher(stopIgnoredAt: stopIgnoredAt)
         self.inspector = inspector
-        services = RecordingServices(environment: serviceEnvironment, holdStarts: holdServices)
+        services = RecordingServices(
+            environment: serviceEnvironment, holdStarts: holdServices, honoursCancellation: servicesHonourCancellation)
         events = EventLog(store: store, clock: clock)
         manager = RuntimeManager(
             store: store, launcher: launcher, inspector: inspector, endpoints: FixedEndpoint(endpoint: Self.endpoint),

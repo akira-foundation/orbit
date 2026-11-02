@@ -9,7 +9,17 @@ extension RuntimeManager {
 
     func launch(_ projectID: String, automatic: Bool) async throws {
         let session = try admit(projectID, automatic: automatic)
-        defer { finishLaunching(session) }
+        do {
+            try await runLaunch(session)
+        } catch {
+            await endLaunch(session)
+            throw error
+        }
+        await endLaunch(session)
+    }
+
+    private func runLaunch(_ session: RuntimeSession) async throws {
+        let projectID = session.projectID
         let project: Project
         do {
             guard let found = try await store.project(id: projectID) else {
@@ -24,7 +34,7 @@ extension RuntimeManager {
         guard let devCommand = project.devCommand, let program = command.first else {
             throw await fail(session, "runtime: project has no dev command")
         }
-        let serviceEnvironment = await startServices(project)
+        let serviceEnvironment = await startServices(project, session)
         try proceed(session)
         let endpoint: Endpoint
         do {
@@ -61,13 +71,10 @@ extension RuntimeManager {
         supervise(session, handle)
     }
 
-    func launchFinished(_ session: RuntimeSession) async {
-        guard launching[session.sessionID] != nil else { return }
-        await withCheckedContinuation { launching[session.sessionID]?.append($0) }
-    }
-
-    private func finishLaunching(_ session: RuntimeSession) {
-        launching.removeValue(forKey: session.sessionID)?.forEach { $0.resume() }
+    private func endLaunch(_ session: RuntimeSession) async {
+        launching.remove(session.sessionID)
+        guard abandonedLaunches.remove(session.sessionID) != nil else { return }
+        await settleStop(session)
     }
 
     private func proceed(_ session: RuntimeSession) throws {
@@ -97,7 +104,7 @@ extension RuntimeManager {
         }
         let session = RuntimeSession(projectID: projectID, sessionID: OwnershipIdentifiers.sessionID(), clock: clock)
         sessions[projectID] = session
-        launching[session.sessionID] = []
+        launching.insert(session.sessionID)
         return session
     }
 
@@ -111,7 +118,7 @@ extension RuntimeManager {
         return RuntimeError.message(reported ?? message)
     }
 
-    private func startServices(_ project: Project) async -> [String: String] {
+    private func startServices(_ project: Project, _ session: RuntimeSession) async -> [String: String] {
         let services = services
         let clock = clock
         let outcome = await withTaskGroup(of: Result<[String: String], any Error>?.self) { group in
@@ -127,10 +134,15 @@ extension RuntimeManager {
                 try? await clock.sleep(for: Self.servicesTimeout)
                 return nil
             }
+            group.addTask {
+                await session.stopSignal()
+                return nil
+            }
             let first = await group.next().flatMap { $0 }
             group.cancelAll()
             return first
         }
+        guard !session.shutdownRequested else { return [:] }
         switch outcome {
         case .success(let environment):
             return environment

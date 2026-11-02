@@ -22,7 +22,8 @@ public actor RuntimeManager {
     var sessions: [String: RuntimeSession] = [:]
     let statusWrites = StatusWrites()
     var supervising: [String: RuntimeSession] = [:]
-    var launching: [String: [CheckedContinuation<Void, Never>]] = [:]
+    var launching: Set<String> = []
+    var abandonedLaunches: Set<String> = []
     var closing = false
     var watchdogs: [String: Task<Void, Never>] = [:]
     var restarts: [String: Task<Void, Never>] = [:]

@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 
 @testable import Core
@@ -91,6 +92,87 @@ struct RuntimeManagerStopTests {
         #expect(harness.launcher.handles.count == 2)
         #expect(refused == "runtime: manager is closed")
         stubborn.exit()
+    }
+
+    private func failure(of start: Task<Void, any Error>) async -> String? {
+        do {
+            try await start.value
+            return nil
+        } catch {
+            return String(describing: error)
+        }
+    }
+
+    @Test func closeCancelsACooperativeServiceWithoutWaitingForItsTimeout() async throws {
+        let harness = try await ManagerHarness(holdServices: true, servicesHonourCancellation: true)
+        let start = Task { try await harness.manager.start(ManagerHarness.projectID) }
+        #expect(await Poll.until { harness.services.heldStarts == 1 })
+
+        let closed = Task { await harness.manager.close() }
+        let closedInTime = await Poll.until(within: .seconds(5)) {
+            harness.services.calls.contains("stopped p1")
+        }
+        harness.services.releaseStarts()
+        await closed.value
+        let message = await failure(of: start)
+
+        #expect(closedInTime)
+        #expect(message == "runtime: manager is closed")
+        #expect(harness.services.calls == ["starting p1", "cancelled p1", "stopped p1"])
+        #expect(harness.launcher.specs.isEmpty)
+        #expect(await harness.status() == .stopped)
+        #expect(try await harness.persisted() == .stopped)
+    }
+
+    @Test func stopAllKeepsItsTimeoutAgainstAServiceThatIgnoresCancellation() async throws {
+        let harness = try await ManagerHarness(holdServices: true)
+        let start = Task { try await harness.manager.start(ManagerHarness.projectID) }
+        #expect(await Poll.until { harness.services.heldStarts == 1 })
+
+        let stopAll = Task { await harness.manager.stopAll() }
+        #expect(await harness.clock.waitForPending(RuntimeManager.stopAllTimeout))
+        harness.clock.advance(by: 3)
+        let returned = Atomic<Bool>(false)
+        let waiter = Task {
+            await stopAll.value
+            returned.store(true, ordering: .relaxed)
+        }
+        let returnedInTime = await Poll.until(within: .seconds(5)) { returned.load(ordering: .relaxed) }
+        let callsWhileHeld = harness.services.calls
+        harness.services.releaseStarts()
+        await waiter.value
+        let message = await failure(of: start)
+
+        #expect(returnedInTime)
+        #expect(callsWhileHeld == ["starting p1"])
+        #expect(message == "runtime: start cancelled")
+        #expect(harness.launcher.specs.isEmpty)
+        #expect(await Poll.until { harness.services.calls == ["starting p1", "started p1", "stopped p1"] })
+        #expect(await harness.persists(.stopped))
+    }
+
+    @Test func stopGivesUpOnAServiceThatIgnoresCancellationWithinItsLimit() async throws {
+        let harness = try await ManagerHarness(holdServices: true)
+        let start = Task { try await harness.manager.start(ManagerHarness.projectID) }
+        #expect(await Poll.until { harness.services.heldStarts == 1 })
+
+        let stop = Task { try await harness.manager.stop(ManagerHarness.projectID) }
+        let returned = Atomic<Bool>(false)
+        let waiter = Task {
+            try await stop.value
+            returned.store(true, ordering: .relaxed)
+        }
+        let returnedInTime = await Poll.until(within: .seconds(30)) { returned.load(ordering: .relaxed) }
+        let callsWhileHeld = harness.services.calls
+        harness.services.releaseStarts()
+        try await waiter.value
+        let message = await failure(of: start)
+
+        #expect(returnedInTime)
+        #expect(callsWhileHeld == ["starting p1"])
+        #expect(message == "runtime: start cancelled")
+        #expect(await Poll.until { harness.services.calls == ["starting p1", "started p1", "stopped p1"] })
+        #expect(await harness.persists(.stopped))
     }
 
     @Test func connectionCountsIgnoreEmptyIDsAndDropAtZero() async throws {
