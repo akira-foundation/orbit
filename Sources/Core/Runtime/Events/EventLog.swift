@@ -7,12 +7,15 @@ public actor EventLog {
     public static let batchSize = 200
     public static let batchBytes = 4 * 1024 * 1024
     public static let flushInterval: Duration = .milliseconds(250)
+    static let droppedLinesWarning = "event log buffer above 32 MiB: newer lines dropped"
 
     private let store: Store?
     private let clock: any RuntimeClock
     private let continuation: AsyncStream<EventRecord>.Continuation?
     private let enqueued = Atomic<Int>(0)
     private let queuedBytes = Atomic<Int>(0)
+    private let firstDropped = Mutex<EventRecord?>(nil)
+    private var dropReported = false
     private(set) var received = 0
     private var pending: [EventRecord] = []
     private var pendingBytes = 0
@@ -47,6 +50,7 @@ public actor EventLog {
         let size = record.text.utf8.count
         guard queuedBytes.add(size, ordering: .relaxed).newValue <= Self.bufferBytes else {
             queuedBytes.subtract(size, ordering: .relaxed)
+            firstDropped.withLock { $0 = $0 ?? record }
             return
         }
         guard case .enqueued = continuation.yield(record) else {
@@ -136,7 +140,20 @@ public actor EventLog {
         ready.forEach { $0.continuation.resume() }
     }
 
+    private func reportDrop() {
+        guard !dropReported, var warning = firstDropped.withLock({ $0 }) else { return }
+        dropReported = true
+        lastTimestamp = max(lastTimestamp, warning.timestamp)
+        warning.timestamp = lastTimestamp
+        warning.level = .warn
+        warning.source = .system
+        warning.stream = .system
+        warning.text = Self.droppedLinesWarning
+        pending.append(warning)
+    }
+
     private func writePending() async {
+        reportDrop()
         if let store, !pending.isEmpty {
             let batch = pending
             pending.removeAll(keepingCapacity: true)

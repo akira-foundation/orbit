@@ -56,6 +56,38 @@ struct EventLogMemoryTests {
         #expect(rows <= bound)
     }
 
+    @Test func droppingOverTheByteBudgetLeavesASingleWarning() async throws {
+        let directory = try TemporaryDirectory()
+        let path = directory.path + "/orbit.sqlite"
+        let (store, projectID) = try await store(at: path)
+        let log = EventLog(store: store, clock: TestClock())
+        let blocker = try SQLiteDatabase(path: path)
+        try blocker.execute("BEGIN IMMEDIATE;")
+        let line = String(repeating: "x", count: 1 << 20)
+        for _ in 0..<EventLog.bufferSize {
+            log.push(record(projectID, line))
+        }
+        try blocker.execute("COMMIT;")
+        await log.close()
+
+        let warnings = try store.db.query(
+            "SELECT project_id, level, source FROM events WHERE text = ?;",
+            [.text("event log buffer above 32 MiB: newer lines dropped")])
+        #expect(warnings.count == 1)
+        #expect(warnings.first?.string("project_id") == projectID)
+        #expect(warnings.first?.string("level") == EventLevel.warn.rawValue)
+        #expect(warnings.first?.string("source") == EventSource.system.rawValue)
+    }
+
+    @Test func nothingDroppedLeavesNoWarning() async throws {
+        let (store, projectID) = try await store()
+        let log = EventLog(store: store, clock: TestClock())
+        log.push(record(projectID, "line"))
+        await log.close()
+
+        #expect(try store.db.query("SELECT id FROM events WHERE level = ?;", [.text(EventLevel.warn.rawValue)]).isEmpty)
+    }
+
     @Test func timestampsNeverGoBackwardsInInsertionOrder() async throws {
         let (store, projectID) = try await store()
         let log = EventLog(store: store, clock: TestClock())
