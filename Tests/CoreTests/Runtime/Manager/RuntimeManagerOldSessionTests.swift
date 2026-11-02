@@ -4,7 +4,7 @@ import Testing
 
 struct RuntimeManagerOldSessionTests {
     @Test func aLaunchAbandonedByStopCannotOverwriteTheNewSessionStatus() async throws {
-        let harness = try await ManagerHarness()
+        let harness = try await ManagerHarness(instantStopPolls: true)
         harness.launcher.holdLaunches()
         let abandoned = Task { try? await harness.manager.start(ManagerHarness.projectID) }
         #expect(await Poll.until { harness.launcher.heldLaunches == 1 })

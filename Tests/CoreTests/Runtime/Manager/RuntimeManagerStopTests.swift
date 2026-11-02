@@ -153,7 +153,7 @@ struct RuntimeManagerStopTests {
     }
 
     @Test func stopGivesUpOnAServiceThatIgnoresCancellationWithinItsLimit() async throws {
-        let harness = try await ManagerHarness(initialStatus: .error, holdServices: true)
+        let harness = try await ManagerHarness(initialStatus: .error, holdServices: true, instantStopPolls: true)
         let start = Task { try await harness.manager.start(ManagerHarness.projectID) }
         #expect(await Poll.until { harness.services.heldStarts == 1 })
 

@@ -20,9 +20,11 @@ final class ManualClock: RuntimeClock {
     }
 
     private let state: Mutex<State>
+    private let instantSleeps: Set<Duration>
 
-    init(_ start: Date = Date(timeIntervalSince1970: 1_800_000_000)) {
+    init(_ start: Date = Date(timeIntervalSince1970: 1_800_000_000), instantSleeps: Set<Duration> = []) {
         state = Mutex(State(now: start))
+        self.instantSleeps = instantSleeps
     }
 
     var now: Date { state.withLock { $0.now } }
@@ -30,6 +32,11 @@ final class ManualClock: RuntimeClock {
     var requested: [Duration] { state.withLock { $0.requested } }
 
     func sleep(for duration: Duration) async throws {
+        if instantSleeps.contains(duration) {
+            try Task.checkCancellation()
+            await Task.yield()
+            return
+        }
         guard duration >= Self.manualThreshold else {
             try await Task.sleep(for: duration)
             return

@@ -13,7 +13,7 @@ struct ManagerHarness {
     let inspector: FakeProcessInspector
     let services: RecordingServices
     let sink = RecordingEventSink()
-    let clock = ManualClock()
+    let clock: ManualClock
     let events: EventLog
     let manager: RuntimeManager
 
@@ -23,8 +23,9 @@ struct ManagerHarness {
         base: [String] = [],
         serviceEnvironment: [String: String] = [:], holdServices: Bool = false,
         servicesHonourCancellation: Bool = false, stopIgnoredAt: Set<Int> = [],
-        inspector: FakeProcessInspector = .supervised()
+        inspector: FakeProcessInspector = .supervised(), instantStopPolls: Bool = false
     ) async throws {
+        clock = ManualClock(instantSleeps: instantStopPolls ? [RuntimeManager.stopPoll] : [])
         store = try Store.inMemory()
         directory = try TemporaryDirectory()
         launcher = FakeLauncher(stopIgnoredAt: stopIgnoredAt)

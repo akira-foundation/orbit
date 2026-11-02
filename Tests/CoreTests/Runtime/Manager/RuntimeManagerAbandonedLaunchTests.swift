@@ -15,7 +15,7 @@ struct RuntimeManagerAbandonedLaunchTests {
     }
 
     @Test func launchThatEndsAfterStopGaveUpIsStopped() async throws {
-        let harness = try await ManagerHarness(initialStatus: .error)
+        let harness = try await ManagerHarness(initialStatus: .error, instantStopPolls: true)
         harness.launcher.holdLaunches()
         let start = Task { try await harness.manager.start(ManagerHarness.projectID) }
         #expect(await Poll.until { harness.launcher.heldLaunches == 1 })
