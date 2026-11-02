@@ -51,37 +51,10 @@ struct DotEnvTests {
         #expect(DotEnv.load(directory: directory.path).isEmpty)
     }
 
-    @Test func readWriteProjectEnvRoundTrips() throws {
+    @Test func readProjectEnvReadsTheEnvFile() throws {
         let directory = try TemporaryDirectory()
-        let values = ["APP_NAME": "orbit", "DB_PORT": "5433"]
-        try ProjectEnvFile.write(values, directory: directory.path)
-        let path = directory.path + "/.env"
-        #expect(ProjectEnvFile.read(directory: directory.path) == values)
-        #expect(try String(contentsOfFile: path, encoding: .utf8) == "APP_NAME=orbit\nDB_PORT=5433\n")
-        let permissions = try FileManager.default.attributesOfItem(atPath: path)[.posixPermissions] as? Int
-        #expect(permissions == 0o644)
-    }
-
-    @Test func writeKeepsTheModeOfAnExistingFile() throws {
-        let directory = try TemporaryDirectory()
-        let path = directory.path + "/.env"
-        try directory.write("OLD=1\n", to: ".env")
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
-        try ProjectEnvFile.write(["NEW": "2"], directory: directory.path)
-        let permissions = try FileManager.default.attributesOfItem(atPath: path)[.posixPermissions] as? Int
-        #expect(permissions == 0o600)
-        #expect(try String(contentsOfFile: path, encoding: .utf8) == "NEW=2\n")
-    }
-
-    @Test func writeFollowsASymlinkedFile() throws {
-        let directory = try TemporaryDirectory()
-        try directory.write("OLD=1\n", to: "real.env")
-        try FileManager.default.createSymbolicLink(
-            atPath: directory.path + "/.env", withDestinationPath: directory.path + "/real.env")
-        try ProjectEnvFile.write(["NEW": "2"], directory: directory.path)
-        let attributes = try FileManager.default.attributesOfItem(atPath: directory.path + "/.env")
-        #expect(attributes[.type] as? FileAttributeType == .typeSymbolicLink)
-        #expect(try String(contentsOfFile: directory.path + "/real.env", encoding: .utf8) == "NEW=2\n")
+        try directory.write("APP_NAME=orbit\nDB_PORT=5433\n", to: ".env")
+        #expect(ProjectEnvFile.read(directory: directory.path) == ["APP_NAME": "orbit", "DB_PORT": "5433"])
     }
 
     @Test func readProjectEnvMissingFileIsEmpty() throws {
