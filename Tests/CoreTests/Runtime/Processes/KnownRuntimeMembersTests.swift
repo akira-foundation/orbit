@@ -32,4 +32,34 @@ struct KnownRuntimeMembersTests {
         #expect(members.unsettled == [4101])
         #expect(!members.containsOnly(4100))
     }
+
+    @Test func refreshAdoptsTheIdentityOfAMemberThatExecuted() throws {
+        let inspector = FakeProcessInspector.supervised(members: [
+            .init(pid: 4101, ignoresTerm: true, execsAfterTerm: "node")
+        ])
+        var members = try KnownRuntimeMembers(supervisor: inspector.identity(4100), inspector: inspector)
+        let original = inspector.identity(4101)
+        try inspector.signal(original, .terminate)
+        try members.refresh(supervisor: inspector.identity(4100), inspector: inspector)
+        #expect(members.members[4101]?.executable == "node")
+        #expect(members.members[4101]?.startID == original.startID)
+    }
+
+    @Test func refreshRejectsAPIDThatNowBelongsToAnotherProcess() throws {
+        let inspector = FakeProcessInspector.supervised(members: [.init(pid: 4101)])
+        var members = try KnownRuntimeMembers(supervisor: inspector.identity(4100), inspector: inspector)
+        inspector.setStartID(4101, "recycled")
+        #expect(throws: RuntimeError.identityMismatch("PID 4101 changed while cleaning up")) {
+            try members.refresh(supervisor: inspector.identity(4100), inspector: inspector)
+        }
+    }
+
+    @Test func refreshKeepsAMemberCaughtMidExecAsUnsettled() throws {
+        let inspector = FakeProcessInspector.supervised(members: [.init(pid: 4101)])
+        var members = try KnownRuntimeMembers(supervisor: inspector.identity(4100), inspector: inspector)
+        inspector.add(.init(pid: 4101, unstableIdentityReads: 1))
+        try members.refresh(supervisor: inspector.identity(4100), inspector: inspector)
+        #expect(members.unsettled == [4101])
+        #expect(members.members[4101] != nil)
+    }
 }

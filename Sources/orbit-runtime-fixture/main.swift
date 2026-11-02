@@ -63,7 +63,42 @@ func holdControl(of handle: any SupervisorHandle) throws -> Int32 {
     return holder.pid
 }
 
+func clobberArgumentsAndHold() -> Never {
+    var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, getpid()]
+    var buffer = [UInt8](repeating: 0, count: 1 << 20)
+    var size = buffer.count
+    guard sysctl(&mib, UInt32(mib.count), &buffer, &size, nil, 0) == 0, let first = CommandLine.unsafeArgv[0] else {
+        exit(1)
+    }
+    var offset = MemoryLayout<Int32>.size
+    while offset < size, buffer[offset] != 0 { offset += 1 }
+    while offset < size, buffer[offset] == 0 { offset += 1 }
+    memset(first, 0x41, size - offset)
+    holdWhileParentLives()
+}
+
+func leaveTheGroupOnTerm() -> Never {
+    signal(SIGTERM) { _ in _ = setsid() }
+    print("READY")
+    fflush(stdout)
+    holdWhileParentLives()
+}
+
+func holdWhileParentLives() -> Never {
+    let parent = getppid()
+    while getppid() == parent {
+        usleep(10_000)
+    }
+    exit(0)
+}
+
 let arguments = Array(CommandLine.arguments.dropFirst())
+if arguments.first == "--clobber-arguments" {
+    clobberArgumentsAndHold()
+}
+if arguments.first == "--setsid-on-term" {
+    leaveTheGroupOnTerm()
+}
 if let code = RuntimeSupervisor.runIfRequested(arguments: arguments) {
     exit(code)
 }

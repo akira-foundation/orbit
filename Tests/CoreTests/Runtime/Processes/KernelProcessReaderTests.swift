@@ -16,12 +16,10 @@ struct KernelProcessReaderTests {
         #expect(source.calls == 3)
     }
 
-    @Test func argumentsGiveUpAfterRepeatedInputOutputErrors() {
+    @Test func argumentsThatStayUnreadableAfterInputOutputErrorsAreEmpty() throws {
         let source = ScriptedArgumentSource(failures: Array(repeating: EIO, count: 9))
         let reader = KernelProcessReader(argumentSource: source.read)
-        #expect(throws: RuntimeError.message("inspect arguments for PID \(getpid()): Input/output error")) {
-            try reader.arguments(getpid())
-        }
+        #expect(try reader.arguments(getpid()) == "")
         #expect(source.calls == 8)
     }
 
@@ -32,12 +30,10 @@ struct KernelProcessReaderTests {
         #expect(source.calls == 3)
     }
 
-    @Test func argumentsOfOwnProcessGiveUpOnPersistentInvalidArgument() {
+    @Test func argumentsOfOwnProcessAreEmptyOnPersistentInvalidArgument() throws {
         let source = ScriptedArgumentSource(failures: Array(repeating: EINVAL, count: 9))
         let reader = KernelProcessReader(argumentSource: source.read)
-        #expect(throws: RuntimeError.identityMismatch("arguments of PID \(getpid()) stayed unreadable")) {
-            try reader.arguments(getpid())
-        }
+        #expect(try reader.arguments(getpid()) == "")
         #expect(source.calls == 8)
     }
 
@@ -50,17 +46,22 @@ struct KernelProcessReaderTests {
         #expect(source.calls == 1)
     }
 
-    @Test func argumentsOfAProcessStillOursKeepTheError() {
+    @Test func unreadableArgumentsOfAProcessStillOursAreEmpty() throws {
         let source = ScriptedArgumentSource(failures: [EPERM])
         let owners = ScriptedOwnerSource(owners: [geteuid()])
         let reader = KernelProcessReader(argumentSource: source.read, ownerSource: owners.read)
-        #expect(throws: RuntimeError.message("inspect arguments for PID \(getpid()): Operation not permitted")) {
-            try reader.arguments(getpid())
-        }
+        #expect(try reader.arguments(getpid()) == "")
+        #expect(source.calls == 1)
+    }
+
+    @Test func malformedArgumentsAreEmpty() throws {
+        let source = ScriptedArgumentSource(failures: [], payload: [UInt8](repeating: 0x41, count: 64))
+        #expect(try KernelProcessReader(argumentSource: source.read).arguments(getpid()) == "")
+        #expect(source.calls == 1)
     }
 
     @Test func argumentsOfAnotherOwnerAreEmptyWithoutReading() throws {
-        let child = try SpawnedTestProcess.spawn("/usr/bin/top", ["-l", "0", "-s", "1"])
+        let child = try SpawnedTestProcess.spawn("/usr/bin/top", ["-l", "30", "-s", "1"])
         defer { child.terminate() }
         let source = ScriptedArgumentSource(failures: [])
         #expect(try KernelProcessReader(argumentSource: source.read).arguments(child.pid) == "")

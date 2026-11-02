@@ -7,9 +7,22 @@ import Testing
 struct SupervisorShutdownTests {
     private static let execOnTerm = "trap 'exec /bin/sleep 600' TERM; echo READY; /bin/sleep 600 & wait"
 
-    @Test func failedCleanupStillKillsTheDirectChildAndExits() async throws {
+    @Test func childThatExecsOnTermIsKilledAndTheSupervisorExitsCleanly() async throws {
         let handle = try await SupervisedRuntime.launch(
             SupervisedRuntime.spec(["/bin/sh", "-c", Self.execOnTerm], grace: .milliseconds(20)))
+        defer { SupervisedRuntime.killGroup(handle.identity.pgid) }
+        _ = try SupervisedRuntime.readLine(handle, prefix: "READY")
+
+        try handle.stop()
+        let outcome = await SupervisedRuntime.waitBounded(handle, within: .seconds(20))
+
+        #expect(throws: Never.self) { try #require(outcome).get() }
+        #expect(await SupervisedRuntime.groupIsEmpty(handle.identity.pgid, within: .seconds(20)))
+    }
+
+    @Test func failedCleanupStillKillsTheDirectChildAndExits() async throws {
+        let handle = try await SupervisedRuntime.launch(
+            SupervisedRuntime.spec([ProcessFixture.runtimeFixturePath, "--setsid-on-term"], grace: .milliseconds(20)))
         defer { SupervisedRuntime.killGroup(handle.identity.pgid) }
         _ = try SupervisedRuntime.readLine(handle, prefix: "READY")
 

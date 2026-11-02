@@ -8,13 +8,15 @@ final class ScriptedArgumentSource: Sendable {
         var calls = 0
     }
 
-    private static let payload: [UInt8] =
+    private static let wellFormed: [UInt8] =
         withUnsafeBytes(of: Int32(3)) { Array($0) } + Array("/bin/sh\0\0sh\0-c\0echo ready\0".utf8)
 
     private let state: Mutex<State>
+    private let payload: [UInt8]
 
-    init(failures: [Int32]) {
+    init(failures: [Int32], payload: [UInt8] = wellFormed) {
         state = Mutex(State(failures: failures))
+        self.payload = payload
     }
 
     var calls: Int {
@@ -27,8 +29,8 @@ final class ScriptedArgumentSource: Sendable {
             return state.failures.isEmpty ? nil : state.failures.removeFirst()
         }
         if let failure { return failure }
-        buffer.replaceSubrange(0..<Self.payload.count, with: Self.payload)
-        size = Self.payload.count
+        buffer.replaceSubrange(0..<payload.count, with: payload)
+        size = payload.count
         return 0
     }
 }

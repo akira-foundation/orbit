@@ -47,7 +47,7 @@ final class ScriptedKernelReader: KernelProcessReading {
             return state.generation
         }
         return KernelProcessSnapshot(
-            pid: pid, pgid: listed.pgid, ppid: listed.ppid, startID: "\(generation):999999", command: listed.command
+            pid: pid, pgid: listed.pgid, ppid: listed.ppid, startID: listed.startID, command: "image-\(generation)"
         )
     }
 

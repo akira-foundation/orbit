@@ -104,6 +104,7 @@ public struct DarwinProcessInspector: ProcessInspector {
                 guard attempt < Self.rereads else { return nil }
                 usleep(Self.rereadPause)
                 snapshot = try reader.snapshot(listed.pid)
+                guard snapshot.isSameProcess(as: listed) else { throw RuntimeError.processGone }
             }
         }
         return nil

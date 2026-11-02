@@ -45,17 +45,34 @@ public enum OwnedMemberCleanup {
         signalled: inout Set<Int32>, inspector: any ProcessInspector
     ) -> (any Error)? {
         var errors: [(any Error)?] = []
-        for member in members where member.pid != supervisorPID && signalled.insert(member.pid).inserted {
-            do {
-                try inspector.verifyIdentity(member)
-                try inspector.signal(member, signal)
-            } catch let error where !error.contains(.processGone) {
-                errors.append(error)
-            } catch {
-                continue
+        for member in members where member.pid != supervisorPID && !signalled.contains(member.pid) {
+            let attempt = deliver(signal, to: member, inspector: inspector)
+            if attempt.done {
+                signalled.insert(member.pid)
             }
+            errors.append(attempt.error)
         }
         return RuntimeErrors.join(errors)
+    }
+
+    private static func deliver(
+        _ signal: ProcessSignal, to member: ProcessIdentity, inspector: any ProcessInspector
+    ) -> (done: Bool, error: (any Error)?) {
+        do {
+            let current = try inspector.identity(of: member.pid)
+            guard current.isSameProcess(as: member) else {
+                return (true, RuntimeError.identityMismatch("PID \(member.pid)"))
+            }
+            try inspector.signal(current, signal)
+            return (true, nil)
+        } catch let error where error.contains(.processGone) {
+            return (true, nil)
+        } catch let error where error.contains(.identityMismatch("")) {
+            let stillOurs = (try? inspector.identity(of: member.pid))?.isSameProcess(as: member) ?? true
+            return stillOurs ? (false, nil) : (true, error)
+        } catch {
+            return (true, error)
+        }
     }
 
     private static func drainUntilOnlySupervisor(

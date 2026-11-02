@@ -77,13 +77,34 @@ struct DarwinProcessInspectorTests {
         }
     }
 
-    @Test func listingRereadsAMemberThatChangesTwiceAndThenSettles() throws {
+    @Test func listingRereadsAMemberThatExecsRepeatedlyAndThenSettles() throws {
         let reader = ScriptedKernelReader(
-            snapshots: [moved(2), moved(3), moved(4), moved(5), moved(5), moved(5)],
-            table: [moved(1)]
+            snapshots: [
+                execing("sh"), execing("env"), execing("env"), execing("node"), execing("node"), execing("node"),
+                execing("node"),
+            ],
+            table: [execing("sh")],
+            arguments: ["a", "b", "node app.js"]
         )
         let members = try DarwinProcessInspector(reader: reader).groupMembers(10)
-        #expect(members.map(\.startID) == ["5:000001"])
+        #expect(members.map(\.executable) == ["node"])
+        #expect(members.map(\.startID) == ["1:000001"])
+    }
+
+    @Test func listingDropsAPIDThatNowBelongsToAnotherProcess() throws {
+        let reader = ScriptedKernelReader(
+            snapshots: [moved(2), moved(2), moved(2), moved(2)],
+            table: [moved(1)]
+        )
+        let listing = try DarwinProcessInspector(reader: reader).groupListing(10)
+        #expect(listing == ProcessListing(identities: [], unsettled: []))
+    }
+
+    @Test func listingDropsAMemberThatLeftTheListedGroup() throws {
+        let left = KernelProcessSnapshot(pid: 12, pgid: 12, ppid: 10, startID: "1:000001", command: "fixture")
+        let reader = ScriptedKernelReader(snapshots: [left, left, left, left], table: [moved(1)])
+        let listing = try DarwinProcessInspector(reader: reader).groupListing(10)
+        #expect(listing == ProcessListing(identities: [], unsettled: []))
     }
 
     @Test func listingReportsAMemberThatNeverSettlesAndKeepsTheOthers() throws {
@@ -102,7 +123,7 @@ struct DarwinProcessInspectorTests {
 
     @Test func identityOfAProcessThatNeverSettlesIsStillAMismatch() {
         let reader = ScriptedKernelReader(table: [member(12, parent: 10)], unsettled: [12])
-        #expect(throws: RuntimeError.identityMismatch("changed before enrichment")) {
+        #expect(throws: RuntimeError.identityMismatch("changed during enrichment")) {
             try DarwinProcessInspector(reader: reader).identity(of: 12)
         }
     }
@@ -247,6 +268,10 @@ struct DarwinProcessInspectorTests {
 
     private func moved(_ generation: Int) -> KernelProcessSnapshot {
         KernelProcessSnapshot(pid: 12, pgid: 10, ppid: 10, startID: "\(generation):000001", command: "fixture")
+    }
+
+    private func execing(_ command: String) -> KernelProcessSnapshot {
+        KernelProcessSnapshot(pid: 12, pgid: 10, ppid: 10, startID: "1:000001", command: command)
     }
 
     private func image(_ command: String) -> KernelProcessSnapshot {

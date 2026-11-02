@@ -37,26 +37,17 @@ public struct KernelProcessReader: KernelProcessReading {
     public func arguments(_ pid: Int32) throws -> String {
         guard try ownerSource(pid) == geteuid() else { return "" }
         var buffer = [UInt8](repeating: 0, count: try Self.argumentLimit(for: pid))
-        var lastCode = EIO
         for _ in 0..<Self.attempts {
             var size = buffer.count
             let code = argumentSource(pid, &buffer, &size)
             if code == 0 {
-                return try ProcessArgumentsParser.parse(Array(buffer.prefix(size)))
+                return (try? ProcessArgumentsParser.parse(Array(buffer.prefix(size)))) ?? ""
             }
             if Self.isGone(pid, code) { throw RuntimeError.processGone }
-            let owner = try ownerSource(pid)
-            if (code == EINVAL || code == EPERM) && owner != geteuid() { return "" }
-            guard Self.transientCodes.contains(code) else {
-                throw RuntimeError.message("inspect arguments for PID \(pid): \(Self.describe(code))")
-            }
-            lastCode = code
+            guard Self.transientCodes.contains(code), try ownerSource(pid) == geteuid() else { return "" }
             usleep(100)
         }
-        guard lastCode != EINVAL else {
-            throw RuntimeError.identityMismatch("arguments of PID \(pid) stayed unreadable")
-        }
-        throw RuntimeError.message("inspect arguments for PID \(pid): \(Self.describe(lastCode))")
+        return ""
     }
 
     private static func owner(_ pid: Int32) throws -> uid_t {

@@ -12,4 +12,8 @@ public struct ProcessIdentity: Sendable, Hashable {
         self.executable = executable
         self.arguments = arguments
     }
+
+    func isSameProcess(as other: ProcessIdentity) -> Bool {
+        pid == other.pid && pgid == other.pgid && startID == other.startID
+    }
 }

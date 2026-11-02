@@ -20,20 +20,28 @@ struct KnownRuntimeMembers: Sendable {
         let owned = try Self.owned(by: supervisor, inspector: inspector)
         unsettled = Set(owned.unsettled)
         for identity in owned.identities {
-            if let prior = members[identity.pid], prior != identity {
-                throw RuntimeError.identityMismatch("PID \(identity.pid) changed while cleaning up")
-            }
-            members[identity.pid] = identity
+            try adopt(identity)
         }
         for expected in ordered {
+            let current: ProcessIdentity
             do {
-                guard try inspector.identity(of: expected.pid) == expected else {
-                    throw RuntimeError.identityMismatch("PID \(expected.pid) changed while cleaning up")
-                }
+                current = try inspector.identity(of: expected.pid)
             } catch let error where error.contains(.processGone) {
                 members[expected.pid] = nil
+                continue
+            } catch let error where error.contains(.identityMismatch("")) {
+                unsettled.insert(expected.pid)
+                continue
             }
+            try adopt(current)
         }
+    }
+
+    private mutating func adopt(_ identity: ProcessIdentity) throws {
+        if let prior = members[identity.pid], !prior.isSameProcess(as: identity) {
+            throw RuntimeError.identityMismatch("PID \(identity.pid) changed while cleaning up")
+        }
+        members[identity.pid] = identity
     }
 
     static func owned(by supervisor: ProcessIdentity, inspector: any ProcessInspector) throws -> ProcessListing {

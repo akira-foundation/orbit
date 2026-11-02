@@ -20,6 +20,10 @@ final class FakeProcessInspector: ProcessInspector {
         var spawnedRecyclesInsideSignal = false
         var unsettledForListings = 0
         var conflictingForDescendantReads = 0
+        var execsAfterTerm: String?
+        var execsInsideSignal: String?
+        var recyclesAfterTerm = false
+        var unstableIdentityReads = 0
     }
 
     private struct State {
@@ -103,6 +107,10 @@ final class FakeProcessInspector: ProcessInspector {
 
     func identity(of pid: Int32) throws -> ProcessIdentity {
         try state.withLock { state in
+            if let reads = state.processes[pid]?.unstableIdentityReads, reads > 0 {
+                state.processes[pid]?.unstableIdentityReads = reads - 1
+                throw RuntimeError.identityMismatch("changed during enrichment")
+            }
             if let remaining = state.pendingDeathReads[pid] {
                 state.pendingDeathReads[pid] = remaining > 1 ? remaining - 1 : nil
                 if remaining <= 1 {
@@ -176,6 +184,10 @@ final class FakeProcessInspector: ProcessInspector {
                 state.identities[pid] = Self.replacing(identity, startID: "recycled")
                 state.processes[pid]?.recycleInsideSignal = false
             }
+            if let image = state.processes[pid]?.execsInsideSignal, let identity = state.identities[pid] {
+                state.identities[pid] = Self.execing(identity, image: image)
+                state.processes[pid]?.execsInsideSignal = nil
+            }
             if state.processes[pid]?.exitBeforeSignal == true {
                 state.alive.remove(pid)
                 state.processes[pid]?.exitBeforeSignal = false
@@ -203,6 +215,14 @@ final class FakeProcessInspector: ProcessInspector {
                 state.identities[pid] = Self.replacing(expected, pgid: group)
                 state.parents[pid] = 0
                 state.processes[pid]?.changeGroupAfterTerm = nil
+            }
+            if signal == .terminate, let image = state.processes[pid]?.execsAfterTerm {
+                state.identities[pid] = Self.execing(expected, image: image)
+                state.processes[pid]?.execsAfterTerm = nil
+            }
+            if signal == .terminate, state.processes[pid]?.recyclesAfterTerm == true {
+                state.identities[pid] = Self.replacing(expected, startID: "recycled")
+                state.processes[pid]?.recyclesAfterTerm = false
             }
             if signal == .kill, let reads = state.processes[pid]?.survivesKillForReads, reads > 0 {
                 state.pendingDeathReads[pid] = reads
@@ -260,6 +280,12 @@ final class FakeProcessInspector: ProcessInspector {
         guard let remaining = state.conflictingDescendantReads[identity.pid] else { return identity }
         state.conflictingDescendantReads[identity.pid] = remaining > 1 ? remaining - 1 : nil
         return replacing(identity, startID: "exec-\(identity.pid)")
+    }
+
+    private static func execing(_ identity: ProcessIdentity, image: String) -> ProcessIdentity {
+        ProcessIdentity(
+            pid: identity.pid, pgid: identity.pgid, startID: identity.startID, executable: image,
+            arguments: "\(image) \(identity.pid)")
     }
 
     private static func replacing(
