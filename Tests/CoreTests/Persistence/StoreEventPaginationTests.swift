@@ -3,8 +3,9 @@ import Testing
 
 @testable import Core
 
-@Suite(.timeLimit(.minutes(1)))
 struct StoreEventPaginationTests {
+    private static let walkLimit = 100_000
+
     private func store() async throws -> (Store, String) {
         let store = try Store.inMemory()
         let analysis = ProjectAnalysis(name: "p", path: "/tmp/p", runtimeKind: .phpFPM, phpVersion: "8.3")
@@ -15,7 +16,7 @@ struct StoreEventPaginationTests {
     private func walk(_ store: Store, _ projectID: String, pageSize: Int) async throws -> [String] {
         var seen: [String] = []
         var page = try await store.events(projectID: projectID, since: 0, limit: pageSize)
-        while let last = page.last {
+        while let last = page.last, seen.count < Self.walkLimit {
             seen += page.map(\.text)
             let cursor = try #require(last.cursor)
             page = try await store.events(projectID: projectID, after: cursor, limit: pageSize)
