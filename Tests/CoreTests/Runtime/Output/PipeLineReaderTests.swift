@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import Synchronization
 import Testing
 
 @testable import Core
@@ -55,10 +56,15 @@ struct PipeLineReaderTests {
         let pipe = Pipe()
         let reader = PipeLineReader(pipe.fileHandleForReading)
         reader.start()
-        let payload = Data(repeating: 0x61, count: LineScanner.maximumLineLength + 4096) + Data("\nlate\n".utf8)
+        let overlong = Data(repeating: 0x61, count: LineScanner.maximumLineLength + 4096)
+        let pastThePipeCapacity = Data(repeating: 0x0A, count: LineScanner.maximumLineLength)
+        let written = Atomic<Bool>(false)
 
         Thread.detachNewThread {
-            try? pipe.fileHandleForWriting.write(contentsOf: payload)
+            guard (try? pipe.fileHandleForWriting.write(contentsOf: overlong + pastThePipeCapacity)) != nil else {
+                return
+            }
+            written.store(true, ordering: .relaxed)
             try? pipe.fileHandleForWriting.close()
         }
         var lines: [String] = []
@@ -67,6 +73,7 @@ struct PipeLineReaderTests {
             reader.acknowledge()
         }
 
+        #expect(await Poll.until(within: .seconds(10)) { written.load(ordering: .relaxed) })
         #expect(lines.isEmpty)
     }
 }

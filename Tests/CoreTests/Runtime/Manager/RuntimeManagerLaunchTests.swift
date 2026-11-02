@@ -232,6 +232,7 @@ struct RuntimeManagerLaunchTests {
         Thread.detachNewThread {
             handle.write(String(repeating: "a", count: LineScanner.maximumLineLength + 4096))
             handle.write("  VITE ready in 300 ms")
+            handle.write(String(repeating: "b", count: LineScanner.maximumLineLength))
             written.withLock { $0 = true }
         }
 
