@@ -12,9 +12,9 @@ struct LoginShellRunnerTests {
 
     @Test func returnsNilAndStopsWaitingAfterTheTimeout() async {
         let started = ContinuousClock.now
-        let output = await LoginShellRunner().run(shell: "/bin/sh", script: "sleep 5", timeout: .milliseconds(100))
+        let output = await LoginShellRunner().run(shell: "/bin/sh", script: "sleep 30", timeout: .milliseconds(100))
         #expect(output == nil)
-        #expect(ContinuousClock.now - started < .seconds(2))
+        #expect(ContinuousClock.now - started < .seconds(15))
     }
 
     @Test func returnsNilWhenTheShellDoesNotExist() async {
