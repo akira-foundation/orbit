@@ -157,7 +157,7 @@ struct RuntimeManagerLaunchTests {
     }
 
     @Test func stopDuringLaunchStopsTheHandleOnceLaunched() async throws {
-        let harness = try await ManagerHarness()
+        let harness = try await ManagerHarness(initialStatus: .error)
         harness.launcher.holdLaunches()
         let start = Task { try await harness.manager.start(ManagerHarness.projectID) }
         #expect(await Poll.until { harness.launcher.heldLaunches == 1 })
@@ -202,7 +202,7 @@ struct RuntimeManagerLaunchTests {
     }
 
     @Test func stopWhileServicesStartAbortsBeforeTheSpawn() async throws {
-        let harness = try await ManagerHarness(holdServices: true)
+        let harness = try await ManagerHarness(initialStatus: .error, holdServices: true)
         let start = Task { try await harness.manager.start(ManagerHarness.projectID) }
         #expect(await Poll.until { harness.services.heldStarts == 1 })
         let stop = Task { try await harness.manager.stop(ManagerHarness.projectID) }

@@ -18,7 +18,9 @@ struct ManagerHarness {
     let manager: RuntimeManager
 
     init(
-        devCommand: String? = "/bin/echo ready", projects: [String] = [projectID], base: [String] = [],
+        devCommand: String? = "/bin/echo ready", projects: [String] = [projectID],
+        initialStatus: ProjectStatus = .stopped,
+        base: [String] = [],
         serviceEnvironment: [String: String] = [:], holdServices: Bool = false,
         servicesHonourCancellation: Bool = false, stopIgnoredAt: Set<Int> = [],
         inspector: FakeProcessInspector = .supervised()
@@ -40,7 +42,7 @@ struct ManagerHarness {
             try await store.upsert(
                 Project(
                     id: id, name: id, path: try directory.makeDirectory(id), slug: id, localDomain: "\(id).orbit.test",
-                    devCommand: devCommand))
+                    devCommand: devCommand, status: initialStatus))
         }
     }
 

@@ -104,7 +104,8 @@ struct RuntimeManagerStopTests {
     }
 
     @Test func closeCancelsACooperativeServiceWithoutWaitingForItsTimeout() async throws {
-        let harness = try await ManagerHarness(holdServices: true, servicesHonourCancellation: true)
+        let harness = try await ManagerHarness(
+            initialStatus: .error, holdServices: true, servicesHonourCancellation: true)
         let start = Task { try await harness.manager.start(ManagerHarness.projectID) }
         #expect(await Poll.until { harness.services.heldStarts == 1 })
 
@@ -125,7 +126,7 @@ struct RuntimeManagerStopTests {
     }
 
     @Test func stopAllKeepsItsTimeoutAgainstAServiceThatIgnoresCancellation() async throws {
-        let harness = try await ManagerHarness(holdServices: true)
+        let harness = try await ManagerHarness(initialStatus: .error, holdServices: true)
         let start = Task { try await harness.manager.start(ManagerHarness.projectID) }
         #expect(await Poll.until { harness.services.heldStarts == 1 })
 
@@ -152,7 +153,7 @@ struct RuntimeManagerStopTests {
     }
 
     @Test func stopGivesUpOnAServiceThatIgnoresCancellationWithinItsLimit() async throws {
-        let harness = try await ManagerHarness(holdServices: true)
+        let harness = try await ManagerHarness(initialStatus: .error, holdServices: true)
         let start = Task { try await harness.manager.start(ManagerHarness.projectID) }
         #expect(await Poll.until { harness.services.heldStarts == 1 })
 
@@ -222,6 +223,7 @@ struct RuntimeManagerStopTests {
         defer { SupervisedRuntime.killGroup(pgid) }
         #expect(pgid > 0)
         #expect(await Poll.until(within: .seconds(30)) { await manager.status("real").status == .running })
+        try await SupervisedRuntime.waitForMember("/bin/sleep 600", in: pgid)
 
         try await manager.stop("real")
 

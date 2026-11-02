@@ -66,8 +66,10 @@ extension RuntimeManager {
             session.requestStop()
         }
         session.setSupervisor(handle.identity)
-        publish(.starting, session)
-        await persist(.starting, session)
+        if !session.shutdownRequested {
+            publish(.starting, session)
+            await persist(.starting, session)
+        }
         supervise(session, handle)
     }
 
