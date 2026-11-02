@@ -20,6 +20,7 @@ struct RuntimeManagerLaunchTests {
 
     @Test func mainCommandUsesSupervisor() async throws {
         let harness = try await ManagerHarness(devCommand: "/bin/echo ready")
+        defer { harness.exitAll() }
 
         try await harness.manager.start(ManagerHarness.projectID)
 
@@ -36,6 +37,7 @@ struct RuntimeManagerLaunchTests {
     @Test func childEnvironmentHasOnlyTheAssignedEndpoint() async throws {
         let harness = try await ManagerHarness(
             base: ["CI=1", "HOST=x", "A=base"], serviceEnvironment: ["HOST": "::1", "PORT": "8888", "B": "svc"])
+        defer { harness.exitAll() }
         try harness.directory.write("PORT=1\nA=dot", to: "\(ManagerHarness.projectID)/.env")
 
         try await harness.manager.start(ManagerHarness.projectID)
@@ -54,6 +56,7 @@ struct RuntimeManagerLaunchTests {
 
     @Test func bareCommandIsResolvedAgainstTheChildPath() async throws {
         let harness = try await ManagerHarness(devCommand: "sleep 600")
+        defer { harness.exitAll() }
 
         try await harness.manager.start(ManagerHarness.projectID)
 
@@ -134,6 +137,7 @@ struct RuntimeManagerLaunchTests {
 
     @Test func alreadyRunningIsRefused() async throws {
         let harness = try await ManagerHarness()
+        defer { harness.exitAll() }
         try await harness.manager.start(ManagerHarness.projectID)
 
         let message = await failure { try await harness.manager.start(ManagerHarness.projectID) }
@@ -144,6 +148,7 @@ struct RuntimeManagerLaunchTests {
 
     @Test func concurrentStartsOfOneProjectLaunchOnce() async throws {
         let harness = try await ManagerHarness()
+        defer { harness.exitAll() }
         harness.launcher.holdLaunches()
         let first = Task { try await harness.manager.start(ManagerHarness.projectID) }
         #expect(await Poll.until { harness.launcher.heldLaunches == 1 })

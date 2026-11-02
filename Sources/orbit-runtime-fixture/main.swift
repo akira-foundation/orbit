@@ -110,6 +110,7 @@ case "--clobber-arguments": clobberArgumentsAndHold()
 case "--setsid-on-term": leaveTheGroupOnTerm()
 case "--join-group": joinGroupAndHold(Int32(arguments[1]) ?? 0)
 case "--print-environment": printEnvironmentAndHold(arguments[1])
+case "--control-on-fd-3": try await writeThroughControlOnDescriptorThree()
 default: break
 }
 if let code = RuntimeSupervisor.runIfRequested(arguments: arguments) {

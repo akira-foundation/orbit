@@ -64,18 +64,14 @@ struct PosixSpawnerTests {
     }
 
     @Test func controlDescriptorAlreadyOnFD3StillReachesTheChild() async throws {
-        let control = try highPipe()
-        defer { close(control.read) }
-        let process = try await LowDescriptor.with(control.write, placedOn: 3) {
-            try PosixSpawner.spawn(
-                SpawnRequest(
-                    executable: "/bin/sh", arguments: ["-c", "echo control >&3"],
-                    environment: EnvironmentList([]), controlDescriptor: 3))
-        }
-        close(control.write)
+        let process = try PosixSpawner.spawn(
+            SpawnRequest(
+                executable: ProcessFixture.runtimeFixturePath, arguments: ["--control-on-fd-3"],
+                environment: EnvironmentList([]), captureOutput: true))
+        let fixture = SpawnedTestProcess(adopting: process)
+        defer { fixture.terminate() }
+        #expect(try fixture.outputLines() == ["control"])
         #expect(try await process.exitStatus() == .exited(0))
-        let output = FileHandle(fileDescriptor: control.read, closeOnDealloc: false).readDataToEndOfFile()
-        #expect(String(decoding: output, as: UTF8.self) == "control\n")
     }
 
     @Test func controlFromAStandardDescriptorIsNotOverwrittenByTheRedirectedInput() async throws {
@@ -199,18 +195,6 @@ struct PosixSpawnerTests {
         let high = ends.map { fcntl($0, F_DUPFD, 200) }
         guard high.allSatisfy({ $0 >= 200 }) else { throw RuntimeError.message("dup failed") }
         return high
-    }
-
-    private func highPipe() throws -> (read: Int32, write: Int32) {
-        let ends = try PosixSpawner.makePipe()
-        defer {
-            close(ends.read)
-            close(ends.write)
-        }
-        let read = fcntl(ends.read, F_DUPFD_CLOEXEC, 100)
-        let write = fcntl(ends.write, F_DUPFD_CLOEXEC, 100)
-        guard read >= 100, write >= 100 else { throw RuntimeError.message("dup failed") }
-        return (read, write)
     }
 
     private func canonical(_ path: String) throws -> String {
