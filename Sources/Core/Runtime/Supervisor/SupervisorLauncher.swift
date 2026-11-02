@@ -28,8 +28,9 @@ public struct SupervisorLauncher: SupervisorLaunching {
             process = try PosixSpawner.spawn(
                 SpawnRequest(
                     executable: executable, arguments: arguments,
-                    environment: SupervisorGrace.environment(spec.environment ?? .process(), grace: spec.grace),
-                    captureOutput: true, controlDescriptor: control.read))
+                    environment: SupervisorEnvironment.forSupervisor(
+                        SupervisorGrace.environment(spec.environment ?? .process(), grace: spec.grace)),
+                    group: .newSession, captureOutput: true, controlDescriptor: control.read))
         } catch {
             close(control.read)
             close(control.write)

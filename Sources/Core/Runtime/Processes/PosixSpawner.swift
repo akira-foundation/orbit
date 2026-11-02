@@ -91,6 +91,8 @@ public enum PosixSpawner {
         case .newLeader:
             flags |= Int32(POSIX_SPAWN_SETPGROUP)
             try check(posix_spawnattr_setpgroup(&attributes, 0))
+        case .newSession:
+            flags |= Int32(POSIX_SPAWN_SETSID)
         case .join(let pgid):
             flags |= Int32(POSIX_SPAWN_SETPGROUP)
             try check(posix_spawnattr_setpgroup(&attributes, pgid))

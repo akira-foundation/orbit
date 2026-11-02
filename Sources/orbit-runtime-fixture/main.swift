@@ -84,6 +84,18 @@ func leaveTheGroupOnTerm() -> Never {
     holdWhileParentLives()
 }
 
+func joinGroupAndHold(_ group: Int32) -> Never {
+    print(setpgid(0, group) == 0 ? "JOIN_ERRNO=0" : "JOIN_ERRNO=\(errno)")
+    fflush(stdout)
+    holdWhileParentLives()
+}
+
+func printEnvironmentAndHold(_ name: String) -> Never {
+    print("\(name)=\(getenv(name).map { String(cString: $0) } ?? "")")
+    fflush(stdout)
+    holdWhileParentLives()
+}
+
 func holdWhileParentLives() -> Never {
     let parent = getppid()
     while getppid() == parent {
@@ -93,11 +105,12 @@ func holdWhileParentLives() -> Never {
 }
 
 let arguments = Array(CommandLine.arguments.dropFirst())
-if arguments.first == "--clobber-arguments" {
-    clobberArgumentsAndHold()
-}
-if arguments.first == "--setsid-on-term" {
-    leaveTheGroupOnTerm()
+switch arguments.first {
+case "--clobber-arguments": clobberArgumentsAndHold()
+case "--setsid-on-term": leaveTheGroupOnTerm()
+case "--join-group": joinGroupAndHold(Int32(arguments[1]) ?? 0)
+case "--print-environment": printEnvironmentAndHold(arguments[1])
+default: break
 }
 if let code = RuntimeSupervisor.runIfRequested(arguments: arguments) {
     exit(code)

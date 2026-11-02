@@ -41,7 +41,8 @@ public enum RuntimeSupervisor {
                 SpawnRequest(
                     executable: executable(invocation.command[0], in: invocation.directory),
                     arguments: Array(invocation.command.dropFirst()),
-                    environment: .process(), directory: invocation.directory, group: .join(identity.pgid)))
+                    environment: SupervisorEnvironment.forChild(.process()), directory: invocation.directory,
+                    group: .join(identity.pgid)))
         } catch {
             throw RuntimeError.message("runtime: start supervised command: \(error)")
         }
