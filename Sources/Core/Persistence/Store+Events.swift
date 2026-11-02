@@ -5,6 +5,10 @@ extension Store {
     static let historyFetchRows = 32
 
     public func appendEvents(_ records: [EventRecord]) throws {
+        try Self.insertEvents(records, into: db)
+    }
+
+    static func insertEvents(_ records: [EventRecord], into db: SQLiteDatabase) throws {
         try db.transaction {
             for record in records {
                 let projectID = record.projectID.flatMap { $0.isEmpty ? nil : $0 }
