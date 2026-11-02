@@ -8,7 +8,7 @@ struct DarwinSetuidExecTests {
     private static let script = """
         i=0
         while [ $i -lt 4 ]; do
-            /bin/sh -c 'while :; do /bin/ps -p $$ >/dev/null; done' &
+            /bin/sh -c 'while kill -0 $PPID 2>/dev/null; do /bin/ps -p $$ >/dev/null; done' &
             i=$((i + 1))
         done
         exec /bin/sleep 30

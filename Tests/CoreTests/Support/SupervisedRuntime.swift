@@ -140,8 +140,14 @@ struct SupervisedRuntime {
     }
 
     static func killGroup(_ pgid: Int32) {
-        if (try? KernelProcessReader().group(pgid))?.isEmpty == false {
-            Darwin.kill(-pgid, SIGKILL)
+        let inspector = DarwinProcessInspector()
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: OwnedMemberCleanup.killWait)
+        while clock.now < deadline, let listing = try? inspector.groupListing(pgid),
+            !listing.identities.isEmpty || !listing.unsettled.isEmpty
+        {
+            listing.identities.forEach { try? inspector.signal($0, .kill) }
+            usleep(1000)
         }
     }
 

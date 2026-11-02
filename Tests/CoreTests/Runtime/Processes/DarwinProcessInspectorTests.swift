@@ -185,7 +185,7 @@ struct DarwinProcessInspectorTests {
     }
 
     @Test func setuidChildHasEmptyArgumentsAndAStableIdentity() throws {
-        let child = try SpawnedTestProcess.spawn("/usr/bin/top", ["-l", "0", "-s", "1"])
+        let child = try SpawnedTestProcess.spawn("/usr/bin/top", ["-l", "30", "-s", "1"])
         defer { child.terminate() }
         let inspector = DarwinProcessInspector()
         let identity = try inspector.identity(of: child.pid)

@@ -8,7 +8,7 @@ struct DarwinGroupCleanupTests {
     private static let script = """
         i=0
         while [ $i -lt 20 ]; do
-            /bin/sh -c "trap 'exit 0' TERM; while :; do /bin/sleep 0.00$((i % 9 + 1)); done" &
+            /bin/sh -c "trap 'exit 0' TERM; while kill -0 \\$PPID 2>/dev/null; do /bin/sleep 0.00$((i % 9 + 1)); done" &
             i=$((i + 1))
         done
         /bin/sh -c "trap '' TERM; exec /bin/sleep 30" &
