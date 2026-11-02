@@ -97,6 +97,40 @@ struct StoreEventRetentionTests {
         #expect(observed)
     }
 
+    @Test func upsertReplacingRemovesEventsInBatchesAndLetsOtherCallersRun() async throws {
+        let (store, ids) = try await store(with: "p", "q")
+        let total = EventRetention.batchRows * 40
+        try await store.appendEvents((0..<total).map { record(ids[0], "\($0)") })
+        try await store.appendEvents([record(ids[1], "kept")])
+        let replacedID = ids[0]
+        let analysis = ProjectAnalysis(name: "r", path: "/tmp/r", runtimeKind: .phpFPM, phpVersion: "8.3")
+        let replacement = Project(analysis: analysis, slug: "r", localDomain: "r.orbit.test")
+
+        let observed = await withTaskGroup(of: Bool.self) { group in
+            group.addTask {
+                _ = try? await store.upsert(replacement, replacing: replacedID)
+                return false
+            }
+            group.addTask {
+                while true {
+                    let remaining = (try? await store.eventCount(projectID: replacedID)) ?? 0
+                    if remaining > 0 && remaining < total { return true }
+                    if remaining == 0 { return false }
+                    await Task.yield()
+                }
+            }
+            var sawPartial = false
+            for await partial in group where partial { sawPartial = true }
+            return sawPartial
+        }
+
+        #expect(observed)
+        #expect(try await store.eventCount(projectID: replacedID) == 0)
+        #expect(try await store.eventCount(projectID: ids[1]) == 1)
+        #expect(try await store.project(id: replacedID) == nil)
+        #expect(try await store.project(id: replacement.id)?.slug == "r")
+    }
+
     @Test func deleteProjectRemovesEventsInBatchesAndLetsOtherCallersRun() async throws {
         let (store, ids) = try await store(with: "p", "q")
         let total = EventRetention.batchRows * 40

@@ -2,14 +2,21 @@ import Foundation
 
 extension Store {
     @discardableResult
-    public func upsert(_ project: Project, replacing replacedID: String? = nil) throws -> Project {
+    public func upsert(_ project: Project, replacing replacedID: String? = nil) async throws -> Project {
+        let replaced = replacedID == project.id ? nil : replacedID
+        if let replaced {
+            try await deleteEvents(ofProject: replaced)
+        }
         try reportingDuplicates {
             try db.transaction {
-                if let replacedID, replacedID != project.id {
-                    try db.run("DELETE FROM projects WHERE id = ?;", [.text(replacedID)])
+                if let replaced {
+                    try db.run("DELETE FROM projects WHERE id = ?;", [.text(replaced)])
                 }
                 try write(project)
             }
+        }
+        if replaced != nil {
+            try await returnFreePages()
         }
         return project
     }
