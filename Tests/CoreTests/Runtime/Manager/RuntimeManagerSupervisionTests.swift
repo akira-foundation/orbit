@@ -37,6 +37,25 @@ struct RuntimeManagerSupervisionTests {
         #expect(await harness.persists(.error))
     }
 
+    @Test func aReadyLineAfterTheStopOrderDoesNotPromoteTheSession() async throws {
+        let harness = try await ManagerHarness(stopIgnoredAt: [0])
+        try await harness.manager.start(ManagerHarness.projectID)
+        let handle = try await harness.launcher.handle(0)
+        let session = try #require(await harness.manager.sessions[ManagerHarness.projectID])
+
+        session.requestShutdown()
+        handle.write("  VITE ready in 300 ms")
+
+        #expect(
+            await Poll.until {
+                await harness.manager.logs(ManagerHarness.projectID).contains { $0.text.contains("VITE ready") }
+            })
+        #expect(await harness.status() == .starting)
+        #expect(!harness.emitted().contains(.running))
+        handle.exit()
+        #expect(await harness.persists(.stopped))
+    }
+
     @Test func restartDoesNotLetTheOldSessionOverwriteStatus() async throws {
         let harness = try await ManagerHarness(stopIgnoredAt: [0])
         try await harness.manager.start(ManagerHarness.projectID)

@@ -114,7 +114,7 @@ public final class RuntimeSession: Sendable {
         }
     }
 
-    public func snapshot(conns: Int) -> SessionSnapshot {
+    public func snapshot(conns: Int, attempts: Int? = nil) -> SessionSnapshot {
         let now = clock.now
         return state.withLock { state in
             let live = state.status.isLive
@@ -127,6 +127,7 @@ public final class RuntimeSession: Sendable {
                 readyAt: state.readyAt,
                 uptimeMs: live ? Self.milliseconds(from: state.startedAt, to: now) : 0,
                 startupMs: state.readyAt.map { Self.milliseconds(from: state.startedAt, to: $0) },
+                attempts: attempts,
                 conns: conns,
                 lastActivity: state.lastActivity,
                 error: state.errorMessage)

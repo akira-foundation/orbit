@@ -13,14 +13,17 @@ extension RuntimeManager {
         Task { await self.awaitExit(session, handle) }
     }
 
-    func received(_ lines: [String], _ stream: LogStream, _ session: RuntimeSession) async {
+    func received(_ batch: PipeLineBatch, _ stream: LogStream, _ session: RuntimeSession) async {
         var becameReady = false
-        for text in lines {
+        for text in batch.lines {
             log(LogLine(timestamp: clock.now, stream: stream, text: text), session)
-            if session.status == .starting && ReadinessDetector.looksReady(text) {
+            if session.status == .starting && !session.shutdownRequested && ReadinessDetector.looksReady(text) {
                 session.setStatus(.running)
                 becameReady = true
             }
+        }
+        for _ in 0..<batch.overflowedLines {
+            log(LogLine(timestamp: clock.now, stream: .system, text: Self.overlongLineWarning), session)
         }
         guard becameReady, isCurrent(session) else { return }
         publish(.running, session)
@@ -30,8 +33,8 @@ extension RuntimeManager {
     private nonisolated func read(_ output: FileHandle, _ stream: LogStream, _ session: RuntimeSession) {
         let reader = PipeLineReader(output)
         Task.detached { [weak self] in
-            for await lines in reader.batches {
-                await self?.received(lines, stream, session)
+            for await batch in reader.batches {
+                await self?.received(batch, stream, session)
                 reader.acknowledge()
             }
         }

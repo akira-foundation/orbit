@@ -223,7 +223,7 @@ struct RuntimeManagerLaunchTests {
         harness.exitAll()
     }
 
-    @Test func outputPastAnOverlongLineIsDrainedUntilExit() async throws {
+    @Test func anOverlongLineIsReportedOnceAndLaterLinesStillArrive() async throws {
         let harness = try await ManagerHarness()
         try await harness.manager.start(ManagerHarness.projectID)
         let handle = try await harness.launcher.handle(0)
@@ -237,8 +237,15 @@ struct RuntimeManagerLaunchTests {
         }
 
         #expect(await Poll.until { written.withLock { $0 } })
+        #expect(await harness.reaches(.running))
+        let warning = "output line longer than 1 MiB discarded"
+        #expect(
+            await Poll.until {
+                await harness.manager.logs(ManagerHarness.projectID).filter { $0.text == warning }.count == 2
+            })
+        let logs = await harness.manager.logs(ManagerHarness.projectID)
+        #expect(logs.filter { $0.text == warning }.allSatisfy { $0.stream == .system })
+        #expect(logs.filter { $0.stream == .stdout }.map(\.text) == ["  VITE ready in 300 ms"])
         handle.exit()
-        #expect(await harness.reaches(.error))
-        #expect(await harness.manager.logs(ManagerHarness.projectID).allSatisfy { $0.stream == .system })
     }
 }

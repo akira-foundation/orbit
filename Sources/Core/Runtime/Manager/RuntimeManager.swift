@@ -7,6 +7,7 @@ public actor RuntimeManager {
     public static let restartPause: Duration = .milliseconds(300)
     public static let stopAllTimeout: Duration = .seconds(3)
     public static let stopPoll: Duration = .milliseconds(50)
+    static let overlongLineWarning = "output line longer than 1 MiB discarded"
     static let servicesTimeout: Duration = .seconds(60)
 
     let store: Store
@@ -55,7 +56,7 @@ public actor RuntimeManager {
                 projectID: projectID, status: .stopped, pid: 0, port: 0, startedAt: never, readyAt: nil, uptimeMs: 0,
                 startupMs: nil, conns: 0, lastActivity: never, error: nil)
         }
-        return session.snapshot(conns: connections[projectID] ?? 0)
+        return session.snapshot(conns: connections[projectID] ?? 0, attempts: attempts[projectID])
     }
 
     public func logs(_ projectID: String) -> [LogLine] {
@@ -104,7 +105,10 @@ public actor RuntimeManager {
     }
 
     func publish(_ name: RuntimeEventName, _ session: RuntimeSession) {
-        sink.emit(.status(name, session.snapshot(conns: connections[session.projectID] ?? 0)))
+        sink.emit(
+            .status(
+                name,
+                session.snapshot(conns: connections[session.projectID] ?? 0, attempts: attempts[session.projectID])))
     }
 
     func persist(_ status: ProjectStatus, _ session: RuntimeSession) async {

@@ -15,7 +15,7 @@ struct PipeLineReaderTests {
         try pipe.fileHandleForWriting.close()
         var lines: [String] = []
         for await batch in reader.batches {
-            lines += batch
+            lines += batch.lines
             reader.acknowledge()
         }
 
@@ -52,28 +52,31 @@ struct PipeLineReaderTests {
         }
     }
 
-    @Test func keepsDrainingAfterAnOverlongLine() async throws {
+    @Test func keepsDeliveringAfterAnOverlongLine() async throws {
         let pipe = Pipe()
         let reader = PipeLineReader(pipe.fileHandleForReading)
         reader.start()
         let overlong = Data(repeating: 0x61, count: LineScanner.maximumLineLength + 4096)
-        let pastThePipeCapacity = Data(repeating: 0x0A, count: LineScanner.maximumLineLength)
         let written = Atomic<Bool>(false)
 
         Thread.detachNewThread {
-            guard (try? pipe.fileHandleForWriting.write(contentsOf: overlong + pastThePipeCapacity)) != nil else {
+            let output = overlong + Data("\nafter\n".utf8) + overlong
+            guard (try? pipe.fileHandleForWriting.write(contentsOf: output)) != nil else {
                 return
             }
             written.store(true, ordering: .relaxed)
             try? pipe.fileHandleForWriting.close()
         }
         var lines: [String] = []
+        var overflowedLines = 0
         for await batch in reader.batches {
-            lines += batch
+            lines += batch.lines
+            overflowedLines += batch.overflowedLines
             reader.acknowledge()
         }
 
         #expect(await Poll.until(within: .seconds(10)) { written.load(ordering: .relaxed) })
-        #expect(lines.isEmpty)
+        #expect(lines == ["after"])
+        #expect(overflowedLines == 2)
     }
 }

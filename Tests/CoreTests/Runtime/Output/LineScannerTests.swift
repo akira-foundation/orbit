@@ -16,11 +16,25 @@ struct LineScannerTests {
         #expect(scanner.finish() == [])
     }
 
-    @Test func scannerStopsAtOneMebibyteLine() {
+    @Test func scannerDiscardsAnOverlongLineUpToItsTerminatorAndContinues() {
         var scanner = LineScanner()
         #expect(scanner.feed([UInt8](repeating: 0x61, count: LineScanner.maximumLineLength + 1)) == [])
-        #expect(scanner.overflowed)
-        #expect(scanner.feed(Array("x\n".utf8)) == [])
+        #expect(scanner.overflowedLines == 1)
+        #expect(scanner.feed(Array("rest of it\nnext\n".utf8)) == ["next"])
+        #expect(scanner.overflowedLines == 1)
+        #expect(scanner.finish() == [])
+    }
+
+    @Test func scannerCountsEachOverlongLineOnce() {
+        var scanner = LineScanner()
+        let overlong = [UInt8](repeating: 0x61, count: LineScanner.maximumLineLength * 2) + [0x0A]
+        #expect(scanner.feed(overlong + Array("between\n".utf8) + overlong) == ["between"])
+        #expect(scanner.overflowedLines == 2)
+    }
+
+    @Test func scannerDropsTheUnterminatedTailOfAnOverlongLine() {
+        var scanner = LineScanner()
+        #expect(scanner.feed([UInt8](repeating: 0x61, count: LineScanner.maximumLineLength + 10)) == [])
         #expect(scanner.finish() == [])
     }
 
@@ -28,28 +42,28 @@ struct LineScannerTests {
         var scanner = LineScanner()
         let line = String(repeating: "a", count: LineScanner.maximumLineLength - 1)
         #expect(scanner.feed(Array((line + "\n").utf8)) == [line])
-        #expect(!scanner.overflowed)
+        #expect(scanner.overflowedLines == 0)
     }
 
     @Test func scannerRejectsALineWhoseTerminatorDoesNotFitTheMaximum() {
         var scanner = LineScanner()
         let bytes = [UInt8](repeating: 0x61, count: LineScanner.maximumLineLength) + [0x0A]
         #expect(scanner.feed(bytes) == [])
-        #expect(scanner.overflowed)
+        #expect(scanner.overflowedLines == 1)
     }
 
     @Test func scannerCountsTheCarriageReturnAgainstTheMaximum() {
         var scanner = LineScanner()
         let bytes = [UInt8](repeating: 0x61, count: LineScanner.maximumLineLength - 1) + [0x0D, 0x0A]
         #expect(scanner.feed(bytes) == [])
-        #expect(scanner.overflowed)
+        #expect(scanner.overflowedLines == 1)
     }
 
     @Test func scannerRejectsAnUnterminatedLastLineOfTheMaximum() {
         var scanner = LineScanner()
         #expect(scanner.feed([UInt8](repeating: 0x61, count: LineScanner.maximumLineLength)) == [])
         #expect(scanner.finish() == [])
-        #expect(scanner.overflowed)
+        #expect(scanner.overflowedLines == 1)
     }
 
     @Test func scannerAcceptsAnUnterminatedLastLineJustBelowTheMaximum() {
@@ -78,7 +92,7 @@ struct LineScannerTests {
         var bytes = Array("ok\n".utf8)
         bytes.append(contentsOf: [UInt8](repeating: 0x61, count: LineScanner.maximumLineLength + 1))
         #expect(scanner.feed(bytes) == ["ok"])
-        #expect(scanner.overflowed)
+        #expect(scanner.overflowedLines == 1)
     }
 
     @Test func scannerReplacesInvalidUTF8() {
