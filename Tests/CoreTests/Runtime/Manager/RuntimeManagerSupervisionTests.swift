@@ -56,6 +56,18 @@ struct RuntimeManagerSupervisionTests {
         #expect(await harness.persists(.stopped))
     }
 
+    @Test func aStopDuringTheSelfHealWaitKeepsTheProjectDown() async throws {
+        let harness = try await ManagerHarness()
+        try await harness.manager.start(ManagerHarness.projectID)
+        try await harness.startRunning(0).exit()
+        #expect(await harness.clock.waitForPending(.seconds(1)))
+
+        try? await harness.manager.stop(ManagerHarness.projectID)
+        harness.clock.advance(by: 1)
+
+        #expect(await !Poll.until(within: .milliseconds(300)) { harness.launcher.handles.count > 1 })
+    }
+
     @Test func restartDoesNotLetTheOldSessionOverwriteStatus() async throws {
         let harness = try await ManagerHarness(stopIgnoredAt: [0])
         try await harness.manager.start(ManagerHarness.projectID)
@@ -135,7 +147,7 @@ struct RuntimeManagerSupervisionTests {
         handle.exit()
 
         #expect(await Poll.until { await harness.manager.supervising.isEmpty })
-        #expect(await harness.clock.waitForPending(next, within: .seconds(5)))
+        #expect(await harness.clock.waitForPending(next))
         return harness.clock.requested.filter { $0 < RuntimeManager.readinessTimeout }
     }
 

@@ -8,6 +8,8 @@ final class ScriptedHandle: SupervisorHandle {
         var stopCalls = 0
         var exited = false
         var waiters: [CheckedContinuation<Void, Never>] = []
+        var waitFailure: RuntimeError?
+        var verifyFailure: RuntimeError?
     }
 
     let identity: ProcessIdentity
@@ -31,6 +33,16 @@ final class ScriptedHandle: SupervisorHandle {
     }
 
     var stopCalls: Int { state.withLock { $0.stopCalls } }
+
+    var waitFailure: RuntimeError? {
+        get { state.withLock { $0.waitFailure } }
+        set { state.withLock { $0.waitFailure = newValue } }
+    }
+
+    var verifyFailure: RuntimeError? {
+        get { state.withLock { $0.verifyFailure } }
+        set { state.withLock { $0.verifyFailure = newValue } }
+    }
 
     func write(_ line: String, to stream: LogStream = .stdout) {
         try? (stream == .stderr ? stderrWriter : stdoutWriter).write(contentsOf: Data((line + "\n").utf8))
@@ -66,7 +78,14 @@ final class ScriptedHandle: SupervisorHandle {
                 continuation.resume()
             }
         }
+        if let failure = waitFailure {
+            throw failure
+        }
     }
 
-    func verifyEmpty(within limit: Duration) async throws {}
+    func verifyEmpty(within limit: Duration) async throws {
+        if let failure = verifyFailure {
+            throw failure
+        }
+    }
 }

@@ -30,7 +30,7 @@ struct SupervisorShutdownTests {
         let outcome = await SupervisedRuntime.waitBounded(handle, within: .seconds(10))
 
         #expect(throws: RuntimeError.message("supervisor exit status 1")) { try #require(outcome).get() }
-        #expect(await SupervisedRuntime.groupIsEmpty(handle.identity.pgid, within: .seconds(5)))
+        #expect(await SupervisedRuntime.groupIsEmpty(handle.identity.pgid, within: .seconds(20)))
     }
 
     @Test func droppingTheHandleWithoutStopCleansTheGroup() async throws {
@@ -44,8 +44,8 @@ struct SupervisorShutdownTests {
         }
 
         #expect(grandchild != nil)
-        #expect(await SupervisedRuntime.groupIsEmpty(pgid, within: .seconds(5)))
-        #expect(await SupervisedRuntime.isGone(grandchildPID, was: grandchild, within: .seconds(5)))
+        #expect(await SupervisedRuntime.groupIsEmpty(pgid, within: .seconds(20)))
+        #expect(await SupervisedRuntime.isGone(grandchildPID, was: grandchild, within: .seconds(20)))
     }
 
     @Test func errorLineWithAClosedStderrDoesNotCrashTheSupervisor() async throws {

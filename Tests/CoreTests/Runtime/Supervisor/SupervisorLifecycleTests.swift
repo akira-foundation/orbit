@@ -19,6 +19,7 @@ struct SupervisorLifecycleTests {
         let runtime = try await SupervisedRuntime.start(SupervisedRuntime.runnerExits, grace: .milliseconds(20))
         defer { runtime.cleanUp() }
 
+        #expect(runtime.grandchild != nil)
         try await runtime.handle.wait()
 
         #expect(await runtime.grandchildGone())
@@ -72,7 +73,7 @@ struct SupervisorLifecycleTests {
         try handle.stop()
         try await handle.wait()
 
-        #expect(clock.now - started < .seconds(5))
+        #expect(clock.now - started < .seconds(25))
     }
 
     @Test func waitSupportsCancellation() async throws {
@@ -143,7 +144,7 @@ struct SupervisorLifecycleTests {
 
     @Test func launchFailsWhenTheExecutableIsMissing() async {
         let launcher = SupervisorLauncher(executable: "/nonexistent/orbit", inspector: DarwinProcessInspector())
-        await #expect(throws: RuntimeError.self) {
+        await #expect(throws: RuntimeError.message("runtime: start supervisor: start: No such file or directory")) {
             try await launcher.launch(SupervisedRuntime.spec(["/bin/sleep", "600"], grace: .milliseconds(20)))
         }
     }

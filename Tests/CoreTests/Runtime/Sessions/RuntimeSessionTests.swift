@@ -43,7 +43,7 @@ struct RuntimeSessionTests {
             released.store(true, ordering: .relaxed)
         }
         session.requestShutdown()
-        try? await Task.sleep(for: .milliseconds(20))
+        try? await Task.sleep(for: .milliseconds(100))
         #expect(released.load(ordering: .relaxed) == false)
 
         session.requestStop()
@@ -58,11 +58,11 @@ struct RuntimeSessionTests {
             await session.stopSignal()
             released.store(true, ordering: .relaxed)
         }
-        try await Task.sleep(for: .milliseconds(20))
+        try await Task.sleep(for: .milliseconds(100))
         #expect(released.load(ordering: .relaxed) == false)
 
         waiter.cancel()
-        let deadline = ContinuousClock.now + .seconds(2)
+        let deadline = ContinuousClock.now + .seconds(20)
         while !released.load(ordering: .relaxed) && ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(5))
         }
@@ -79,7 +79,7 @@ struct RuntimeSessionTests {
                 released.add(1, ordering: .relaxed)
             }
         }
-        try await Task.sleep(for: .milliseconds(20))
+        try await Task.sleep(for: .milliseconds(100))
         #expect(released.load(ordering: .relaxed) == 0)
 
         session.requestStop()

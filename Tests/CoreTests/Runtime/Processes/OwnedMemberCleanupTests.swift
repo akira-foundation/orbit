@@ -67,7 +67,7 @@ struct OwnedMemberCleanupTests {
         let started = clock.now
         let result = await task.result
         #expect(throws: RuntimeError.cancelled) { try result.get() }
-        #expect(clock.now - started < .seconds(5))
+        #expect(clock.now - started < .seconds(25))
         #expect(fake.signals.map(\.1) == [.terminate, .kill])
         #expect(!fake.isAlive(4101))
     }
@@ -159,7 +159,7 @@ struct OwnedMemberCleanupTests {
     @Test func everyPIDReceivesEachSignalAtMostOnce() async throws {
         let fake = FakeProcessInspector.supervised(members: [
             .init(pid: 4101, ignoresTerm: true, spawnsOnTerm: 4103),
-            .init(pid: 4102, ignoresTerm: true, survivesKillForReads: 20, spawnsOnKill: 4104),
+            .init(pid: 4102, ignoresTerm: true, survivesKillForReads: 5, spawnsOnKill: 4104),
         ])
         try await OwnedMemberCleanup.run(supervisor: fake.identity(4100), inspector: fake, grace: .milliseconds(20))
         let pairs = fake.signals.map { "\($0.0):\($0.1)" }

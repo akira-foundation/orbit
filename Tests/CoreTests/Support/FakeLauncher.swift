@@ -33,6 +33,10 @@ final class FakeLauncher: SupervisorLaunching {
         state.withLock { $0.holding = true }
     }
 
+    func stopHolding() {
+        state.withLock { $0.holding = false }
+    }
+
     func releaseLaunches() {
         let held = state.withLock { state in
             state.holding = false

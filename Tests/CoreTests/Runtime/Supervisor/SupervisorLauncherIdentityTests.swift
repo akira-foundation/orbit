@@ -26,6 +26,20 @@ struct SupervisorLauncherIdentityTests {
         try await handle.wait()
     }
 
+    @Test func verifyEmptyFailsWhileAGroupMemberIsUnsettled() async throws {
+        let inspector = ScriptedLeaderInspector([.leader], group: ProcessListing(identities: [], unsettled: [4242]))
+        let handle = try await Self.launch(inspector)
+        defer { SupervisedRuntime.killGroup(handle.identity.pgid) }
+
+        let error = await #expect(throws: RuntimeErrors.self) {
+            try await handle.verifyEmpty(within: .milliseconds(20))
+        }
+
+        #expect(error?.contains(.groupNotEmpty) == true)
+        try handle.stop()
+        try await handle.wait()
+    }
+
     @Test func launchGivesUpOnASupervisorThatNeverLeadsItsGroup() async throws {
         let inspector = ScriptedLeaderInspector([.parentGroup])
         defer { inspector.inspectedPIDs.forEach(SupervisedRuntime.killGroup) }
@@ -42,7 +56,7 @@ struct SupervisorLauncherIdentityTests {
         let inspector = ScriptedLeaderInspector([.parentGroup])
         defer { inspector.inspectedPIDs.forEach(SupervisedRuntime.killGroup) }
         let launching = Task { try await Self.launch(inspector) }
-        try await Task.sleep(for: .milliseconds(100))
+        #expect(await Poll.until { !inspector.inspectedPIDs.isEmpty })
         launching.cancel()
 
         await #expect(throws: RuntimeError.cancelled) { try await launching.value }

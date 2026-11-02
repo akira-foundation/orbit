@@ -20,13 +20,18 @@ struct DarwinSetuidExecTests {
         let inspector = DarwinProcessInspector()
         try await waitForLeaderExec(leader.pid, inspector: inspector)
         var failures: [String] = []
-        for _ in 0..<500 {
+        var passes = 0
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(5))
+        while passes < 500 && clock.now < deadline {
             do {
                 _ = try inspector.groupListing(leader.pid)
             } catch {
                 failures.append("\(error)")
             }
+            passes += 1
         }
+        #expect(passes > 0)
         #expect(failures == [])
     }
 

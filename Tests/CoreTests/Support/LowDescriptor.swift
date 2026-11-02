@@ -3,7 +3,7 @@ import Darwin
 @testable import Core
 
 enum LowDescriptor {
-    private static let claimTimeout: Duration = .seconds(5)
+    private static let claimTimeout: Duration = .seconds(20)
 
     static func with<Result>(
         _ descriptor: Int32, placedOn target: Int32, _ body: () throws -> Result

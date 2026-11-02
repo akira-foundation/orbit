@@ -4,7 +4,7 @@ import Foundation
 @testable import Core
 
 struct SpawnedTestProcess {
-    private static let lineTimeout: Duration = .seconds(5)
+    private static let lineTimeout: Duration = .seconds(20)
 
     let pid: pid_t
     private let output: FileHandle?

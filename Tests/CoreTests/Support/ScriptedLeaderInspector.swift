@@ -12,9 +12,11 @@ final class ScriptedLeaderInspector: ProcessInspector {
 
     private let reads: Mutex<[Read]>
     private let inspected = Mutex<Set<Int32>>([])
+    private let group: ProcessListing
 
-    init(_ reads: [Read]) {
+    init(_ reads: [Read], group: ProcessListing = ProcessListing(identities: [], unsettled: [])) {
         self.reads = Mutex(reads)
+        self.group = group
     }
 
     var inspectedPIDs: Set<Int32> {
@@ -32,7 +34,7 @@ final class ScriptedLeaderInspector: ProcessInspector {
     }
 
     func groupListing(_ pgid: Int32) throws -> ProcessListing {
-        ProcessListing(identities: [], unsettled: [])
+        group
     }
 
     func descendantListing(of pid: Int32) throws -> ProcessListing {

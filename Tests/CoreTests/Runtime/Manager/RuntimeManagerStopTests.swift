@@ -110,7 +110,7 @@ struct RuntimeManagerStopTests {
         #expect(await Poll.until { harness.services.heldStarts == 1 })
 
         let closed = Task { await harness.manager.close() }
-        let closedInTime = await Poll.until(within: .seconds(5)) {
+        let closedInTime = await Poll.until {
             harness.services.calls.contains("stopped p1")
         }
         harness.services.releaseStarts()
@@ -138,7 +138,7 @@ struct RuntimeManagerStopTests {
             await stopAll.value
             returned.store(true, ordering: .relaxed)
         }
-        let returnedInTime = await Poll.until(within: .seconds(5)) { returned.load(ordering: .relaxed) }
+        let returnedInTime = await Poll.until { returned.load(ordering: .relaxed) }
         let callsWhileHeld = harness.services.calls
         harness.services.releaseStarts()
         await waiter.value

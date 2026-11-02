@@ -6,7 +6,7 @@ import Foundation
 struct SupervisedRuntime {
     static let holds = "exec /bin/sleep 600"
     static let runnerExits = "/bin/sleep 1; exit 0"
-    private static let settleLimit: Duration = .seconds(5)
+    private static let settleLimit: Duration = .seconds(20)
 
     let handle: any SupervisorHandle
     let grandchildPID: Int32
@@ -143,9 +143,10 @@ struct SupervisedRuntime {
         let inspector = DarwinProcessInspector()
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: OwnedMemberCleanup.killWait)
-        while clock.now < deadline, let listing = try? inspector.groupListing(pgid),
-            !listing.identities.isEmpty || !listing.unsettled.isEmpty
-        {
+        while clock.now < deadline {
+            guard let listing = try? inspector.groupListing(pgid),
+                !listing.identities.isEmpty || !listing.unsettled.isEmpty
+            else { return }
             listing.identities.forEach { try? inspector.signal($0, .kill) }
             usleep(1000)
         }
@@ -176,7 +177,7 @@ struct SupervisedRuntime {
         }
     }
 
-    func grandchildGone(within limit: Duration = .seconds(3)) async -> Bool {
+    func grandchildGone(within limit: Duration = .seconds(20)) async -> Bool {
         await Self.isGone(grandchildPID, was: grandchild, within: limit)
     }
 

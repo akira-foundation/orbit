@@ -7,7 +7,11 @@ struct ReadinessDetectorTests {
         #expect(ReadinessDetector.phrases.count == 13)
     }
 
-    @Test(arguments: ReadinessDetector.phrases)
+    @Test(arguments: [
+        "ready in", "ready - started", "local:", "localhost:", "listening on", "server running", "server started",
+        "compiled successfully", "started development server", "uvicorn running on", "application startup complete",
+        "starting development server at", "running on http",
+    ])
     func everyPhraseLooksReady(phrase: String) {
         #expect(ReadinessDetector.looksReady(phrase.uppercased()))
         #expect(ReadinessDetector.looksReady("\u{1B}[32m" + phrase + "\u{1B}[39m"))

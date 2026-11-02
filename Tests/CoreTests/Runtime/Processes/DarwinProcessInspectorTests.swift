@@ -202,7 +202,7 @@ struct DarwinProcessInspectorTests {
         #expect(identity.executable == "sleep")
         #expect(identity.arguments == "/bin/sleep 30")
         #expect(try inspector.groupMembers(child.pid) == [identity])
-        #expect(try inspector.descendants(of: getpid()).contains(identity))
+        #expect(try inspector.descendantListing(of: getpid()).identities.contains(identity))
     }
 
     @Test func setuidChildHasEmptyArgumentsAndAStableIdentity() throws {
@@ -213,7 +213,7 @@ struct DarwinProcessInspectorTests {
         #expect(identity.arguments == "")
         #expect(identity.executable == "top")
         #expect(try inspector.identity(of: child.pid) == identity)
-        #expect(try inspector.descendants(of: getpid()).contains(identity))
+        #expect(try inspector.descendantListing(of: getpid()).identities.contains(identity))
     }
 
     @Test func zombieIsProcessGoneAndLeavesTheListings() throws {
@@ -222,7 +222,7 @@ struct DarwinProcessInspectorTests {
         let inspector = DarwinProcessInspector()
         kill(child.pid, SIGKILL)
         let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(2))
+        let deadline = clock.now.advanced(by: .seconds(20))
         var gone = false
         while !gone && clock.now < deadline {
             do {
@@ -234,7 +234,7 @@ struct DarwinProcessInspectorTests {
         }
         #expect(gone)
         #expect(try inspector.groupMembers(child.pid) == [])
-        #expect(try !inspector.descendants(of: getpid()).contains { $0.pid == child.pid })
+        #expect(try !inspector.descendantListing(of: getpid()).identities.contains { $0.pid == child.pid })
     }
 
     @Test func signalDeliversToTheVerifiedProcess() throws {

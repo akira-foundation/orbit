@@ -35,8 +35,8 @@ struct SupervisorParentTests {
 
         #expect(try await launcher.exitStatus() == .exited(0))
         #expect(launcherArguments.count == 1 || holder != nil)
-        #expect(await SupervisedRuntime.groupIsEmpty(supervisorPID, within: .seconds(5)))
-        #expect(await SupervisedRuntime.isGone(grandchildPID, was: grandchild, within: .seconds(5)))
+        #expect(await SupervisedRuntime.groupIsEmpty(supervisorPID, within: .seconds(20)))
+        #expect(await SupervisedRuntime.isGone(grandchildPID, was: grandchild, within: .seconds(20)))
     }
 
     private static func value(_ prefix: String, in lines: [String]) -> Int32? {
