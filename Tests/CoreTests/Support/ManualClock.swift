@@ -71,7 +71,9 @@ final class ManualClock: RuntimeClock {
         due.forEach { $0.resume() }
     }
 
-    func waitForPending(_ duration: Duration) async -> Bool {
-        await Poll.until { self.state.withLock { $0.sleepers.values.contains { $0.duration == duration } } }
+    func waitForPending(_ duration: Duration, within limit: Duration = .seconds(20)) async -> Bool {
+        await Poll.until(within: limit) {
+            self.state.withLock { $0.sleepers.values.contains { $0.duration == duration } }
+        }
     }
 }

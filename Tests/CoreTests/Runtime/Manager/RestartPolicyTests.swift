@@ -15,5 +15,6 @@ struct RestartPolicyTests {
     @Test func limitsMatchTheGoReference() {
         #expect(RestartPolicy.maximumAttempts == 5)
         #expect(RestartPolicy.maximumDelay == .seconds(16))
+        #expect(RestartPolicy.stabilityWindow == .seconds(60))
     }
 }

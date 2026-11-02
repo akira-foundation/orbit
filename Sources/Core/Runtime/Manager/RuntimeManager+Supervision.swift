@@ -45,6 +45,7 @@ extension RuntimeManager {
         } catch {
             waitError = error
         }
+        forgetAttemptsAfterStableRun(session)
         var verifyError: (any Error)?
         do {
             try await handle.verifyEmpty(within: Self.stopGrace + .seconds(1))
@@ -62,6 +63,14 @@ extension RuntimeManager {
         }
         await finalize(session, failure, requested: requested)
         supervising.removeValue(forKey: session.sessionID)
+    }
+
+    private func forgetAttemptsAfterStableRun(_ session: RuntimeSession) {
+        guard isCurrent(session), let readyAt = session.readyAt else { return }
+        let window = Double(RestartPolicy.stabilityWindow.components.seconds)
+        if clock.now.timeIntervalSince(readyAt) >= window {
+            attempts[session.projectID] = 0
+        }
     }
 
     private func finalize(_ session: RuntimeSession, _ failure: (any Error)?, requested: Bool) async {

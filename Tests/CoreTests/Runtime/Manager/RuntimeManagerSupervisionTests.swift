@@ -98,4 +98,37 @@ struct RuntimeManagerSupervisionTests {
         #expect(await harness.manager.restarts.isEmpty)
         #expect(harness.launcher.handles.count == 1)
     }
+
+    private func delaysAfterACrash(
+        runningFor seconds: TimeInterval, expecting next: Duration
+    ) async throws -> [Duration] {
+        let harness = try await ManagerHarness()
+        try await harness.manager.start(ManagerHarness.projectID)
+        for attempt in 0...1 {
+            try await harness.startRunning(attempt).exit()
+            let delay = Self.restartDelays[attempt]
+            #expect(await harness.clock.waitForPending(delay))
+            harness.clock.advance(by: TimeInterval(delay.components.seconds))
+        }
+        let handle = try await harness.startRunning(2)
+
+        harness.clock.advance(by: seconds)
+        handle.exit()
+
+        #expect(await Poll.until { await harness.manager.supervising.isEmpty })
+        #expect(await harness.clock.waitForPending(next, within: .seconds(5)))
+        return harness.clock.requested.filter { $0 < RuntimeManager.readinessTimeout }
+    }
+
+    @Test func crashAfterAStableRunWaitsOneSecondAgain() async throws {
+        let delays = try await delaysAfterACrash(runningFor: 60, expecting: .seconds(1))
+
+        #expect(delays == [.seconds(1), .seconds(2), .seconds(1)])
+    }
+
+    @Test func crashJustBeforeTheStabilityWindowKeepsCounting() async throws {
+        let delays = try await delaysAfterACrash(runningFor: 59, expecting: .seconds(4))
+
+        #expect(delays == [.seconds(1), .seconds(2), .seconds(4)])
+    }
 }

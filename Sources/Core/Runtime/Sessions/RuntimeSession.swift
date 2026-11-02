@@ -22,6 +22,7 @@ public final class RuntimeSession: Sendable {
     public var shutdownError: (any Error)? { state.withLock { $0.shutdownError } }
     public var shutdownRequested: Bool { state.withLock { $0.shutdownRequested } }
     public var lastActivity: Date { state.withLock { $0.lastActivity } }
+    public var readyAt: Date? { state.withLock { $0.readyAt } }
     public var wasRunning: Bool { state.withLock { $0.wasRunning } }
     public var logTotal: Int { state.withLock { $0.logTotal } }
 
