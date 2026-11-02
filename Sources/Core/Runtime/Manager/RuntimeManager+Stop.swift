@@ -73,5 +73,6 @@ extension RuntimeManager {
         await stopAll()
         watchdogs.values.forEach { $0.cancel() }
         watchdogs.removeAll()
+        await events.close()
     }
 }

@@ -90,6 +90,11 @@ public actor RuntimeManager {
         return try await events.history(projectID: projectID, since: since, limit: limit)
     }
 
+    public func history(_ projectID: String, after cursor: EventCursor, limit: Int) async throws -> [LogLine] {
+        await events.flush()
+        return try await events.history(projectID: projectID, after: cursor, limit: limit)
+    }
+
     public func record(projectID: String?, level: EventLevel, source: EventSource, text: String) {
         events.push(EventRecord(projectID: projectID, level: level, source: source, text: text))
     }
@@ -112,7 +117,9 @@ public actor RuntimeManager {
         await statusWrites.write(status, projectID: projectID, ticket: ticket, to: store)
     }
 
-    func log(_ line: LogLine, _ session: RuntimeSession) {
+    func log(_ received: LogLine, _ session: RuntimeSession) {
+        let line = LogLine(
+            timestamp: received.timestamp, stream: received.stream, text: StoredText.limited(received.text))
         session.addLog(line)
         events.push(
             EventRecord(

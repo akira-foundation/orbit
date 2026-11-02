@@ -55,10 +55,13 @@ extension Store {
         try db.read { try loadProjects(where: nil, []) }
     }
 
-    public func deleteProject(id: String) throws {
-        guard try db.run("DELETE FROM projects WHERE id = ?;", [.text(id)]) > 0 else {
+    public func deleteProject(id: String) async throws {
+        guard try loadProjects(where: "id = ?", [.text(id)]).first != nil else {
             throw StoreError.projectNotFound(id)
         }
+        try await deleteEvents(ofProject: id)
+        try db.run("DELETE FROM projects WHERE id = ?;", [.text(id)])
+        try await returnFreePages()
     }
 
     private func write(_ project: Project) throws {

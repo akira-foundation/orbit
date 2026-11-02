@@ -131,4 +131,20 @@ struct RuntimeManagerSupervisionTests {
 
         #expect(delays == [.seconds(1), .seconds(2), .seconds(4)])
     }
+
+    @Test func aOneMebibyteLineIsCutInMemoryAndInTheStoreAndStillDetectsReadiness() async throws {
+        let harness = try await ManagerHarness()
+        try await harness.manager.start(ManagerHarness.projectID)
+        let handle = try await harness.launcher.handle(0)
+        let filler = String(repeating: "x", count: (1 << 20) - 100)
+
+        handle.write("\(filler) VITE ready in 10 ms")
+
+        #expect(await harness.reaches(.running))
+        let line = try #require(await harness.manager.logs(ManagerHarness.projectID).last)
+        #expect(line.text.utf8.count == StoredText.maximumBytes)
+        let stored = try await harness.manager.history(ManagerHarness.projectID, since: 0, limit: 0)
+        #expect(stored.contains { $0.text == line.text })
+        handle.exit()
+    }
 }

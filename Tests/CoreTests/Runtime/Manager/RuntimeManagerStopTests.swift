@@ -176,6 +176,26 @@ struct RuntimeManagerStopTests {
         #expect(await harness.persists(.stopped))
     }
 
+    @Test func closeWritesEveryRecordedEventBeforeItReturns() async throws {
+        let directory = try TemporaryDirectory()
+        let path = directory.path + "/orbit.sqlite"
+        let store = try Store(path: path)
+        let events = EventLog(store: store, clock: TestClock())
+        let manager = RuntimeManager(
+            store: store, launcher: FakeLauncher(), inspector: FakeProcessInspector.supervised(),
+            endpoints: FixedEndpoint(endpoint: ManagerHarness.endpoint),
+            loginPath: LoginPathResolver(runner: StubShell(output: nil), shell: "/bin/zsh", home: nil),
+            events: events, sink: RecordingEventSink(), clock: TestClock(), baseEnvironment: EnvironmentList([]))
+        for index in 0..<50 {
+            await manager.record(projectID: nil, level: .error, source: .system, text: "line \(index)")
+        }
+
+        await manager.close()
+
+        let reopened = try SQLiteDatabase(path: path)
+        #expect(try reopened.query("SELECT COUNT(*) AS n FROM events;").first?.int("n") == 50)
+    }
+
     @Test func connectionCountsIgnoreEmptyIDsAndDropAtZero() async throws {
         let harness = try await ManagerHarness()
         try await harness.manager.start(ManagerHarness.projectID)

@@ -3,6 +3,7 @@ import Synchronization
 
 public final class RuntimeSession: Sendable {
     public static let logCapacity = 2000
+    public static let logByteBudget = 16 * 1024 * 1024
 
     public let projectID: String
     public let sessionID: String
@@ -64,7 +65,7 @@ public final class RuntimeSession: Sendable {
     }
 
     public func addLog(_ line: LogLine) {
-        mutate { state, _ in state.append(line, capacity: Self.logCapacity) }
+        mutate { state, _ in state.append(line, capacity: Self.logCapacity, byteBudget: Self.logByteBudget) }
     }
 
     public func logs() -> [LogLine] {

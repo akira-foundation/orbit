@@ -1,6 +1,9 @@
 import Foundation
 
 extension Store {
+    static let historyByteBudget = 16 * 1024 * 1024
+    static let historyFetchRows = 32
+
     public func appendEvents(_ records: [EventRecord]) throws {
         try db.transaction {
             for record in records {
@@ -24,16 +27,46 @@ extension Store {
     }
 
     public func events(projectID: String, since: Int64, limit: Int) throws -> [LogLine] {
+        try eventPage(projectID: projectID, after: EventCursor(timestamp: since, id: 0), limit: limit)
+    }
+
+    public func events(projectID: String, after cursor: EventCursor, limit: Int) throws -> [LogLine] {
+        try eventPage(projectID: projectID, after: cursor, limit: limit)
+    }
+
+    private func eventPage(projectID: String, after start: EventCursor, limit: Int) throws -> [LogLine] {
         let limit = limit <= 0 || limit > 5000 ? 1000 : limit
-        let rows = try db.query(
-            "SELECT ts, stream, text FROM events WHERE project_id = ? AND ts >= ? ORDER BY ts ASC, id ASC LIMIT ?;",
-            [.text(projectID), .int(since), .int(Int64(limit))])
-        return try rows.map { row in
-            let nanoseconds = try row.requiredInt("ts", in: "events")
-            return LogLine(
-                timestamp: Date(timeIntervalSince1970: Double(nanoseconds) / 1_000_000_000),
-                stream: row.string("stream").flatMap(LogStream.init(rawValue:)) ?? .system,
-                text: try row.requiredText("text", in: "events"))
+        var cursor = start
+        var lines: [LogLine] = []
+        var bytes = 0
+        while lines.count < limit {
+            let rows = try db.query(
+                """
+                SELECT id, ts, stream, text FROM events
+                WHERE project_id = ? AND (ts, id) > (?, ?) ORDER BY ts ASC, id ASC LIMIT ?;
+                """,
+                [
+                    .text(projectID), .int(cursor.timestamp), .int(cursor.id),
+                    .int(Int64(min(Self.historyFetchRows, limit - lines.count))),
+                ])
+            guard !rows.isEmpty else { break }
+            for row in rows {
+                let line = try Self.logLine(row)
+                lines.append(line)
+                bytes += line.text.utf8.count
+                cursor = line.cursor ?? cursor
+                if bytes >= Self.historyByteBudget { return lines }
+            }
         }
+        return lines
+    }
+
+    private static func logLine(_ row: SQLiteRow) throws -> LogLine {
+        let nanoseconds = try row.requiredInt("ts", in: "events")
+        return LogLine(
+            timestamp: Date(timeIntervalSince1970: Double(nanoseconds) / 1_000_000_000),
+            stream: row.string("stream").flatMap(LogStream.init(rawValue:)) ?? .system,
+            text: try row.requiredText("text", in: "events"),
+            cursor: EventCursor(timestamp: nanoseconds, id: try row.requiredInt("id", in: "events")))
     }
 }

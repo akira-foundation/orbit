@@ -3,15 +3,20 @@ import Synchronization
 
 public actor EventLog {
     public static let bufferSize = 4096
+    public static let bufferBytes = 32 * 1024 * 1024
     public static let batchSize = 200
+    public static let batchBytes = 4 * 1024 * 1024
     public static let flushInterval: Duration = .milliseconds(250)
 
     private let store: Store?
     private let clock: any RuntimeClock
     private let continuation: AsyncStream<EventRecord>.Continuation?
     private let enqueued = Atomic<Int>(0)
+    private let queuedBytes = Atomic<Int>(0)
     private(set) var received = 0
     private var pending: [EventRecord] = []
+    private var pendingBytes = 0
+    private var lastTimestamp: Int64 = 0
     private var finished = false
     private var drainWaiters: [(target: Int, continuation: CheckedContinuation<Void, Never>)] = []
     private var closeWaiters: [CheckedContinuation<Void, Never>] = []
@@ -38,14 +43,27 @@ public actor EventLog {
         if record.timestamp == 0 {
             record.timestamp = Int64((clock.now.timeIntervalSince1970 * 1_000_000_000).rounded(.towardZero))
         }
-        if case .enqueued = continuation.yield(record) {
-            enqueued.add(1, ordering: .releasing)
+        record.text = StoredText.limited(record.text)
+        let size = record.text.utf8.count
+        guard queuedBytes.add(size, ordering: .relaxed).newValue <= Self.bufferBytes else {
+            queuedBytes.subtract(size, ordering: .relaxed)
+            return
         }
+        guard case .enqueued = continuation.yield(record) else {
+            queuedBytes.subtract(size, ordering: .relaxed)
+            return
+        }
+        enqueued.add(1, ordering: .releasing)
     }
 
     public func history(projectID: String, since: Int64, limit: Int) async throws -> [LogLine] {
         guard let store else { return [] }
         return try await store.events(projectID: projectID, since: since, limit: limit)
+    }
+
+    public func history(projectID: String, after cursor: EventCursor, limit: Int) async throws -> [LogLine] {
+        guard let store else { return [] }
+        return try await store.events(projectID: projectID, after: cursor, limit: limit)
     }
 
     public func flush() async {
@@ -69,11 +87,16 @@ public actor EventLog {
                     await self.writePending()
                 }
             }
+            group.addTask { [clock] in
+                repeat {
+                    await self.prune()
+                } while (try? await clock.sleep(for: EventRetention.interval)) != nil
+            }
             for await record in stream {
-                pending.append(record)
+                accept(record)
                 received += 1
                 resumeDrainWaiters()
-                if pending.count >= Self.batchSize {
+                if pending.count >= Self.batchSize || pendingBytes >= Self.batchBytes {
                     await writePending()
                 }
             }
@@ -86,6 +109,27 @@ public actor EventLog {
         closeWaiters.removeAll()
     }
 
+    private func accept(_ record: EventRecord) {
+        var record = record
+        lastTimestamp = max(lastTimestamp, record.timestamp)
+        record.timestamp = lastTimestamp
+        let size = record.text.utf8.count
+        queuedBytes.subtract(size, ordering: .relaxed)
+        pendingBytes += size
+        pending.append(record)
+    }
+
+    private func prune() async {
+        guard let store else { return }
+        do {
+            try await store.pruneEvents(now: clock.now)
+        } catch is CancellationError {
+            return
+        } catch {
+            lastWriteError = error
+        }
+    }
+
     private func resumeDrainWaiters() {
         let ready = drainWaiters.filter { finished || $0.target <= received }
         drainWaiters.removeAll { finished || $0.target <= received }
@@ -96,6 +140,7 @@ public actor EventLog {
         if let store, !pending.isEmpty {
             let batch = pending
             pending.removeAll(keepingCapacity: true)
+            pendingBytes = 0
             let previous = lastWrite
             lastWrite = Task {
                 await previous?.value

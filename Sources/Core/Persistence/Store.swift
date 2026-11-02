@@ -1,10 +1,13 @@
 import Foundation
 
 public actor Store {
+    private static let incrementalVacuumMode: Int64 = 2
+
     nonisolated let db: SQLiteDatabase
 
     public init(path: String) throws {
         let db = try SQLiteDatabase(path: path)
+        try Self.adoptIncrementalVacuum(db)
         try Self.migrate(db)
         self.db = db
     }
@@ -28,6 +31,13 @@ public actor Store {
 
     public func schemaVersion() throws -> Int32 {
         try db.userVersion
+    }
+
+    private static func adoptIncrementalVacuum(_ db: SQLiteDatabase) throws {
+        let tables = try db.query("SELECT COUNT(*) AS n FROM sqlite_master;").first?.int("n") ?? 0
+        let mode = try db.query("PRAGMA auto_vacuum;").first?.int("auto_vacuum")
+        guard tables > 0, mode != Self.incrementalVacuumMode else { return }
+        try? db.execute("PRAGMA auto_vacuum = INCREMENTAL; VACUUM;")
     }
 
     private static func migrate(_ db: SQLiteDatabase) throws {

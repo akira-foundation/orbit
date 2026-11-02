@@ -10,8 +10,9 @@ struct SessionState {
     var errorMessage: String?
     var shutdownError: (any Error)?
     var wasRunning = false
-    var logs: [LogLine] = []
+    var logs: [LogLine?] = []
     var logHead = 0
+    var logBytes = 0
     var logTotal = 0
     var shutdownRequested = false
     var stopCallback: (@Sendable () -> Void)?
@@ -26,17 +27,22 @@ struct SessionState {
     }
 
     var orderedLogs: [LogLine] {
-        Array(logs[logHead...] + logs[..<logHead])
+        logs[logHead...].compactMap(\.self)
     }
 
-    mutating func append(_ line: LogLine, capacity: Int) {
-        if logs.count < capacity {
-            logs.append(line)
-        } else {
-            logs[logHead] = line
-            logHead = (logHead + 1) % capacity
-        }
+    mutating func append(_ line: LogLine, capacity: Int, byteBudget: Int) {
+        logs.append(line)
+        logBytes += line.text.utf8.count
         logTotal += 1
+        while logs.count - logHead > capacity || (logBytes > byteBudget && logs.count - logHead > 1) {
+            logBytes -= logs[logHead]?.text.utf8.count ?? 0
+            logs[logHead] = nil
+            logHead += 1
+        }
+        if logHead >= capacity {
+            logs.removeFirst(logHead)
+            logHead = 0
+        }
     }
 
     mutating func invokeStopCallback() {
