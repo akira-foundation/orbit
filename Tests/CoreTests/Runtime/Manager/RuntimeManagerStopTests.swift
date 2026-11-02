@@ -223,7 +223,6 @@ struct RuntimeManagerStopTests {
         defer { SupervisedRuntime.killGroup(pgid) }
         #expect(pgid > 0)
         #expect(await Poll.until(within: .seconds(30)) { await manager.status("real").status == .running })
-        try await SupervisedRuntime.waitForMember("/bin/sleep 600", in: pgid)
 
         try await manager.stop("real")
 

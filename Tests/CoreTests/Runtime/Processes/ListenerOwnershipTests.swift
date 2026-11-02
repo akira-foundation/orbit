@@ -43,6 +43,15 @@ struct ListenerOwnershipTests {
         }
     }
 
+    @Test func verifyRejectsAnOwnerWhoseSnapshotConflictsInTheConfirmingRead() {
+        let fake = FakeProcessInspector.supervised(members: [.init(pid: 4101)])
+        fake.confirmingListenerReadConflicts = true
+        fake.listenerReads = [[4101], [4101]]
+        #expect(throws: RuntimeError.unownedEndpoint("listener owner set changed during inspection")) {
+            try ListenerOwnership.verify(supervisor: fake.identity(4100), endpoint: endpoint, inspector: fake)
+        }
+    }
+
     @Test func verifyRejectsNoOwners() {
         let fake = FakeProcessInspector.supervised()
         #expect(throws: RuntimeError.unownedEndpoint(nil)) {

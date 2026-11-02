@@ -40,23 +40,28 @@ struct KnownRuntimeMembers: Sendable {
         try inspector.verifyIdentity(supervisor)
         let group = try inspector.groupListing(supervisor.pgid)
         let descendants = try inspector.descendantListing(of: supervisor.pid)
-        return try ProcessListing(
-            identities: combine(group.identities + descendants.identities),
-            unsettled: (group.unsettled + descendants.unsettled).filter { $0 != supervisor.pid }
+        let combined = try combine(group.identities + descendants.identities)
+        return ProcessListing(
+            identities: combined.identities,
+            unsettled: (group.unsettled + descendants.unsettled + combined.unsettled).filter { $0 != supervisor.pid }
         )
     }
 
-    static func combine(_ identities: [ProcessIdentity]) throws -> [ProcessIdentity] {
+    static func combine(_ identities: [ProcessIdentity]) throws -> ProcessListing {
         var combined: [Int32: ProcessIdentity] = [:]
+        var conflicting: Set<Int32> = []
         for identity in identities {
             guard identity.pid > 0 else {
                 throw RuntimeError.identityMismatch("invalid PID \(identity.pid)")
             }
             if let prior = combined[identity.pid], prior != identity {
-                throw RuntimeError.identityMismatch("conflicting snapshots for PID \(identity.pid)")
+                conflicting.insert(identity.pid)
             }
             combined[identity.pid] = identity
         }
-        return combined.values.sorted { $0.pid < $1.pid }
+        return ProcessListing(
+            identities: combined.values.filter { !conflicting.contains($0.pid) }.sorted { $0.pid < $1.pid },
+            unsettled: conflicting.sorted()
+        )
     }
 }

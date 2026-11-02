@@ -19,6 +19,7 @@ final class FakeProcessInspector: ProcessInspector {
         var spawnedDeniesSignalOnce: String?
         var spawnedRecyclesInsideSignal = false
         var unsettledForListings = 0
+        var conflictingForDescendantReads = 0
     }
 
     private struct State {
@@ -33,6 +34,8 @@ final class FakeProcessInspector: ProcessInspector {
         var signalVerifiesIdentity = true
         var unsettled: Set<Int32> = []
         var unsettledListings: [Int32: Int] = [:]
+        var conflictingDescendantReads: [Int32: Int] = [:]
+        var confirmingListenerReadConflicts = false
         var groupReads = 0
         var groupFailure: (fromRead: Int, message: String)?
     }
@@ -93,6 +96,11 @@ final class FakeProcessInspector: ProcessInspector {
         set { state.withLock { $0.signalVerifiesIdentity = newValue } }
     }
 
+    var confirmingListenerReadConflicts: Bool {
+        get { state.withLock { $0.confirmingListenerReadConflicts } }
+        set { state.withLock { $0.confirmingListenerReadConflicts = newValue } }
+    }
+
     func identity(of pid: Int32) throws -> ProcessIdentity {
         try state.withLock { state in
             if let remaining = state.pendingDeathReads[pid] {
@@ -136,7 +144,11 @@ final class FakeProcessInspector: ProcessInspector {
                     changed = true
                 }
             }
-            return Self.listing(in: &state) { $0.pid != pid && known.contains($0.pid) }
+            let listed = Self.listing(in: &state) { $0.pid != pid && known.contains($0.pid) }
+            return ProcessListing(
+                identities: listed.identities.map { Self.descendantSnapshot(of: $0, in: &state) },
+                unsettled: listed.unsettled
+            )
         }
     }
 
@@ -147,8 +159,11 @@ final class FakeProcessInspector: ProcessInspector {
             }
             guard !state.listenerReads.isEmpty else { return ProcessListing(identities: [], unsettled: []) }
             let pids = state.listenerReads.removeFirst()
+            let conflicts = state.confirmingListenerReadConflicts && state.listenerReads.isEmpty
             return ProcessListing(
-                identities: pids.filter { !state.unsettled.contains($0) }.compactMap { state.identities[$0] },
+                identities: pids.filter { !state.unsettled.contains($0) }.compactMap { state.identities[$0] }.map {
+                    conflicts ? Self.replacing($0, startID: "exec-\($0.pid)") : $0
+                },
                 unsettled: pids.filter { state.unsettled.contains($0) }
             )
         }
@@ -214,6 +229,9 @@ final class FakeProcessInspector: ProcessInspector {
         if process.unsettledForListings > 0 {
             state.unsettledListings[process.pid] = process.unsettledForListings
         }
+        if process.conflictingForDescendantReads > 0 {
+            state.conflictingDescendantReads[process.pid] = process.conflictingForDescendantReads
+        }
     }
 
     private static func identity(of pid: Int32, in state: State) throws -> ProcessIdentity {
@@ -236,6 +254,12 @@ final class FakeProcessInspector: ProcessInspector {
             identities: matching.filter { !unsettled.contains($0.pid) },
             unsettled: unsettled
         )
+    }
+
+    private static func descendantSnapshot(of identity: ProcessIdentity, in state: inout State) -> ProcessIdentity {
+        guard let remaining = state.conflictingDescendantReads[identity.pid] else { return identity }
+        state.conflictingDescendantReads[identity.pid] = remaining > 1 ? remaining - 1 : nil
+        return replacing(identity, startID: "exec-\(identity.pid)")
     }
 
     private static func replacing(
