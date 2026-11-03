@@ -42,6 +42,7 @@ area is implemented.
 | `orbit-agent` | executable | `Core` | Background agent: supervisor, proxy, services, problem detection. |
 | `orbit-helper` | executable | `Core` | Privileged helper: DNS, ports 80 and 443, loopback alias, resolver, CA trust. |
 | `orbit-mcp` | executable | `Core` | MCP connector over stdio with the `runtime` capability. |
+| `orbit-runtime-fixture` | executable | `Core` | Test-only fixture: runtime supervisor entry and launcher for the Core suite. |
 | `CoreTests` | tests | `Core` | Swift Testing suite for `Core`. |
 | `OrbitDesignTests` | tests | `OrbitDesign` | Swift Testing suite for `OrbitDesign`. |
 

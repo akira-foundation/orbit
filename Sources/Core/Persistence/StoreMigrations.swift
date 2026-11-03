@@ -27,6 +27,18 @@ enum StoreMigrations {
         );
         CREATE TABLE parked_folders (path TEXT PRIMARY KEY, created_at REAL NOT NULL);
         CREATE INDEX idx_projects_parked_folder ON projects(parked_folder);
+        """,
         """
+        CREATE TABLE events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+            session_id TEXT NOT NULL, ts INTEGER NOT NULL, stream TEXT NOT NULL, text TEXT NOT NULL,
+            level TEXT NOT NULL DEFAULT 'info', source TEXT NOT NULL DEFAULT 'runtime'
+        );
+        CREATE INDEX idx_events_project_ts ON events(project_id, ts);
+        CREATE INDEX idx_events_session ON events(session_id);
+        CREATE INDEX idx_events_source ON events(source);
+        CREATE INDEX idx_events_level ON events(level);
+        """,
     ]
 }

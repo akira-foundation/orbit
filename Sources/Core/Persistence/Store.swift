@@ -6,6 +6,7 @@ public actor Store {
     public init(path: String) throws {
         let db = try SQLiteDatabase(path: path)
         try Self.migrate(db)
+        try Self.adoptIncrementalVacuum(db)
         self.db = db
     }
 
