@@ -16,10 +16,14 @@ struct SupervisorLifecycleTests {
     }
 
     @Test func runnerExitKillsGrandchild() async throws {
-        let runtime = try await SupervisedRuntime.start(SupervisedRuntime.runnerExits, grace: .milliseconds(20))
+        let directory = try TemporaryDirectory()
+        let gate = directory.path + "/exit"
+        let runtime = try await SupervisedRuntime.start(
+            SupervisedRuntime.runnerExits(once: gate), grace: .milliseconds(20))
         defer { runtime.cleanUp() }
 
         #expect(runtime.grandchild != nil)
+        try directory.write("", to: "exit")
         try await runtime.handle.wait()
 
         #expect(await runtime.grandchildGone())

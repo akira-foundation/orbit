@@ -5,7 +5,9 @@ import Foundation
 
 struct SupervisedRuntime {
     static let holds = "exec /bin/sleep 600"
-    static let runnerExits = "/bin/sleep 1; exit 0"
+    static func runnerExits(once gate: String) -> String {
+        "while [ ! -e '\(gate)' ]; do /bin/sleep 0.01; done; exit 0"
+    }
     private static let settleLimit: Duration = .seconds(20)
 
     let handle: any SupervisorHandle

@@ -10,6 +10,9 @@ enum ReapedStatus {
             }
             try await clock.sleep(for: .milliseconds(2))
         }
+        if let status = process.reaper.reapedStatus() {
+            return status
+        }
         throw RuntimeError.message("PID \(process.pid) was not reaped within \(limit)")
     }
 }
