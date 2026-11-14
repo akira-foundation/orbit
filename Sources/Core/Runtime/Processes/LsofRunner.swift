@@ -1,5 +1,5 @@
+import Darwin
 import Foundation
-import Synchronization
 
 public struct LsofRunner: Sendable {
     static let environment = ["LC_ALL": "C", "LANG": "C", "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]
@@ -16,41 +16,39 @@ public struct LsofRunner: Sendable {
 
     public func run(host: String, port: Int) throws -> String {
         let address = "\(host):\(port)"
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = ["-nP", "-a", "-iTCP@\(address)", "-sTCP:LISTEN", "-Fp"]
-        process.environment = Self.environment
-        let output = Pipe()
-        let errors = Pipe()
-        process.standardInput = FileHandle.nullDevice
-        process.standardOutput = output
-        process.standardError = errors
+        let process: SpawnedProcess
         do {
-            try process.run()
+            process = try PosixSpawner.spawn(
+                SpawnRequest(
+                    executable: executable.path(percentEncoded: false),
+                    arguments: ["-nP", "-a", "-iTCP@\(address)", "-sTCP:LISTEN", "-Fp"],
+                    environment: EnvironmentList(Self.environment.map { "\($0.key)=\($0.value)" }),
+                    group: .inherit, captureOutput: true))
         } catch {
-            throw RuntimeError.message("inspect listener \(address): \(error.localizedDescription)")
+            throw RuntimeError.message("inspect listener \(address): \(error)")
         }
-        let errorData = Mutex(Data())
-        let reading = DispatchGroup()
-        let errorHandle = errors.fileHandleForReading
-        DispatchQueue.global().async(group: reading) {
-            let data = errorHandle.readDataToEndOfFile()
-            errorData.withLock { $0 = data }
+        guard let output = process.stdout, let errors = process.stderr else {
+            throw RuntimeError.message("inspect listener \(address): lsof output was not captured")
         }
-        let standardOutput = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-        reading.wait()
-        process.waitUntilExit()
-        let standardError = String(decoding: errorData.withLock { $0 }, as: UTF8.self)
+        let captured = PipeDrain.readToEnd([output.fileDescriptor, errors.fileDescriptor])
+        let status = process.waitForExit()
+        let standardOutput = String(decoding: captured[0], as: UTF8.self)
+        let standardError = String(decoding: captured[1], as: UTF8.self)
         guard standardError.isEmpty else {
             throw RuntimeError.message(
                 "inspect listener \(address): \(standardError.trimmingCharacters(in: .whitespacesAndNewlines))"
             )
         }
-        let status = process.terminationStatus
-        guard process.terminationReason == .exit, status == 0 else {
-            if process.terminationReason == .exit, status == 1, standardOutput.isEmpty { return "" }
-            throw RuntimeError.message("inspect listener \(address): lsof exited with status \(status)")
+        switch status {
+        case .exited(0):
+            return standardOutput
+        case .exited(1) where standardOutput.isEmpty:
+            return ""
+        case .exited(let code):
+            throw RuntimeError.message("inspect listener \(address): lsof exited with status \(code)")
+        case .signaled, .unknown:
+            throw RuntimeError.message(
+                "inspect listener \(address): \(status.failure("lsof").map(\.description) ?? "")")
         }
-        return standardOutput
     }
 }
