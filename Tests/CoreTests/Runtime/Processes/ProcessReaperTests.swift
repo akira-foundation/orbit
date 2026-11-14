@@ -24,6 +24,13 @@ struct ProcessReaperTests {
         #expect(try await process.exitStatus() == .exited(7))
     }
 
+    @Test func blockingWaitReturnsTheReapedStatusToEveryCaller() throws {
+        let process = try PosixSpawner.spawn(
+            SpawnRequest(executable: "/bin/sh", arguments: ["-c", "exit 5"], environment: EnvironmentList([])))
+        #expect(process.waitForExit() == .exited(5))
+        #expect(process.waitForExit() == .exited(5))
+    }
+
     @Test func cancelledWaiterReturnsAndTheProcessIsStillReaped() async throws {
         let process = try PosixSpawner.spawn(
             SpawnRequest(executable: "/bin/sleep", arguments: ["30"], environment: EnvironmentList([])))

@@ -16,4 +16,8 @@ public final class SpawnedProcess: Sendable {
     public func exitStatus() async throws -> ExitStatus {
         try await reaper.exitStatus()
     }
+
+    public func waitForExit() -> ExitStatus {
+        reaper.waitForExit()
+    }
 }

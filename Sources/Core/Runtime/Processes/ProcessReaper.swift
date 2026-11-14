@@ -4,6 +4,7 @@ import Synchronization
 
 final class ProcessReaper: Sendable {
     private let state = Mutex(ReapState())
+    private let reaped = DispatchSemaphore(value: 0)
 
     init(pid: Int32) {
         let thread = Thread { [self] in
@@ -19,6 +20,12 @@ final class ProcessReaper: Sendable {
 
     func reapedStatus() -> ExitStatus? {
         state.withLock { $0.status }
+    }
+
+    func waitForExit() -> ExitStatus {
+        reaped.wait()
+        reaped.signal()
+        return reapedStatus() ?? .unknown(ECHILD)
     }
 
     func exitStatus() async throws -> ExitStatus {
@@ -69,6 +76,7 @@ final class ProcessReaper: Sendable {
             defer { state.waiters.removeAll() }
             return Array(state.waiters.values)
         }
+        reaped.signal()
         waiters.forEach { $0.resume(returning: status) }
     }
 
