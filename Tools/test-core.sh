@@ -1,7 +1,7 @@
 #!/bin/bash
 # Runs the Core suite in a mirror package with no app target, so a broken view cannot stop it.
 #
-#   ./Tools/test-core.sh                         run everything
+#   ./Tools/test-core.sh                         run everything, the process-storm suites after the rest
 #   ./Tools/test-core.sh OrbitEnvironmentTests   run the suites matching each filter given
 #   ORBIT_TEST_SWIFT_ARGS="--sanitize=thread" ./Tools/test-core.sh   pass extra flags to swift test
 
@@ -36,11 +36,24 @@ let package = Package(
 )
 MANIFEST
 
-args=()
-for filter in "$@"; do
-  args+=(--filter "$filter")
-done
+storms=(DarwinGroupCleanupTests DarwinSetuidExecTests)
 read -r -a extra <<< "${ORBIT_TEST_SWIFT_ARGS:-}"
-
 cd "$mirror"
-swift test --scratch-path "$scratch" ${extra[@]+"${extra[@]}"} ${args[@]+"${args[@]}"}
+
+if [ "$#" -gt 0 ]; then
+  args=()
+  for filter in "$@"; do
+    args+=(--filter "$filter")
+  done
+  swift test --scratch-path "$scratch" ${extra[@]+"${extra[@]}"} "${args[@]}"
+  exit
+fi
+
+skips=()
+filters=()
+for suite in "${storms[@]}"; do
+  skips+=(--skip "$suite")
+  filters+=(--filter "$suite")
+done
+swift test --scratch-path "$scratch" ${extra[@]+"${extra[@]}"} "${skips[@]}"
+swift test --scratch-path "$scratch" ${extra[@]+"${extra[@]}"} "${filters[@]}"
