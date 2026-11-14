@@ -2,14 +2,21 @@ import Foundation
 
 extension Store {
     @discardableResult
-    public func upsert(_ project: Project, replacing replacedID: String? = nil) throws -> Project {
+    public func upsert(_ project: Project, replacing replacedID: String? = nil) async throws -> Project {
+        let replaced = replacedID == project.id ? nil : replacedID
+        if let replaced {
+            try await deleteEvents(ofProject: replaced)
+        }
         try reportingDuplicates {
             try db.transaction {
-                if let replacedID, replacedID != project.id {
-                    try db.run("DELETE FROM projects WHERE id = ?;", [.text(replacedID)])
+                if let replaced {
+                    try db.run("DELETE FROM projects WHERE id = ?;", [.text(replaced)])
                 }
                 try write(project)
             }
+        }
+        if replaced != nil {
+            try await returnFreePages()
         }
         return project
     }
@@ -55,10 +62,13 @@ extension Store {
         try db.read { try loadProjects(where: nil, []) }
     }
 
-    public func deleteProject(id: String) throws {
-        guard try db.run("DELETE FROM projects WHERE id = ?;", [.text(id)]) > 0 else {
+    public func deleteProject(id: String) async throws {
+        guard try loadProjects(where: "id = ?", [.text(id)]).first != nil else {
             throw StoreError.projectNotFound(id)
         }
+        try await deleteEvents(ofProject: id)
+        try db.run("DELETE FROM projects WHERE id = ?;", [.text(id)])
+        try await returnFreePages()
     }
 
     private func write(_ project: Project) throws {

@@ -12,8 +12,10 @@ struct SQLiteError: Error, CustomStringConvertible {
         return message
     }
 
+    var isConstraintViolation: Bool { code == SQLITE_CONSTRAINT }
+
     var duplicateColumn: String? {
-        guard code == SQLITE_CONSTRAINT, message.hasPrefix(Self.uniquePrefix) else { return nil }
+        guard isConstraintViolation, message.hasPrefix(Self.uniquePrefix) else { return nil }
         return message.dropFirst(Self.uniquePrefix.count)
             .split(separator: ",")
             .map { $0.split(separator: ".").last.map(String.init) ?? "" }

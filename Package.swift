@@ -42,9 +42,14 @@ let package = Package(
             dependencies: ["Core"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
+        .executableTarget(
+            name: "orbit-runtime-fixture",
+            dependencies: ["Core"],
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
         .testTarget(
             name: "CoreTests",
-            dependencies: ["Core"],
+            dependencies: ["Core", "orbit-runtime-fixture"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

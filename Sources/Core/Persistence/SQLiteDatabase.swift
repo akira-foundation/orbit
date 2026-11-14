@@ -17,6 +17,7 @@ final class SQLiteDatabase: @unchecked Sendable {
         self.handle = handle
         try execute("PRAGMA foreign_keys = ON;")
         try execute("PRAGMA busy_timeout = 5000;")
+        try execute("PRAGMA auto_vacuum = INCREMENTAL;")
         if path != ":memory:" {
             try enableWriteAheadLogging()
         }

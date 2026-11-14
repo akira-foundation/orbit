@@ -2,10 +2,16 @@ import Foundation
 
 public actor Store {
     nonisolated let db: SQLiteDatabase
+    private nonisolated let queue = DispatchSerialQueue(label: "io.akira.orbit.store")
+
+    public nonisolated var unownedExecutor: UnownedSerialExecutor {
+        queue.asUnownedSerialExecutor()
+    }
 
     public init(path: String) throws {
         let db = try SQLiteDatabase(path: path)
         try Self.migrate(db)
+        try Self.adoptIncrementalVacuum(db)
         self.db = db
     }
 

@@ -5,4 +5,8 @@ public enum ProjectStatus: String, Sendable, Codable {
     case idle
     case suspended
     case error
+
+    public var isLive: Bool {
+        self == .starting || self == .running
+    }
 }

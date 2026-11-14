@@ -40,4 +40,12 @@ import Testing
         #expect(project.createdAt == now)
         #expect(project.updatedAt == now)
     }
+
+    @Test(arguments: [
+        (ProjectStatus.starting, true), (.running, true), (.stopped, false), (.idle, false), (.suspended, false),
+        (.error, false),
+    ])
+    func onlyStartingAndRunningAreLive(status: ProjectStatus, live: Bool) {
+        #expect(status.isLive == live)
+    }
 }
